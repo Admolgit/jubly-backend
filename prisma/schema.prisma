@@ -1,0 +1,70 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+enum UserRole {
+  CLIENT
+  VENDOR
+  ADMIN
+}
+
+enum KYCStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id               String       @id @default(auto()) @map("_id") @db.ObjectId
+  email            String       @unique
+  password         String
+  firstName        String
+  lastName         String
+  phone            String?
+  role             UserRole     @default(VENDOR)
+  codeExpiresAt    DateTime?
+  verificationCode String?
+  refreshTokenHash String?
+  isOnline         Boolean?
+  lastLogin        DateTime?    @default(now())
+  provider         AuthProvider @default(EMAIL)
+  isVerified       Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  vendor           Vendor?
+}
+
+model Vendor {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  businessName    String
+  category        String
+  city            String
+  state           String
+  bio             String?
+  profileImage    String?
+  portfolioImages String[]
+
+  bankAccountNumber  String?
+  bankCode           String?
+  paystackSubaccount String?
+
+  kycStatus  KYCStatus @default(NOT_SUBMITTED)
+  isApproved Boolean   @default(false)
+  isActive   Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+}
