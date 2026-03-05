@@ -2,15 +2,16 @@ import { UserRole } from '@prisma/client';
 
 export interface RegisterDto {
   email: string;
-  password: string;
+  password: string | null;
   firstName: string;
   lastName: string;
+  phone: string;
   role: UserRole;
 }
 
 export interface LoginDto {
   email: string;
-  password: string;
+  password: string | null;
 }
 
 export interface PasswordDTO {

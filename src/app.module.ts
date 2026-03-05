@@ -8,8 +8,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { UserAgentMiddleware } from './middlewares/userAgent.middleware';
 import { PrismaModule } from 'prisma/prisma.module';
 import { VendorModule } from './vendor/vendor.module';
-// import { APP_GUARD } from '@nestjs/core';
-// import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtStrategy } from './auth/jwt.strategy';
+import { TransactionModule } from './transaction/transaction.module';
+import { PaystackModule } from './paystack/paystack.module';
+import { AvailabilityModule } from './availability/availability.module';
+import { NodemailerModule } from './nodemailer/nodemailer.module';
 
 @Module({
   imports: [
@@ -22,14 +27,19 @@ import { VendorModule } from './vendor/vendor.module';
     AuthModule,
     PrismaModule,
     VendorModule,
+    TransactionModule,
+    PaystackModule,
+    AvailabilityModule,
+    NodemailerModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: AuthGuard,
-    // },
+    {
+      provide: APP_GUARD,
+      useClass: JwtStrategy,
+    },
+    ConfigService,
   ],
 })
 export class AppModule {

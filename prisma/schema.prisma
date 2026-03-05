@@ -25,24 +25,33 @@ enum KYCStatus {
   REJECTED
 }
 
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id               String       @id @default(auto()) @map("_id") @db.ObjectId
   email            String       @unique
-  password         String
-  firstName        String
-  lastName         String
+  password         String?
+  firstName        String?
+  lastName         String?
   phone            String?
   role             UserRole     @default(VENDOR)
   codeExpiresAt    DateTime?
   verificationCode String?
   refreshTokenHash String?
   isOnline         Boolean?
-  lastLogin        DateTime?    @default(now())
+  lastLogin        DateTime     @default(now())
   provider         AuthProvider @default(EMAIL)
   isVerified       Boolean      @default(false)
+  slug             String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   vendor           Vendor?
+  bookings         Booking[]
 }
 
 model Vendor {
@@ -50,21 +59,141 @@ model Vendor {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])
 
-  businessName    String
-  category        String
-  city            String
-  state           String
-  bio             String?
-  profileImage    String?
-  portfolioImages String[]
+  businessName     String
+  category         String
+  city             String
+  state            String
+  country          String?
+  bio              String?
+  services         Service[]
+  profileImage     String?
+  documentFrontUrl String?
+  documentBackUrl  String?
+  identityType     String?
+  portfolioImages  String[]
 
   bankAccountNumber  String?
   bankCode           String?
   paystackSubaccount String?
+  
+  bookings           Booking[]
+  subAccount         SubAccount[]        @relation("SubAccount")
+  transaction        Transaction[]       @relation("Transaction")
 
   kycStatus  KYCStatus @default(NOT_SUBMITTED)
   isApproved Boolean   @default(false)
   isActive   Boolean   @default(false)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Service {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+
+  name         String // "Bridal Makeup"
+  description  String?
+  price        Int // ₦
+  durationMins Int? // 120
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Vendor    Vendor?  @relation(fields: [vendorId], references: [id])
+  vendorId  String?  @db.ObjectId
+
+  @@index([userId])
+}
+
+model VendorAvailability {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId  String
+  dayOfWeek Int // 0 = Sunday, 6 = Saturday
+  startTime String // "09:00"
+  endTime   String // "18:00"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dayOfWeek])
+}
+
+model Booking {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId String
+  clientId String
+
+  date      DateTime // booking day
+  startTime String // "10:00"
+  endTime   String // "11:30"
+
+  status BookingStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+  client User   @relation(fields: [clientId], references: [id])
+}
+
+model SlotLock {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId  String   @db.ObjectId
+  date      DateTime
+  startTime String
+  endTime   String
+  expiresAt DateTime
+
+  @@unique([vendorId, date, startTime, endTime])
+}
+
+model SubAccount {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId          String   @db.ObjectId
+  paystackAccountId String   @unique
+  accountNumber     String
+  bankName          String
+  accountName       String
+  limit             Float?
+  isActive          Boolean  @default(true)
+  percentageFee     Float?   @default(0.05)
+  vendor            Vendor   @relation("SubAccount", fields: [vendorId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model SenderDetails {
+  id                  String        @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId            String        @db.ObjectId
+  senderName          String?
+  email               String?
+  senderAccountNumber String?
+  senderBankName      String?
+  senderAccountName   String?
+  senderDescription   String?
+  transactions        Transaction[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model Transaction {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  senderDetailsId String    @db.ObjectId
+  vendorId        String    @db.ObjectId
+  amount          Float
+  currency        String    @default("NGN")
+  providerRef     String    @unique
+  percentageFee   Float?
+  title           String?
+  category        String?
+  paymentMethod   String?
+  status          String    @default("pending")
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  vendor        Vendor        @relation("Transaction", fields: [vendorId], references: [id])
+  senderDetails SenderDetails @relation(fields: [senderDetailsId], references: [id])
 }

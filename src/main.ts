@@ -16,7 +16,7 @@ import compression from 'compression';
 // import path from 'path';
 import bodyParser from 'body-parser';
 import { keepServerAliveDeployment } from './server/redis.keepAlive';
-import { VersioningType } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 
 config();
 
@@ -35,7 +35,16 @@ async function bootstrap() {
       },
     }),
   );
-  app.enableCors();
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    }),
+  );
+  app.enableCors({
+    origin: ['http://localhost:5174', 'http://localhost:5173'],
+    credentials: true,
+  });
   app.enableVersioning({
     type: VersioningType.URI,
   });
@@ -45,6 +54,8 @@ async function bootstrap() {
   app.use(compression());
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
   app.use(
     session({

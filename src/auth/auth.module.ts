@@ -4,6 +4,10 @@ import { AuthService } from './auth.service';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from 'prisma/prisma.service';
+import { VendorService } from 'src/vendor/vendor.service';
+import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
+import { PaystackService } from 'src/paystack/paystack.service';
+import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
 
 @Module({
   controllers: [AuthController],
@@ -14,8 +18,15 @@ import { PrismaService } from 'prisma/prisma.service';
       signOptions: { expiresIn: '1d' },
     }),
     PassportModule,
+    NodemailerModule,
   ],
-  providers: [AuthService, PrismaService],
-  exports: [JwtModule, PassportModule],
+  providers: [
+    AuthService,
+    PrismaService,
+    VendorService,
+    CloudinaryService,
+    PaystackService,
+  ],
+  exports: [JwtModule, PassportModule, NodemailerModule],
 })
 export class AuthModule {}

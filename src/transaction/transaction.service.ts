@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
-export class VendorService {
+export class TransactionService {
   constructor() {}
 }
