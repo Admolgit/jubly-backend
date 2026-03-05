@@ -28,7 +28,10 @@ export class PaystackService {
         },
       };
 
-      const response = await axios.get(`https://api.paystack.co/bank`, config);
+      const response: any = await axios.get(
+        `https://api.paystack.co/bank`,
+        config,
+      );
 
       if (!response.data.status) {
         throw new Error('Failed to fetch banks from Paystack');
@@ -81,7 +84,7 @@ export class PaystackService {
 
   async verifyTransaction(reference: string) {
     try {
-      const response = await axios.get(
+      const response: any = await axios.get(
         `${process.env.PAYSTACK_BASE_URL}/transaction/verify/${reference}`,
         {
           headers: {
@@ -113,7 +116,7 @@ export class PaystackService {
 
   async verifySubaccount(subaccountCode: string) {
     try {
-      const { data } = await axios.get(
+      const response: any = await axios.get(
         `${this.baseUrl}/subaccount/${subaccountCode}`,
         {
           headers: {
@@ -122,8 +125,9 @@ export class PaystackService {
         },
       );
 
-      if (!data.status) throw new HttpException('Subaccount not found', 404);
-      return data.data;
+      if (!response.status)
+        throw new HttpException('Subaccount not found', 404);
+      return response.data;
     } catch (err) {
       throw new HttpException(
         err.response?.data || err.message,
@@ -134,16 +138,16 @@ export class PaystackService {
 
   async resolveBankAccount(accountNumber: string, bankCode: string) {
     try {
-      const { data } = await axios.get(`${this.baseUrl}/bank/resolve`, {
+      const response: any = await axios.get(`${this.baseUrl}/bank/resolve`, {
         headers: {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
         },
         params: { account_number: accountNumber, bank_code: bankCode },
       });
 
-      if (!data.status)
+      if (!response.status)
         throw new HttpException('Bank account verification failed', 400);
-      return data.data;
+      return response.data;
     } catch (err) {
       return err;
     }

@@ -140,7 +140,7 @@ export class VendorService {
       throw new BadRequestException('Account details does not match.');
     }
 
-    const res = await this.paystackService.createSubaccount({
+    const res: any = await this.paystackService.createSubaccount({
       business_name: verifyAccount.account_name,
       settlement_bank: dto.settlementBank,
       account_number: dto.accountNumber,
