@@ -42,7 +42,11 @@ async function bootstrap() {
     }),
   );
   app.enableCors({
-    origin: ['http://localhost:5174', 'http://localhost:5173'],
+    origin: [
+      'http://localhost:5174',
+      'http://localhost:5173',
+      'https://jubly-frontend.vercel.app',
+    ],
     credentials: true,
   });
   app.enableVersioning({
