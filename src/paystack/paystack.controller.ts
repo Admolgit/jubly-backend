@@ -21,7 +21,6 @@ import { PaystackService } from './paystack.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { BookingService } from 'src/booking/booking.service';
-import { BookingStatus } from '@prisma/client';
 
 @Controller('paystack')
 export class PaystackController {
@@ -126,7 +125,7 @@ export class PaystackController {
           clientEmail: email,
           startTime,
           endTime,
-          status: BookingStatus.CONFIRMED,
+          status: 'CONFIRMED',
         });
 
         const senderDetails = await this.prisma.senderDetails.create({
