@@ -60,6 +60,27 @@ export class PaystackService {
     }
   }
 
+  async deactivateSubaccount(subaccountCode: string) {
+    const response: { data: any } = await axios.put(
+      `https://api.paystack.co/subaccount/${subaccountCode}`,
+      {
+        active: false,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    if (!response.data.status) {
+      throw new Error('Failed to deactivate subaccount');
+    }
+
+    return response.data;
+  }
+
   public async createSubaccount(payload) {
     try {
       const res = await axios.post(
@@ -76,10 +97,6 @@ export class PaystackService {
     } catch (error) {
       console.log(error, 'Paystack subaccount creation failed', 500);
     }
-  }
-
-  async getByUser(vendorId: string) {
-    return this.prisma.subAccount.findFirst({ where: { vendorId } });
   }
 
   async verifyTransaction(reference: string) {

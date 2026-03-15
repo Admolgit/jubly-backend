@@ -15,9 +15,10 @@ import { UnauthorizedException } from '@nestjs/common';
 import { comparePassword, hashPassword } from './hash';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { successResponse } from 'src/utils/response';
-import { UserRole } from '@prisma/client';
+import { KYCStatus, UserRole } from '@prisma/client';
 import Helper from 'src/utils/helpers';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
+import { generateTempPassword } from 'src/utils/generateTempPassword';
 
 @Injectable()
 export class AuthService {
@@ -38,7 +39,6 @@ export class AuthService {
       }
 
       const otpGenerated = Helper.generateUniqueCharacters(6);
-      console.log({ otpGenerated });
 
       const hashed = await hashPassword(dto.password);
       const user = await this.prisma.user.create({
@@ -64,6 +64,59 @@ export class AuthService {
 
       return successResponse({ user, token }, 'Registration successful', 201);
     } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Registration failed',
+        error.message,
+      );
+    }
+  }
+
+  async registerClient(dto: {
+    email: string;
+    clientName: string;
+    phone: string;
+  }) {
+    try {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: dto.email },
+      });
+
+      if (existingUser) {
+        throw new BadRequestException('Email already in use');
+      }
+
+      const generatedPassword = generateTempPassword();
+
+      const hashed = await hashPassword(generatedPassword);
+
+      const client = await this.prisma.user.create({
+        data: {
+          email: dto.email,
+          password: hashed,
+          firstName: dto.clientName,
+          phone: dto.phone,
+          role: UserRole.CLIENT,
+          codeExpiresAt: Helper.set24HourExpiry(),
+          isVerified: true,
+        },
+      });
+
+      await this.nodemailService.sendTempPassword(dto.email, generatedPassword);
+
+      return successResponse(
+        { client },
+        'Client is registered successfully.',
+        201,
+      );
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Registration failed',
         error.message,
@@ -92,9 +145,21 @@ export class AuthService {
         throw new UnauthorizedException('Vendor account not found');
       }
 
-      // if (vendor && vendor.isApproved === false) {
-      //   throw new UnauthorizedException('Vendor account pending approval');
-      // }
+      if (
+        vendor &&
+        vendor.isApproved === false &&
+        vendor.kycStatus === KYCStatus.NOT_SUBMITTED
+      ) {
+        throw new UnauthorizedException('Complete your onboarding');
+      }
+
+      if (
+        vendor &&
+        vendor.isApproved === false &&
+        vendor.kycStatus === KYCStatus.PENDING
+      ) {
+        throw new UnauthorizedException('Vendor account pending approval');
+      }
 
       const token = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
@@ -110,16 +175,21 @@ export class AuthService {
 
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { refreshTokenHash, lastLogin: new Date(), isOnline: true },
+        data: {
+          refreshTokenHash,
+          lastLogin: new Date(),
+          isOnline: true,
+        },
       });
 
-      // const vendorStatus = await this.vendorServices.getPendingVendorsById(
-      //   user.id,
-      // );
-
-      return successResponse({ user, token }, 'Login successful');
+      return successResponse({ user, token, refreshToken }, 'Login successful');
     } catch (error) {
-      throw new InternalServerErrorException('Login failed', error.message);
+      // preserve existing HTTP exceptions
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Login failed');
     }
   }
 

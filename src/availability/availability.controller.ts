@@ -21,6 +21,19 @@ import { CreateVendorAvailabilityDto } from './dto/availability.dto';
 export class AvailabilityController {
   constructor(private availabilityService: AvailabilityService) {}
 
+  @Get('slots/:vendorId/:date/:serviceId')
+  getVendorAvailableSlots(
+    @Param('vendorId') vendorId: string,
+    @Param('serviceId') serviceId: string,
+    @Param('date') date: any,
+  ) {
+    return this.availabilityService.getAvailableSlots(
+      vendorId,
+      serviceId,
+      date,
+    );
+  }
+
   @Get('')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)

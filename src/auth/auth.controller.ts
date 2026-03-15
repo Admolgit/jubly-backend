@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Patch,
   Post,
   Req,
@@ -16,14 +17,25 @@ import {
 import { AuthService } from './auth.service';
 import * as authDto from './dto/auth.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { VendorService } from 'src/vendor/vendor.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private vendorServices: VendorService,
+  ) {}
 
   @Post('register')
   register(@Body() dto: authDto.RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  @Post('client-register')
+  registerClient(
+    @Body() dto: { email: string; clientName: string; phone: string },
+  ) {
+    return this.authService.registerClient(dto);
   }
 
   @Post('login')
@@ -47,17 +59,17 @@ export class AuthController {
 
     const authResult = await this.authService.handleGoogleLoginOrRegister(
       googleProfileInfo,
-      requestedRedirectUrl,
+      requestedRedirectUrl as string,
     );
 
     const params = new URLSearchParams();
 
     if (authResult?.meta?.isSignup) {
-      params.append('email', authResult.data.user.email);
+      params.append('email', authResult.data.user.email as string);
     }
 
-    params.append('token', authResult.data.token);
-    params.append('refreshToken', authResult.data.refreshToken);
+    params.append('token', authResult.data.token as string);
+    params.append('refreshToken', authResult.data.refreshToken as string);
 
     const data = {
       data: {
@@ -96,5 +108,10 @@ export class AuthController {
   @Post('refresh-token')
   refreshToken(@Body('refereshToken') refreshToken: string) {
     return this.authService.refreshToken(refreshToken);
+  }
+
+  @Get('pending-vendor/:userId')
+  getPendingVendor(@Param('userId') userId: string) {
+    return this.vendorServices.getPendingVendorsById(userId);
   }
 }

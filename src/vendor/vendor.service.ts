@@ -28,21 +28,28 @@ export class VendorService {
   ) {}
 
   async completeOnboarding(userId: string, dto, files) {
-    return await this.prisma.$transaction(async (tx) => {
-      await this.createProfile(userId, dto.profile, tx);
+    try {
+      await this.createServices(userId, dto.services, dto.profile.vendorId);
 
-      await this.createServices(userId, dto.services, tx);
+      const createdVendor = await this.submitIdentity(
+        userId,
+        dto.identityType,
+        files,
+      );
 
-      await this.createPaystackSubaccount(userId, dto.subaccount, tx);
+      await this.createPaystackSubaccount(userId, dto.subaccount);
 
-      await this.submitProfileImage(userId, files.profileImage, tx);
+      await this.submitProfileImage(userId, files.profileImage);
+      await this.uploadPortfolio(userId, files.portfolio);
 
-      await this.submitIdentity(userId, dto.identity, files, tx);
-
-      await this.uploadPortfolio(userId, files.portfolio, tx);
-
-      return { message: 'Onboarding completed successfully' };
-    });
+      return successResponse(
+        { createdVendor },
+        'Onboarding completed successfully',
+        201,
+      );
+    } catch (error) {
+      throw new InternalServerErrorException('Failed', error.message);
+    }
   }
 
   async createProfile(
@@ -76,6 +83,7 @@ export class VendorService {
   async createServices(
     userId: string,
     services: ServiceItemDto[],
+    vendorId: string,
     tx?: Prisma.TransactionClient,
   ) {
     const prisma = tx ?? this.prisma;
@@ -91,6 +99,7 @@ export class VendorService {
       services.map((s) =>
         prisma.service.create({
           data: {
+            vendorId,
             userId,
             name: s.name ?? '',
             description: s.description ?? '',
@@ -104,22 +113,19 @@ export class VendorService {
     return successResponse({ created }, 'Services successfully created', 201);
   }
 
-  async createPaystackSubaccount(
-    userId: string,
-    dto: CreateSubaccountDto,
-    tx?: Prisma.TransactionClient,
-  ) {
-    const prisma = tx ?? this.prisma;
-
-    const vendor = await prisma.vendor.findFirst({ where: { userId } });
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+  async createPaystackSubaccount(userId: string, dto: CreateSubaccountDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user) throw new NotFoundException('User not found');
+
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId: user.id },
+    });
     if (!vendor) throw new NotFoundException('Vendor not found');
 
-    const doesAccountExists = await prisma.subAccount.findFirst({
+    const doesAccountExists = await this.prisma.subAccount.findFirst({
       where: {
-        vendorId: vendor.id,
+        userId: user.id,
         accountNumber: dto.accountNumber,
       },
     });
@@ -130,7 +136,6 @@ export class VendorService {
       );
     }
 
-    // External API calls (NOT inside prisma)
     const verifyAccount = await this.paystackService.resolveBankAccount(
       dto.accountNumber,
       dto.settlementBank,
@@ -141,7 +146,7 @@ export class VendorService {
     }
 
     const res: any = await this.paystackService.createSubaccount({
-      business_name: verifyAccount.account_name,
+      business_name: dto.businessName,
       settlement_bank: dto.settlementBank,
       account_number: dto.accountNumber,
       percentage_charge: 0.1,
@@ -163,13 +168,13 @@ export class VendorService {
     const verifyRes =
       await this.paystackService.verifySubaccount(paystackSubId);
 
-    if (!verifyRes.active) {
-      throw new BadRequestException('Paystack subaccount verification failed');
+    if (!verifyRes.status) {
+      throw new BadRequestException('Paystack subaccount creation failed');
     }
 
-    const pastackUserAccount = await prisma.subAccount.create({
+    const pastackUserAccount = await this.prisma.subAccount.create({
       data: {
-        vendorId: vendor.id,
+        userId,
         paystackAccountId: paystackSubId,
         bankName: dto.settlementBank,
         accountNumber: dto.accountNumber,
@@ -178,8 +183,8 @@ export class VendorService {
       },
     });
 
-    await prisma.vendor.update({
-      where: { id: vendor.id },
+    await this.prisma.vendor.update({
+      where: { userId },
       data: {
         paystackSubaccount: paystackSubId,
         bankAccountNumber: dto.accountNumber,
@@ -194,18 +199,12 @@ export class VendorService {
     );
   }
 
-  async submitProfileImage(
-    userId: string,
-    file: Express.Multer.File,
-    tx?: Prisma.TransactionClient,
-  ) {
-    const prisma = tx ?? this.prisma;
-
+  async submitProfileImage(userId: string, file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('Profile image is required');
     }
 
-    const vendor = await prisma.vendor.findUnique({
+    const vendor = await this.prisma.vendor.findUnique({
       where: { userId },
     });
 
@@ -215,7 +214,7 @@ export class VendorService {
 
     const uploadResult = await this.cloudinaryService.uploadImage(file);
 
-    const updatedVendor = prisma.vendor.update({
+    const updatedVendor = await this.prisma.vendor.update({
       where: { userId },
       data: {
         profileImage: uploadResult,
@@ -228,22 +227,12 @@ export class VendorService {
     );
   }
 
-  async submitIdentity(
-    userId: string,
-    body: { identityType: string },
-    files: {
-      documentFrontUrl?: Express.Multer.File[];
-      documentBackUrl?: Express.Multer.File[];
-    },
-    tx?: Prisma.TransactionClient,
-  ) {
-    const prisma = tx ?? this.prisma;
-
-    if (!body.identityType) {
+  async submitIdentity(userId: string, identityType: string, files: any) {
+    if (!identityType) {
       throw new BadRequestException('Identity type is required');
     }
 
-    const vendor = await prisma.vendor.findUnique({
+    const vendor = await this.prisma.vendor.findUnique({
       where: { userId },
     });
 
@@ -251,24 +240,19 @@ export class VendorService {
       throw new NotFoundException('Vendor not found');
     }
 
-    const frontFile = files.documentFrontUrl?.[0];
-    const backFile = files.documentBackUrl?.[0];
+    const frontFile = files.documentFront;
 
-    if (!frontFile || !backFile) {
-      throw new BadRequestException(
-        'Both front and back identity images are required',
-      );
+    if (!frontFile) {
+      throw new BadRequestException('Front identity images are required');
     }
 
     const frontUpload = await this.cloudinaryService.uploadImage(frontFile);
-    const backUpload = await this.cloudinaryService.uploadImage(backFile);
 
-    const updatedVendor = prisma.vendor.update({
+    const updatedVendor = await this.prisma.vendor.update({
       where: { userId },
       data: {
-        identityType: body.identityType,
+        identityType: identityType,
         documentFrontUrl: frontUpload,
-        documentBackUrl: backUpload,
       },
     });
 
@@ -278,18 +262,12 @@ export class VendorService {
     );
   }
 
-  async uploadPortfolio(
-    userId: string,
-    files: Express.Multer.File[],
-    tx?: Prisma.TransactionClient,
-  ) {
-    const prisma = tx ?? this.prisma;
-
+  async uploadPortfolio(userId: string, files: Express.Multer.File[]) {
     if (!files?.length) {
       throw new BadRequestException('At least one image is required');
     }
 
-    const vendor = await prisma.vendor.findUnique({
+    const vendor = await this.prisma.vendor.findUnique({
       where: { userId },
     });
 
@@ -297,16 +275,15 @@ export class VendorService {
       throw new NotFoundException('Vendor not found');
     }
 
-    // Upload to Cloudinary (external service)
     const uploads = await Promise.all(
       files.map((file) => this.cloudinaryService.uploadImage(file)),
     );
 
-    const uploadedPortfolios = prisma.vendor.update({
+    const uploadedPortfolios = await this.prisma.vendor.update({
       where: { userId },
       data: {
         portfolioImages: {
-          push: uploads, // uploads already contains the URLs
+          push: uploads,
         },
         kycStatus: KYCStatus.PENDING,
       },
@@ -346,16 +323,12 @@ export class VendorService {
 
   async bulkUpdateServices(userId: string, updates: BulkUpdateItemDto[]) {
     try {
-      // Ensure the vendor exists
       const vendor = await this.prisma.vendor.findUnique({
         where: { userId },
       });
       if (!vendor) throw new NotFoundException('Vendor not found');
-
-      // Update each service in parallel
       const updatedServices = await Promise.all(
         updates.map(async (item) => {
-          // Verify the service belongs to this vendor
           const service = await this.prisma.service.findFirst({
             where: {
               id: item.id,
@@ -366,7 +339,6 @@ export class VendorService {
             throw new NotFoundException(`Service ${item.id} not found`);
           }
 
-          // Update only the provided fields
           return await this.prisma.service.update({
             where: { id: item.id },
             data: item.data,
@@ -433,7 +405,10 @@ export class VendorService {
         },
       });
 
-      return successResponse(vendor, 'Pending vendor fetched successfully.');
+      return successResponse(
+        { vendor },
+        'Pending vendor fetched successfully.',
+      );
     } catch (error) {
       throw new InternalServerErrorException(
         'Failed to fetch pending vendor',
@@ -524,10 +499,132 @@ export class VendorService {
     }
   }
 
-  // Booking creation vendor check
+  async deletePaystackSubaccount(userId: string) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    if (!vendor.paystackSubaccount) {
+      throw new BadRequestException('Vendor has no Paystack subaccount');
+    }
+
+    await this.paystackService.deactivateSubaccount(vendor.paystackSubaccount);
+
+    await this.prisma.vendor.update({
+      where: { id: vendor.id },
+      data: {
+        paystackSubaccount: null,
+        bankAccountNumber: null,
+        bankCode: null,
+      },
+    });
+
+    return {
+      message: 'Subaccount deleted successfully',
+    };
+  }
+
   ensureVendorIsActive(vendor: { isActive: boolean; kycStatus: string }) {
     if (!vendor.isActive || vendor.kycStatus !== 'APPROVED') {
       throw new ForbiddenException('Vendor not approved');
+    }
+  }
+
+  async getVendorByUserId(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findFirst({
+        where: {
+          userId,
+        },
+      });
+
+      return successResponse({ vendor }, 'Vendor fetched successfully.');
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch vendor profile',
+        error.message,
+      );
+    }
+  }
+
+  async vendorBooking(slug: string) {
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: { slug },
+      });
+
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      const vendor = await this.prisma.vendor.findFirst({
+        where: {
+          userId: user.id,
+        },
+        include: {
+          user: {
+            select: {
+              email: true,
+              id: true,
+              slug: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
+        },
+      });
+
+      const services = await this.prisma.service.findMany({
+        where: {
+          userId: vendor?.userId,
+        },
+      });
+
+      const vendorAvailability = await this.prisma.vendorAvailability.findMany({
+        where: {
+          vendorId: vendor?.id,
+        },
+      });
+
+      if (!vendor) {
+        throw new BadRequestException('Vendor profile not found.');
+      }
+
+      return successResponse(
+        { vendor, services, vendorAvailability },
+        'Booking page fetched.',
+      );
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to fetch vendor',
+        error.message,
+      );
+    }
+  }
+
+  async getServiceById(serviceId) {
+    try {
+      const service = await this.prisma.service.findFirst({
+        where: {
+          id: serviceId,
+        },
+      });
+
+      return successResponse({ service }, 'Service fetched successfully');
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetched service',
+        error.message,
+      );
     }
   }
 }

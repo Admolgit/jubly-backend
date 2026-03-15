@@ -68,17 +68,16 @@ model Vendor {
   services         Service[]
   profileImage     String?
   documentFrontUrl String?
-  documentBackUrl  String?
   identityType     String?
   portfolioImages  String[]
 
   bankAccountNumber  String?
   bankCode           String?
   paystackSubaccount String?
-  
+
   bookings           Booking[]
-  subAccount         SubAccount[]        @relation("SubAccount")
-  transaction        Transaction[]       @relation("Transaction")
+  vendorAvailability VendorAvailability[]
+  transaction        Transaction[]        @relation("Transaction")
 
   kycStatus  KYCStatus @default(NOT_SUBMITTED)
   isApproved Boolean   @default(false)
@@ -99,17 +98,17 @@ model Service {
 
   active Boolean @default(true)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Vendor    Vendor?  @relation(fields: [vendorId], references: [id])
-  vendorId  String?  @db.ObjectId
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Vendor    Vendor?   @relation(fields: [vendorId], references: [id])
+  vendorId  String?   @db.ObjectId
+  booking   Booking[]
 
   @@index([userId])
 }
 
 model VendorAvailability {
   id        String @id @default(auto()) @map("_id") @db.ObjectId
-  vendorId  String
   dayOfWeek Int // 0 = Sunday, 6 = Saturday
   startTime String // "09:00"
   endTime   String // "18:00"
@@ -117,25 +116,34 @@ model VendorAvailability {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  Vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendorId String? @db.ObjectId
+
   @@unique([dayOfWeek])
 }
 
 model Booking {
-  id       String @id @default(auto()) @map("_id") @db.ObjectId
-  vendorId String
-  clientId String
+  id         String  @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId   String
+  clientId   String?
+  serviceId  String
+  clientName String?
 
-  date      DateTime // booking day
-  startTime String // "10:00"
-  endTime   String // "11:30"
+  date        DateTime // booking day
+  startTime   DateTime // "10:00"
+  endTime     DateTime // "11:30"
+  clientEmail String
 
   status BookingStatus @default(PENDING)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  vendor Vendor @relation(fields: [vendorId], references: [id])
-  client User   @relation(fields: [clientId], references: [id])
+  vendor      Vendor        @relation(fields: [vendorId], references: [id])
+  services    Service       @relation(fields: [serviceId], references: [id])
+  User        User?         @relation(fields: [userId], references: [id])
+  userId      String?       @db.ObjectId
+  Transaction Transaction[]
 }
 
 model SlotLock {
@@ -151,7 +159,7 @@ model SlotLock {
 
 model SubAccount {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  vendorId          String   @db.ObjectId
+  userId            String   @db.ObjectId
   paystackAccountId String   @unique
   accountNumber     String
   bankName          String
@@ -159,7 +167,6 @@ model SubAccount {
   limit             Float?
   isActive          Boolean  @default(true)
   percentageFee     Float?   @default(0.05)
-  vendor            Vendor   @relation("SubAccount", fields: [vendorId], references: [id])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
@@ -180,8 +187,9 @@ model SenderDetails {
 
 model Transaction {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
-  senderDetailsId String    @db.ObjectId
+  senderDetailsId String?   @db.ObjectId
   vendorId        String    @db.ObjectId
+  bookingId       String?
   amount          Float
   currency        String    @default("NGN")
   providerRef     String    @unique
@@ -194,6 +202,15 @@ model Transaction {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  vendor        Vendor        @relation("Transaction", fields: [vendorId], references: [id])
-  senderDetails SenderDetails @relation(fields: [senderDetailsId], references: [id])
+  vendor        Vendor         @relation("Transaction", fields: [vendorId], references: [id])
+  senderDetails SenderDetails? @relation(fields: [senderDetailsId], references: [id])
+  booking       Booking?       @relation(fields: [bookingId], references: [id])
+}
+
+model vendorCalendar {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId     String @db.ObjectId
+  provider     String
+  accessToken  String
+  refreshToken String
 }

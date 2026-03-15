@@ -30,27 +30,27 @@ import { cloudinaryMulterOptions } from 'src/middlewares/cloudinary.middleware';
 import { CreateSubaccountDto } from 'src/paystack';
 import { BulkUpdateItemDto, CreateServicesDto } from './dto/services.dto';
 
-@Controller('vendor/onboarding')
+@Controller('vendor')
 export class VendorController {
   constructor(private vendorService: VendorService) {}
 
-  @Post('complete-onboarding')
+  @Post('onboarding/complete-onboarding')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'profileImage', maxCount: 1 },
       { name: 'documentFrontUrl', maxCount: 1 },
-      { name: 'documentBackUrl', maxCount: 1 },
       { name: 'portfolio', maxCount: 10 },
     ]),
   )
   async completeOnboarding(
-    @Req() req,
+    @Req() req: { user: { id: string } },
     @Body() body: any,
     @UploadedFiles()
     files: {
       profileImage?: Express.Multer.File[];
       documentFrontUrl?: Express.Multer.File[];
-      documentBackUrl?: Express.Multer.File[];
       portfolio?: Express.Multer.File[];
     },
   ) {
@@ -59,12 +59,6 @@ export class VendorController {
     if (!userId) {
       throw new BadRequestException('User not authenticated');
     }
-
-    /**
-     * Because this is multipart/form-data,
-     * nested objects arrive as strings.
-     * We must parse them manually.
-     */
 
     let parsedDto: CompleteVendorOnboardingDto;
 
@@ -85,77 +79,67 @@ export class VendorController {
     return this.vendorService.completeOnboarding(userId, parsedDto, {
       profileImage: files.profileImage?.[0],
       documentFront: files.documentFrontUrl?.[0],
-      documentBack: files.documentBackUrl?.[0],
       portfolio: files.portfolio ?? [],
     });
   }
 
-  @Post('profile')
+  @Post('onboarding/profile')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
-  createProfile(@Req() req, @Body() dto: CreateVendorDto) {
+  createProfile(
+    @Req() req: { user: { id: string } },
+    @Body() dto: CreateVendorDto,
+  ) {
     const userId = req.user.id;
     return this.vendorService.createProfile(userId, dto);
   }
 
-  @Post('services')
+  @Post('onboarding/services')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
   createServices(@Req() req, @Body() body: CreateServicesDto) {
-    return this.vendorService.createServices(req.user.id, body.services);
+    return this.vendorService.createServices(
+      req.user.id,
+      body.services,
+      req.user.id,
+    );
   }
 
-  @Patch('update-services')
+  @Patch('onboarding/update-services')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
   bulkUpdateServices(
-    @Req() req,
+    @Req() req: { user: { id: string } },
     @Body() body: { updates: BulkUpdateItemDto[] },
   ) {
     return this.vendorService.bulkUpdateServices(req.user.id, body.updates);
   }
 
-  @Get('vendor-services/:userId')
+  @Get('onboarding/vendor-services/:userId')
   getVendorServices(@Param('userId') userId: string) {
     return this.vendorService.getVendorServices(userId);
   }
 
-  @Patch('profile-update')
+  @Patch('onboarding/profile-update')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
-  updateProfile(@Req() req, @Body() dto: any) {
+  updateProfile(@Req() req: { user: { id: string } }, @Body() dto: any) {
     const userId = req.user.id;
     return this.vendorService.updateProfile(userId, dto);
   }
 
-  @Post('create-subaccount')
+  @Post('onboarding/create-subaccount')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
-  createSubaccount(@Req() req, @Body() dto: CreateSubaccountDto) {
-    const userId = req.user.id as string;
+  createSubaccount(
+    @Req() req: { user: { id: string } },
+    @Body() dto: CreateSubaccountDto,
+  ) {
+    const userId = req.user.id;
     return this.vendorService.createPaystackSubaccount(userId, dto);
   }
 
-  // @Patch('profile-image')
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles(UserRole.VENDOR)
-  // @UseInterceptors(
-  //   FileFieldsInterceptor([{ name: 'profileImage', maxCount: 1 }]),
-  // )
-  // submitProfileImage(
-  //   @Req() req,
-  //   @UploadedFiles()
-  //   files: {
-  //     profileImage?: Express.Multer.File[];
-  //   },
-  // ) {
-  //   return this.vendorService.submitProfileImage(
-  //     req.user.id,
-  //     files.profileImage?.[0],
-  //   );
-  // }
-
-  @Patch('identity-image')
+  @Patch('onboarding/identity-image')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
   @UseInterceptors(
@@ -164,34 +148,29 @@ export class VendorController {
       { name: 'documentBackUrl', maxCount: 1 },
     ]),
   )
-  submitIdentity(
-    @Req() req,
-    @Body() body: { identityType: string },
-    @UploadedFiles()
-    files: {
-      documentFrontUrl?: Express.Multer.File[];
-      documentBackUrl?: Express.Multer.File[];
-    },
-  ) {
-    return this.vendorService.submitIdentity(req.user.id, body, files);
-  }
-
-  @Patch('portfolio-images')
+  @Patch('onboarding/portfolio-images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
   @UseInterceptors(FilesInterceptor('files', 10, cloudinaryMulterOptions))
   submitPortfolioImages(
-    @Req() req,
+    @Req() req: { user: { id: string } },
     @UploadedFiles() files: Express.Multer.File[],
   ) {
     return this.vendorService.uploadPortfolio(req.user.id, files);
   }
 
-  @Get('status')
+  @Get('onboarding/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
-  getStatus(@Req() req) {
+  getStatus(@Req() req: { user: { id: string } }) {
     return this.vendorService.getVendorStatus(req.user.id);
+  }
+
+  @Get('')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  getVendorByUserId(@Req() req: { user: { id: string } }) {
+    return this.vendorService.getVendorByUserId(req.user.id);
   }
 
   @Get('admin/all-vendors')
@@ -220,5 +199,15 @@ export class VendorController {
   @Roles(UserRole.ADMIN)
   getPendingVendors() {
     return this.vendorService.getPendingVendors();
+  }
+
+  @Get('booking-vendor/:slug')
+  getBookingPage(@Param('slug') slug: string) {
+    return this.vendorService.vendorBooking(slug);
+  }
+
+  @Get('service/:serviceId')
+  getServiceById(@Param('serviceId') serviceId: string) {
+    return this.vendorService.getServiceById(serviceId);
   }
 }

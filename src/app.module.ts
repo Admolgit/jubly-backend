@@ -15,6 +15,8 @@ import { TransactionModule } from './transaction/transaction.module';
 import { PaystackModule } from './paystack/paystack.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { NodemailerModule } from './nodemailer/nodemailer.module';
+import { GoogleCalenderModule } from './google/google.module';
+import { BookingModule } from './booking/booking.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { NodemailerModule } from './nodemailer/nodemailer.module';
     PaystackModule,
     AvailabilityModule,
     NodemailerModule,
+    GoogleCalenderModule,
+    BookingModule,
   ],
   controllers: [AppController],
   providers: [

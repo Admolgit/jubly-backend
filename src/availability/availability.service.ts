@@ -14,7 +14,24 @@ import { successResponse } from 'src/utils/response';
 export class AvailabilityService {
   constructor(private prisma: PrismaService) {}
 
-  // Get vendor availability
+  generateSlots(start: Date, end: Date, duration: number) {
+    const slots: { startTime: Date; endTime: Date }[] = [];
+    let current = new Date(start);
+
+    while (current.getTime() + duration * 60000 <= end.getTime()) {
+      const slotEnd = new Date(current.getTime() + duration * 60000);
+
+      slots.push({
+        startTime: new Date(current),
+        endTime: slotEnd,
+      });
+
+      current = slotEnd;
+    }
+
+    return slots;
+  }
+
   async getAvailability(userId: string) {
     try {
       const vendor = await this.prisma.vendor.findUnique({ where: { userId } });
@@ -32,7 +49,61 @@ export class AvailabilityService {
     }
   }
 
-  // Get vendor availability by day of the week
+  async getAvailableSlots(vendorId: string, serviceId: string, date: Date) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { id: vendorId },
+        include: {
+          vendorAvailability: true,
+          bookings: true,
+        },
+      });
+
+      const services = await this.prisma.service.findMany({
+        where: {
+          id: serviceId,
+        },
+      });
+
+      const dateObj = new Date(date);
+
+      const dayOfWeek = dateObj.getDay();
+      if (!vendor) throw new NotFoundException('Vendor not found');
+      const availability = vendor.vendorAvailability.find(
+        (a) => a.dayOfWeek === dayOfWeek,
+      );
+
+      if (!availability) return [];
+
+      const start = new Date(
+        `${dateObj.toDateString()} ${availability.startTime}`,
+      );
+      const end = new Date(`${dateObj.toDateString()} ${availability.endTime}`);
+
+      const duration = services[0].durationMins;
+
+      const slots = this.generateSlots(start, end, duration as number);
+
+      const bookings = vendor.bookings;
+
+      const availableSlots = slots.filter((slot) => {
+        return !bookings.some(
+          (b) => slot.startTime < b.endTime && slot.endTime > b.startTime,
+        );
+      });
+
+      return successResponse(
+        { availableSlots },
+        'Available slot fetched successfully.',
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch vendor availabile slot',
+        error?.message,
+      );
+    }
+  }
+
   async getAvailabilityGrouped(userId: string) {
     try {
       const vendor = await this.prisma.vendor.findUnique({ where: { userId } });
@@ -72,6 +143,7 @@ export class AvailabilityService {
       for (const item of dto.availabilities) {
         const [startH, startM] = item.startTime.split(':').map(Number);
         const [endH, endM] = item.endTime.split(':').map(Number);
+
         if (startH > endH || (startH === endH && startM >= endM)) {
           throw new BadRequestException(
             `startTime (${item.startTime}) must be before endTime (${item.endTime}) for day ${item.dayOfWeek}`,
