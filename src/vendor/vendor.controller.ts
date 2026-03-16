@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFiles,
   UseGuards,
@@ -17,10 +18,10 @@ import {
 import { VendorService } from './vendor.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
-import { UserRole } from '@prisma/client';
 import {
   CompleteVendorOnboardingDto,
   CreateVendorDto,
+  QueryVendorsDto,
 } from './dto/create-vendor.dto';
 import {
   FileFieldsInterceptor,
@@ -36,7 +37,7 @@ export class VendorController {
 
   @Post('onboarding/complete-onboarding')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'profileImage', maxCount: 1 },
@@ -85,7 +86,7 @@ export class VendorController {
 
   @Post('onboarding/profile')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   createProfile(
     @Req() req: { user: { id: string } },
     @Body() dto: CreateVendorDto,
@@ -96,7 +97,7 @@ export class VendorController {
 
   @Post('onboarding/services')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   createServices(@Req() req, @Body() body: CreateServicesDto) {
     return this.vendorService.createServices(
       req.user.id,
@@ -107,7 +108,7 @@ export class VendorController {
 
   @Patch('onboarding/update-services')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   bulkUpdateServices(
     @Req() req: { user: { id: string } },
     @Body() body: { updates: BulkUpdateItemDto[] },
@@ -122,7 +123,7 @@ export class VendorController {
 
   @Patch('onboarding/profile-update')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   updateProfile(@Req() req: { user: { id: string } }, @Body() dto: any) {
     const userId = req.user.id;
     return this.vendorService.updateProfile(userId, dto);
@@ -130,7 +131,7 @@ export class VendorController {
 
   @Post('onboarding/create-subaccount')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   createSubaccount(
     @Req() req: { user: { id: string } },
     @Body() dto: CreateSubaccountDto,
@@ -141,7 +142,7 @@ export class VendorController {
 
   @Patch('onboarding/identity-image')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'documentFrontUrl', maxCount: 1 },
@@ -150,7 +151,7 @@ export class VendorController {
   )
   @Patch('onboarding/portfolio-images')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   @UseInterceptors(FilesInterceptor('files', 10, cloudinaryMulterOptions))
   submitPortfolioImages(
     @Req() req: { user: { id: string } },
@@ -161,42 +162,42 @@ export class VendorController {
 
   @Get('onboarding/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   getStatus(@Req() req: { user: { id: string } }) {
     return this.vendorService.getVendorStatus(req.user.id);
   }
 
   @Get('')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles('VENDOR')
   getVendorByUserId(@Req() req: { user: { id: string } }) {
     return this.vendorService.getVendorByUserId(req.user.id);
   }
 
   @Get('admin/all-vendors')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles('ADMIN')
   getAllVendors() {
     return this.vendorService.getAllVendors();
   }
 
   @Patch('admin/approve/:vendorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles('ADMIN')
   approveVendor(@Param('vendorId') vendorId: string) {
     return this.vendorService.approveVendor(vendorId);
   }
 
   @Patch('admin/reject/:vendorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles('ADMIN')
   rejectVendor(@Param('vendorId') vendorId: string) {
     return this.vendorService.rejectVendor(vendorId);
   }
 
   @Get('admin/pending')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles('ADMIN')
   getPendingVendors() {
     return this.vendorService.getPendingVendors();
   }
@@ -209,5 +210,10 @@ export class VendorController {
   @Get('service/:serviceId')
   getServiceById(@Param('serviceId') serviceId: string) {
     return this.vendorService.getServiceById(serviceId);
+  }
+
+  @Get('search-vendor')
+  searchVendors(@Query() query: QueryVendorsDto) {
+    return this.vendorService.findVendors(query);
   }
 }

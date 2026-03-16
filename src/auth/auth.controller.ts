@@ -114,4 +114,9 @@ export class AuthController {
   getPendingVendor(@Param('userId') userId: string) {
     return this.vendorServices.getPendingVendorsById(userId);
   }
+
+  @Get('/user/:userId')
+  getUserById(@Param(':userId') userId: string) {
+    return this.authService.getUserById(userId);
+  }
 }

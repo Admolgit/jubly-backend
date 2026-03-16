@@ -10,10 +10,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
-import { CreateVendorDto } from './dto/create-vendor.dto';
+import { CreateVendorDto, QueryVendorsDto } from './dto/create-vendor.dto';
 import { successResponse } from 'src/utils/response';
 import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
-import { KYCStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { generateSlug } from 'src/utils/generateSlug';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { CreateSubaccountDto } from 'src/paystack';
@@ -68,7 +68,7 @@ export class VendorService {
       data: {
         userId,
         ...dto,
-        kycStatus: KYCStatus.NOT_SUBMITTED,
+        kycStatus: 'NOT_SUBMITTED',
       },
     });
 
@@ -285,7 +285,7 @@ export class VendorService {
         portfolioImages: {
           push: uploads,
         },
-        kycStatus: KYCStatus.PENDING,
+        kycStatus: 'PENDING',
       },
     });
 
@@ -381,7 +381,7 @@ export class VendorService {
   async getPendingVendors() {
     try {
       const pendingVendors = await this.prisma.vendor.findMany({
-        where: { kycStatus: KYCStatus.PENDING },
+        where: { kycStatus: 'PENDING' },
       });
 
       return successResponse(
@@ -401,7 +401,7 @@ export class VendorService {
       const vendor = await this.prisma.vendor.findFirst({
         where: {
           userId,
-          kycStatus: KYCStatus.PENDING,
+          kycStatus: 'PENDING',
         },
       });
 
@@ -438,7 +438,7 @@ export class VendorService {
       const approveVendor = await this.prisma.vendor.update({
         where: { id: vendorId },
         data: {
-          kycStatus: KYCStatus.APPROVED,
+          kycStatus: 'APPROVED',
           isApproved: true,
           isActive: true,
         },
@@ -484,7 +484,7 @@ export class VendorService {
       const rejectVendor = await this.prisma.vendor.update({
         where: { id: vendorId },
         data: {
-          kycStatus: KYCStatus.REJECTED,
+          kycStatus: 'REJECTED',
           isApproved: false,
           isActive: false,
         },
@@ -561,7 +561,7 @@ export class VendorService {
         throw new BadRequestException('User not found');
       }
 
-      const vendor = await this.prisma.vendor.findFirst({
+      const vendor = await this.prisma.vendor.findUnique({
         where: {
           userId: user.id,
         },
@@ -579,6 +579,10 @@ export class VendorService {
         },
       });
 
+      if (!vendor) {
+        throw new BadRequestException('Vendor profile not found.');
+      }
+
       const services = await this.prisma.service.findMany({
         where: {
           userId: vendor?.userId,
@@ -590,10 +594,6 @@ export class VendorService {
           vendorId: vendor?.id,
         },
       });
-
-      if (!vendor) {
-        throw new BadRequestException('Vendor profile not found.');
-      }
 
       return successResponse(
         { vendor, services, vendorAvailability },
@@ -623,6 +623,35 @@ export class VendorService {
     } catch (error) {
       throw new InternalServerErrorException(
         'Failed to fetched service',
+        error.message,
+      );
+    }
+  }
+
+  async findVendors(query: QueryVendorsDto) {
+    try {
+      const { name, location, type, page = 1, limit = 10 } = query;
+
+      const filters: any = {};
+      if (name) filters.businessName = { contains: name, mode: 'insensitive' };
+      if (location) filters.city = { contains: location, mode: 'insensitive' };
+      if (type) filters.category = type;
+
+      const skip = (page - 1) * limit;
+
+      const [data, total] = await Promise.all([
+        this.prisma.vendor.findMany({
+          where: filters,
+          skip,
+          take: Number(limit),
+        }),
+        this.prisma.vendor.count({ where: filters }),
+      ]);
+
+      return successResponse({ data, total }, 'Successful');
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetched vendors',
         error.message,
       );
     }

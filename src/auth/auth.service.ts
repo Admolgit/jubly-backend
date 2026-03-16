@@ -15,7 +15,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { comparePassword, hashPassword } from './hash';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { successResponse } from 'src/utils/response';
-import { KYCStatus, UserRole } from '@prisma/client';
+// import { KYCStatus, UserRole } from '@prisma/client';
 import Helper from 'src/utils/helpers';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { generateTempPassword } from 'src/utils/generateTempPassword';
@@ -99,7 +99,7 @@ export class AuthService {
           password: hashed,
           firstName: dto.clientName,
           phone: dto.phone,
-          role: UserRole.CLIENT,
+          role: 'CLIENT',
           codeExpiresAt: Helper.set24HourExpiry(),
           isVerified: true,
         },
@@ -141,14 +141,14 @@ export class AuthService {
         where: { userId: user.id },
       });
 
-      if (user.role === UserRole.VENDOR && !vendor) {
+      if (user.role === 'VENDOR' && !vendor) {
         throw new UnauthorizedException('Vendor account not found');
       }
 
       if (
         vendor &&
         vendor.isApproved === false &&
-        vendor.kycStatus === KYCStatus.NOT_SUBMITTED
+        vendor.kycStatus === 'NOT_SUBMITTED'
       ) {
         throw new UnauthorizedException('Complete your onboarding');
       }
@@ -156,7 +156,7 @@ export class AuthService {
       if (
         vendor &&
         vendor.isApproved === false &&
-        vendor.kycStatus === KYCStatus.PENDING
+        vendor.kycStatus === 'PENDING'
       ) {
         throw new UnauthorizedException('Vendor account pending approval');
       }
@@ -425,6 +425,20 @@ export class AuthService {
         'Resend OTP failed',
         error.message,
       );
+    }
+  }
+
+  async getUserById(userId: string) {
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: {
+          id: userId,
+        },
+      });
+
+      return successResponse({ user }, 'successful');
+    } catch (error) {
+      throw new InternalServerErrorException('User failed', error.message);
     }
   }
 }
