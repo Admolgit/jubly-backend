@@ -72,6 +72,7 @@ export class PaystackController {
       }
 
       const event = req.body;
+      console.log({ event });
       const paymentChannel =
         event.data.channel || event.data.authorization.channel || 'unknown';
 
@@ -86,6 +87,8 @@ export class PaystackController {
           providerRef: event.data.reference,
         },
       });
+
+      console.log({ transactionExists });
 
       if (transactionExists) {
         console.log(
@@ -116,7 +119,7 @@ export class PaystackController {
           phone,
         } = event.data.metadata;
 
-        await this.bookingService.createBooking(vendorId, {
+        const book = await this.bookingService.createBooking(vendorId, {
           userId,
           clientId,
           serviceId,
@@ -128,6 +131,8 @@ export class PaystackController {
           status: 'CONFIRMED',
         });
 
+        console.log({ book });
+
         const senderDetails = await this.prisma.senderDetails.create({
           data: {
             vendorId: vendorId,
@@ -138,6 +143,8 @@ export class PaystackController {
             senderDescription: 'Payment via Paystack',
           },
         });
+
+        console.log({ senderDetails });
 
         const dto = {
           amount: event.data.amount,
@@ -152,6 +159,8 @@ export class PaystackController {
           paymentMethod: paymentChannel,
           description: 'Payment via Paystack',
         };
+
+        console.log({ dto });
 
         await this.mailService.sendClientBookingMail({
           clientEmail: email,

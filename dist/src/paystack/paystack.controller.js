@@ -83,6 +83,7 @@ let PaystackController = class PaystackController {
                 throw new common_1.HttpException('Invalid signature', common_1.HttpStatus.UNAUTHORIZED);
             }
             const event = req.body;
+            console.log({ event });
             const paymentChannel = event.data.channel || event.data.authorization.channel || 'unknown';
             const auth = event.data.authorization;
             const bank = auth?.bank || null;
@@ -93,13 +94,14 @@ let PaystackController = class PaystackController {
                     providerRef: event.data.reference,
                 },
             });
+            console.log({ transactionExists });
             if (transactionExists) {
                 console.log(`Transaction with reference ${event.data.reference} already exists. Skipping processing.`);
                 return { status: true };
             }
             if (event.event === 'charge.success') {
                 const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, durationMins, startTime, endTime, clientName, businessName, vendorEmail, city, state, country, phone, } = event.data.metadata;
-                await this.bookingService.createBooking(vendorId, {
+                const book = await this.bookingService.createBooking(vendorId, {
                     userId,
                     clientId,
                     serviceId,
@@ -110,6 +112,7 @@ let PaystackController = class PaystackController {
                     endTime,
                     status: 'CONFIRMED',
                 });
+                console.log({ book });
                 const senderDetails = await this.prisma.senderDetails.create({
                     data: {
                         vendorId: vendorId,
@@ -120,6 +123,7 @@ let PaystackController = class PaystackController {
                         senderDescription: 'Payment via Paystack',
                     },
                 });
+                console.log({ senderDetails });
                 const dto = {
                     amount: event.data.amount,
                     senderDetailsId: senderDetails.id,
@@ -133,6 +137,7 @@ let PaystackController = class PaystackController {
                     paymentMethod: paymentChannel,
                     description: 'Payment via Paystack',
                 };
+                console.log({ dto });
                 await this.mailService.sendClientBookingMail({
                     clientEmail: email,
                     serviceName: title,
