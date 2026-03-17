@@ -101,9 +101,10 @@ let PaystackController = class PaystackController {
                 return { status: true };
             }
             if (event.event === 'charge.success') {
-                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, durationMins, startTime, endTime, clientName, businessName, vendorEmail, city, state, country, phone, } = event.data.metadata;
-                const book = await this.bookingService.createBooking(vendorId, {
-                    userId,
+                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, durationMins, startTime, endTime, clientName, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+                console.log('event.data.metadata', event.data.metadata);
+                const book = await this.bookingService.createBooking(vendorUserId, {
+                    userId: vendorUserId,
                     clientId,
                     serviceId,
                     date: dayOfWeek,

@@ -93,12 +93,15 @@ export class BookingService {
         },
       });
 
+      let savedClientId;
       if (!client) {
-        await this.authService.registerClient({
+        const saved = await this.authService.registerClient({
           clientName: dto.clientName,
           email: dto.clientEmail,
           phone: dto.clientEmail,
         });
+
+        savedClientId = saved.data.client.id;
       }
 
       const services = await this.prisma.service.findUnique({
@@ -124,7 +127,7 @@ export class BookingService {
           amount: amount * 100,
           metadata: {
             vendorId: services.vendorId,
-            clientId: client?.id,
+            clientId: client?.id ?? savedClientId,
             serviceId: dto.serviceId,
             clientName: dto.clientName,
             email: dto.clientEmail,
@@ -138,6 +141,7 @@ export class BookingService {
             city: dto.city,
             state: dto.state,
             country: dto.country,
+            vendorUserId: vendorUser?.id,
           },
         },
         {

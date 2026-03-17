@@ -117,11 +117,14 @@ export class PaystackController {
           city,
           state,
           country,
+          vendorUserId,
           phone,
         } = event.data.metadata;
 
-        const book = await this.bookingService.createBooking(vendorId, {
-          userId,
+        console.log('event.data.metadata', event.data.metadata);
+
+        const book = await this.bookingService.createBooking(vendorUserId, {
+          userId: vendorUserId,
           clientId,
           serviceId,
           date: dayOfWeek,
