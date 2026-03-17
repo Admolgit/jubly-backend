@@ -85,6 +85,7 @@ export class PaystackController {
       const transactionExists = await this.prisma.transaction.findUnique({
         where: {
           providerRef: event.data.reference,
+          status: 'COMPLETED',
         },
       });
 
