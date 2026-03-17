@@ -21,6 +21,7 @@ const fs_1 = require("fs");
 (0, dotenv_1.config)();
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
+    app.set('trust proxy', 1);
     app.use(body_parser_1.default.json({
         verify: (req, _res, buf) => {
             req.rawBody = buf;
