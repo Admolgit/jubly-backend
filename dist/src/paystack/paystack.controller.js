@@ -110,8 +110,8 @@ let PaystackController = class PaystackController {
                     date: dayOfWeek,
                     clientName,
                     clientEmail: email,
-                    startTime,
-                    endTime,
+                    startTime: new Date(startTime),
+                    endTime: new Date(endTime),
                     status: 'CONFIRMED',
                 });
                 console.log({ book });
