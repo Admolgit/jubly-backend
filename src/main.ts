@@ -99,6 +99,6 @@ async function bootstrap() {
 
   keepServerAliveDeployment.start();
 
-  await app.listen(process.env.PORT ?? 4001);
+  await app.listen(process.env.PORT ?? 4001, '0.0.0.0');
 }
 bootstrap();
