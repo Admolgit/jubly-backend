@@ -35,6 +35,14 @@ let BookingService = class BookingService {
             if (!user) {
                 throw new common_1.NotFoundException('User not found');
             }
+            const service = await this.prisma.service.findFirst({
+                where: {
+                    id: dto.serviceId,
+                },
+            });
+            if (!service) {
+                throw new common_1.NotFoundException('Service not found');
+            }
             const vendor = await this.prisma.vendor.findFirst({
                 where: {
                     userId,
@@ -50,8 +58,8 @@ let BookingService = class BookingService {
                     serviceId: dto.serviceId,
                     date: dto.date,
                     clientEmail: dto.clientEmail,
-                    startTime: dto.startTime,
-                    endTime: dto.endTime,
+                    startTime: new Date(dto.startTime),
+                    endTime: new Date(dto.endTime),
                 },
             });
             const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
@@ -61,13 +69,23 @@ let BookingService = class BookingService {
                 },
             });
             if (calendarIntegration) {
-                await this.googleCalendarService.createCalendarEvent(calendarIntegration.accessToken, {
-                    title: 'New Jubl Booking',
-                    description: 'Booking created via Jubl',
-                    startTime: dto.startTime,
-                    endTime: dto.endTime,
-                    attendeeEmail: dto.clientEmail,
-                });
+                try {
+                    await this.googleCalendarService.verifyBooking({
+                        accessToken: calendarIntegration.accessToken,
+                        startTime: new Date(dto.startTime),
+                        endTime: new Date(dto.endTime),
+                    });
+                    await this.googleCalendarService.createCalendarEvent(calendarIntegration.accessToken, {
+                        title: service.name,
+                        description: service.description ?? 'No description',
+                        startTime: new Date(dto.startTime),
+                        endTime: new Date(dto.endTime),
+                        attendeeEmail: dto.clientEmail,
+                    });
+                }
+                catch (err) {
+                    console.error('Google Calendar failed:', err.message);
+                }
             }
             return booking;
         }

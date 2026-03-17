@@ -45,7 +45,7 @@ let GoogleController = class GoogleController {
                 refreshToken: tokens.refresh_token,
             },
         });
-        return res.redirect('http://localhost:3000/dashboard');
+        return res.redirect('http://localhost:5173/dashboard');
     }
 };
 exports.GoogleController = GoogleController;

@@ -56,6 +56,6 @@ export class GoogleController {
       },
     });
 
-    return res.redirect('http://localhost:3000/dashboard');
+    return res.redirect('http://localhost:5173/dashboard');
   }
 }
