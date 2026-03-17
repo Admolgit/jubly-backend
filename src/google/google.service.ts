@@ -2,20 +2,48 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { google } from 'googleapis';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
 export class GoogleCalendarService {
   private oauthClient;
 
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    private prisma: PrismaService,
+  ) {
     this.oauthClient = new google.auth.OAuth2(
       this.config.get('GOOGLE_CLIENT_ID'),
       this.config.get('GOOGLE_CLIENT_SECRET'),
       this.config.get('GOOGLE_REDIRECT_URL'),
     );
+  }
+
+  replaceBigInt(obj: any): any {
+    if (obj === null || obj === undefined) return obj;
+
+    if (typeof obj === 'bigint') {
+      return obj.toString();
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.replaceBigInt(item));
+    }
+
+    if (typeof obj === 'object') {
+      const safeObj: any = {};
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          safeObj[key] = this.replaceBigInt(obj[key]);
+        }
+      }
+      return safeObj;
+    }
+
+    return obj;
   }
 
   getAuthUrl() {
@@ -26,6 +54,34 @@ export class GoogleCalendarService {
       scope: scopes,
       prompt: 'consent',
     });
+  }
+
+  async saveTokens(userId: string, code: string) {
+    const { tokens } = await this.oauthClient.getToken(code);
+
+    if (!tokens.access_token || !tokens.refresh_token) {
+      throw new InternalServerErrorException('Google did not return tokens');
+    }
+
+    const result = await this.prisma.vendorCalendar.upsert({
+      where: { userId: userId },
+      update: {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiryDate: tokens.expiry_date || Date.now(),
+        linked: true,
+      },
+      create: {
+        provider: 'GOOGLE',
+        userId: userId,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiryDate: tokens.expiry_date || Date.now(),
+        linked: true,
+      },
+    });
+
+    return this.replaceBigInt(result);
   }
 
   async getTokens(code: string) {

@@ -13,10 +13,32 @@ exports.GoogleCalendarService = void 0;
 const common_1 = require("@nestjs/common");
 const googleapis_1 = require("googleapis");
 const config_1 = require("@nestjs/config");
+const prisma_service_1 = require("../../prisma/prisma.service");
 let GoogleCalendarService = class GoogleCalendarService {
-    constructor(config) {
+    constructor(config, prisma) {
         this.config = config;
+        this.prisma = prisma;
         this.oauthClient = new googleapis_1.google.auth.OAuth2(this.config.get('GOOGLE_CLIENT_ID'), this.config.get('GOOGLE_CLIENT_SECRET'), this.config.get('GOOGLE_REDIRECT_URL'));
+    }
+    replaceBigInt(obj) {
+        if (obj === null || obj === undefined)
+            return obj;
+        if (typeof obj === 'bigint') {
+            return obj.toString();
+        }
+        if (Array.isArray(obj)) {
+            return obj.map((item) => this.replaceBigInt(item));
+        }
+        if (typeof obj === 'object') {
+            const safeObj = {};
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    safeObj[key] = this.replaceBigInt(obj[key]);
+                }
+            }
+            return safeObj;
+        }
+        return obj;
     }
     getAuthUrl() {
         const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
@@ -25,6 +47,30 @@ let GoogleCalendarService = class GoogleCalendarService {
             scope: scopes,
             prompt: 'consent',
         });
+    }
+    async saveTokens(userId, code) {
+        const { tokens } = await this.oauthClient.getToken(code);
+        if (!tokens.access_token || !tokens.refresh_token) {
+            throw new common_1.InternalServerErrorException('Google did not return tokens');
+        }
+        const result = await this.prisma.vendorCalendar.upsert({
+            where: { userId: userId },
+            update: {
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token,
+                expiryDate: tokens.expiry_date || Date.now(),
+                linked: true,
+            },
+            create: {
+                provider: 'GOOGLE',
+                userId: userId,
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token,
+                expiryDate: tokens.expiry_date || Date.now(),
+                linked: true,
+            },
+        });
+        return this.replaceBigInt(result);
     }
     async getTokens(code) {
         const { tokens } = await this.oauthClient.getToken(code);
@@ -81,5 +127,6 @@ let GoogleCalendarService = class GoogleCalendarService {
 exports.GoogleCalendarService = GoogleCalendarService;
 exports.GoogleCalendarService = GoogleCalendarService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __metadata("design:paramtypes", [config_1.ConfigService,
+        prisma_service_1.PrismaService])
 ], GoogleCalendarService);

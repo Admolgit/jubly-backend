@@ -208,9 +208,11 @@ model Transaction {
 }
 
 model vendorCalendar {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  vendorId     String @db.ObjectId
-  provider     String
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String  @db.ObjectId @unique
+  provider     String  
   accessToken  String
   refreshToken String
+  expiryDate   String
+  linked       Boolean
 }

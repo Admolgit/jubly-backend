@@ -16,14 +16,47 @@ exports.GoogleController = void 0;
 const common_1 = require("@nestjs/common");
 const google_service_1 = require("./google.service");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const auth_service_1 = require("../auth/auth.service");
 let GoogleController = class GoogleController {
-    constructor(googleService, prisma) {
+    constructor(googleService, prisma, authService) {
         this.googleService = googleService;
         this.prisma = prisma;
+        this.authService = authService;
     }
-    connectGoogle(res) {
-        const url = this.googleService.getAuthUrl();
-        return res.redirect(url);
+    connectGoogleCalendar(userId, direction) {
+        if (!userId)
+            throw new common_1.BadRequestException('UserId required');
+        const stateObj = { userId, direction };
+        const state = encodeURIComponent(Buffer.from(JSON.stringify(stateObj)).toString('base64'));
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+            `client_id=${process.env.GOOGLE_CLIENT_ID}` +
+            `&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}` +
+            `&response_type=code` +
+            `&scope=https://www.googleapis.com/auth/calendar` +
+            `&access_type=offline` +
+            `&prompt=consent` +
+            `&state=${state}`;
+        return { url: authUrl };
+    }
+    async googleRedirect(code, state, res) {
+        if (!code)
+            throw new common_1.BadRequestException('Code not provided');
+        if (!state)
+            throw new common_1.BadRequestException('State not provided');
+        let parsedState;
+        try {
+            parsedState = JSON.parse(Buffer.from(decodeURIComponent(state), 'base64').toString());
+        }
+        catch {
+            throw new common_1.BadRequestException('Invalid state');
+        }
+        const result = await this.googleService.saveTokens(parsedState.userId, code);
+        const appJwt = this.authService.generateJwt(parsedState.userId);
+        let frontendRedirectUrl = `${process.env.WEBSITE_URL}/app/home?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
+        if (parsedState.direction === 'onboarding') {
+            frontendRedirectUrl = `${process.env.WEBSITE_URL}/onboard/availability?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
+        }
+        return res.redirect(frontendRedirectUrl);
     }
     async googleCallback(req, code, res) {
         const tokens = await this.googleService.getTokens(code);
@@ -37,27 +70,29 @@ let GoogleController = class GoogleController {
         if (!vendor) {
             throw new common_1.NotFoundException('Vendr not found');
         }
-        await this.prisma.vendorCalendar.create({
-            data: {
-                vendorId: vendor.id,
-                provider: 'google',
-                accessToken: tokens.access_token,
-                refreshToken: tokens.refresh_token,
-            },
-        });
         return res.redirect('http://localhost:5173/dashboard');
     }
 };
 exports.GoogleController = GoogleController;
 __decorate([
     (0, common_1.Get)('calendar'),
-    __param(0, (0, common_1.Res)()),
+    __param(0, (0, common_1.Query)('userId')),
+    __param(1, (0, common_1.Query)('direction')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
-], GoogleController.prototype, "connectGoogle", null);
+], GoogleController.prototype, "connectGoogleCalendar", null);
 __decorate([
     (0, common_1.Get)('callback'),
+    __param(0, (0, common_1.Query)('code')),
+    __param(1, (0, common_1.Query)('state')),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], GoogleController.prototype, "googleRedirect", null);
+__decorate([
+    (0, common_1.Get)('callback/no'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)('code')),
     __param(2, (0, common_1.Res)()),
@@ -68,5 +103,6 @@ __decorate([
 exports.GoogleController = GoogleController = __decorate([
     (0, common_1.Controller)('google'),
     __metadata("design:paramtypes", [google_service_1.GoogleCalendarService,
-        prisma_service_1.PrismaService])
+        prisma_service_1.PrismaService,
+        auth_service_1.AuthService])
 ], GoogleController);

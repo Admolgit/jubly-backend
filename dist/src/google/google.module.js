@@ -12,13 +12,14 @@ const google_controller_1 = require("./google.controller");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const google_service_1 = require("./google.service");
 const config_1 = require("@nestjs/config");
+const auth_service_1 = require("../auth/auth.service");
 let GoogleCalenderModule = class GoogleCalenderModule {
 };
 exports.GoogleCalenderModule = GoogleCalenderModule;
 exports.GoogleCalenderModule = GoogleCalenderModule = __decorate([
     (0, common_1.Module)({
         controllers: [google_controller_1.GoogleController],
-        providers: [prisma_service_1.PrismaService, google_service_1.GoogleCalendarService],
+        providers: [prisma_service_1.PrismaService, google_service_1.GoogleCalendarService, auth_service_1.AuthService],
         exports: [],
         imports: [config_1.ConfigModule],
     })

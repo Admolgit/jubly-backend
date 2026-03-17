@@ -68,7 +68,7 @@ export class BookingService {
 
       const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
         where: {
-          vendorId: vendor.id,
+          userId,
           provider: 'google',
         },
       });
