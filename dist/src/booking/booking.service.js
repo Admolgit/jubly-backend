@@ -165,6 +165,48 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
         }
     }
+    async dashboardStats(userId, vendorId) {
+        try {
+            const bookingCount = await this.prisma.booking.count({
+                where: {
+                    userId,
+                },
+            });
+            const upcomingBooking = await this.prisma.booking.count({
+                where: {
+                    userId,
+                    status: 'PENDING',
+                },
+            });
+            const earnings = await this.prisma.transaction.aggregate({
+                where: {
+                    vendorId,
+                    status: 'SUCCESS',
+                },
+                _sum: {
+                    amount: true,
+                },
+            });
+            const views = await this.prisma.vendor.findFirst({
+                where: {
+                    userId,
+                    id: vendorId,
+                },
+                select: {
+                    vendorViews: true,
+                },
+            });
+            return (0, response_1.successResponse)({
+                bookingCount,
+                upcomingBooking,
+                earnings: earnings._sum.amount ?? 0,
+                views: views?.vendorViews ?? 0,
+            }, 'Successful');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch dashboard stats.', error.message);
+        }
+    }
 };
 exports.BookingService = BookingService;
 exports.BookingService = BookingService = __decorate([
