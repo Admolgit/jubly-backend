@@ -61,7 +61,7 @@ let BookingService = class BookingService {
                 data: {
                     vendorId: vendor.id,
                     serviceId: dto.serviceId,
-                    date: dto.date,
+                    date: new Date(dto.date),
                     clientEmail: dto.clientEmail,
                     startTime: new Date(dto.startTime),
                     endTime: new Date(dto.endTime),
