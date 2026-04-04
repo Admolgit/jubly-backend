@@ -70,6 +70,7 @@ export class BookingService {
           clientEmail: dto.clientEmail,
           startTime: new Date(dto.startTime),
           endTime: new Date(dto.endTime),
+          status: 'CONFIRMED',
         },
       });
 
@@ -201,14 +202,14 @@ export class BookingService {
     try {
       const bookingCount = await this.prisma.booking.count({
         where: {
-          userId,
+          vendorId,
         },
       });
 
       const upcomingBooking = await this.prisma.booking.count({
         where: {
-          userId,
-          status: 'PENDING',
+          vendorId,
+          status: 'CONFIRMED',
         },
       });
 
