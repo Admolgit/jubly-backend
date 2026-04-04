@@ -99,10 +99,12 @@ let GoogleCalendarService = class GoogleCalendarService {
             throw new Error('Vendor already has an event at this time');
         }
     }
-    async createCalendarEvent(accessToken, booking) {
-        const oauth2Client = new googleapis_1.google.auth.OAuth2();
+    async createCalendarEvent(calendarIntegration, booking) {
+        const oauth2Client = new googleapis_1.google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_CALLBACK_URL);
         oauth2Client.setCredentials({
-            access_token: accessToken,
+            access_token: calendarIntegration.accessToken,
+            refresh_token: calendarIntegration.refreshToken,
+            expiry_date: new Date(calendarIntegration.expiryDate).getTime(),
         });
         const calendar = googleapis_1.google.calendar({
             version: 'v3',
