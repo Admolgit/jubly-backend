@@ -82,7 +82,7 @@ export class BookingService {
           });
 
           await this.googleCalendarService.createCalendarEvent(
-            calendarIntegration.accessToken,
+            calendarIntegration,
             {
               title: service.name,
               description: service.description ?? 'No description',

@@ -75,7 +75,7 @@ let BookingService = class BookingService {
                         startTime: new Date(dto.startTime),
                         endTime: new Date(dto.endTime),
                     });
-                    await this.googleCalendarService.createCalendarEvent(calendarIntegration.accessToken, {
+                    await this.googleCalendarService.createCalendarEvent(calendarIntegration, {
                         title: service.name,
                         description: service.description ?? 'No description',
                         startTime: new Date(dto.startTime),

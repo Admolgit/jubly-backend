@@ -117,7 +117,7 @@ export class GoogleCalendarService {
   }
 
   async createCalendarEvent(
-    accessToken: string,
+    calendarIntegration: any,
     booking: {
       title: string;
       description?: string;
@@ -126,10 +126,16 @@ export class GoogleCalendarService {
       attendeeEmail: string;
     },
   ) {
-    const oauth2Client = new google.auth.OAuth2();
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_CALLBACK_URL,
+    );
 
     oauth2Client.setCredentials({
-      access_token: accessToken,
+      access_token: calendarIntegration.accessToken,
+      refresh_token: calendarIntegration.refreshToken,
+      expiry_date: new Date(calendarIntegration.expiryDate as string).getTime(),
     });
 
     const calendar = google.calendar({
