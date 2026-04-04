@@ -4,21 +4,22 @@ import {
   BadRequestException,
   Controller,
   Get,
-  NotFoundException,
   Query,
-  Req,
   Res,
+  // UseGuards,
 } from '@nestjs/common';
 import { GoogleCalendarService } from './google.service';
-import type { Response, Request } from 'express';
-import { PrismaService } from 'prisma/prisma.service';
+// import type { Response, Request } from 'express';
+// import { PrismaService } from 'prisma/prisma.service';
 import { AuthService } from 'src/auth/auth.service';
+// import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+// import { Roles, RolesGuard } from 'src/auth/role.guard';
 
 @Controller('google')
 export class GoogleController {
   constructor(
     private googleService: GoogleCalendarService,
-    private prisma: PrismaService,
+    // private prisma: PrismaService,
     private authService: AuthService,
   ) {}
 
@@ -37,7 +38,7 @@ export class GoogleController {
     const authUrl =
       `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${process.env.GOOGLE_CLIENT_ID}` +
-      `&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}` +
+      `&redirect_uri=${process.env.GOOGLE_CALLBACK_URL}` +
       `&response_type=code` +
       `&scope=https://www.googleapis.com/auth/calendar` +
       `&access_type=offline` +
@@ -72,11 +73,11 @@ export class GoogleController {
 
     const appJwt: any = this.authService.generateJwt(parsedState.userId);
 
-    let frontendRedirectUrl = `${process.env.WEBSITE_URL}/app/home?calendarLinked=true&userId=${encodeURIComponent(
+    let frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(
       result.userId as string,
     )}&accessToken=${encodeURIComponent(result.accessToken as string)}&access_token=${encodeURIComponent(appJwt)}`;
     if (parsedState.direction === 'onboarding') {
-      frontendRedirectUrl = `${process.env.WEBSITE_URL}/onboard/availability?calendarLinked=true&userId=${encodeURIComponent(
+      frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/onboard/availability?calendarLinked=true&userId=${encodeURIComponent(
         result.userId as string,
       )}&accessToken=${encodeURIComponent(result.accessToken as string)}&access_token=${encodeURIComponent(appJwt)}`;
     }
@@ -84,37 +85,11 @@ export class GoogleController {
     return res.redirect(frontendRedirectUrl);
   }
 
-  @Get('callback/no')
-  async googleCallback(
-    @Req() req: Request,
-    @Query('code') code: string,
-    @Res() res: Response,
-  ) {
-    const tokens = await this.googleService.getTokens(code);
-
-    console.log({ tokens });
-
-    const userId = req.body.id;
-    const vendor = await this.prisma.vendor.findUnique({
-      where: {
-        userId,
-      },
-    });
-
-    if (!vendor) {
-      throw new NotFoundException('Vendr not found');
-    }
-
-    // Save tokens in database
-    // await this.prisma.vendorCalendar.create({
-    //   data: {
-    //     userId,
-    //     provider: 'google',
-    //     accessToken: tokens.access_token,
-    //     refreshToken: tokens.refresh_token,
-    //   },
-    // });
-
-    return res.redirect('http://localhost:5173/dashboard');
+  @Get('linked')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles('VENDOR')
+  getCalenderLinkedStatus(@Query('userId') userId: string) {
+    if (!userId) throw new BadRequestException('UserId required');
+    return this.googleService.getUserCalendarLinked(userId);
   }
 }

@@ -6,6 +6,7 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { google } from 'googleapis';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'prisma/prisma.service';
+import { successResponse } from 'src/utils/response';
 
 @Injectable()
 export class GoogleCalendarService {
@@ -57,7 +58,10 @@ export class GoogleCalendarService {
   }
 
   async saveTokens(userId: string, code: string) {
-    const { tokens } = await this.oauthClient.getToken(code);
+    const { tokens } = await this.oauthClient.getToken({
+      code,
+      redirect_uri: process.env.GOOGLE_CALLBACK_URL,
+    });
 
     if (!tokens.access_token || !tokens.refresh_token) {
       throw new InternalServerErrorException('Google did not return tokens');
@@ -68,7 +72,7 @@ export class GoogleCalendarService {
       update: {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
-        expiryDate: tokens.expiry_date || Date.now(),
+        expiryDate: new Date(tokens.expiry_date as string),
         linked: true,
       },
       create: {
@@ -76,7 +80,7 @@ export class GoogleCalendarService {
         userId: userId,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
-        expiryDate: tokens.expiry_date || Date.now(),
+        expiryDate: new Date(tokens.expiry_date as string),
         linked: true,
       },
     });
@@ -153,5 +157,26 @@ export class GoogleCalendarService {
     });
 
     return response.data;
+  }
+
+  async getUserCalendarLinked(userId: string) {
+    try {
+      const linked = await this.prisma.vendorCalendar.findFirst({
+        where: {
+          userId,
+          linked: true,
+        },
+      });
+
+      return successResponse(
+        { linked },
+        'Successfully fetched calendar linked status',
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch dashboard stats.',
+        error.message as string,
+      );
+    }
   }
 }

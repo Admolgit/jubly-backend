@@ -214,6 +214,6 @@ model vendorCalendar {
   provider     String
   accessToken  String
   refreshToken String
-  expiryDate   String
+  expiryDate   DateTime
   linked       Boolean
 }

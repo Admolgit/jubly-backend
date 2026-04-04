@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const googleapis_1 = require("googleapis");
 const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const response_1 = require("../utils/response");
 let GoogleCalendarService = class GoogleCalendarService {
     constructor(config, prisma) {
         this.config = config;
@@ -49,7 +50,10 @@ let GoogleCalendarService = class GoogleCalendarService {
         });
     }
     async saveTokens(userId, code) {
-        const { tokens } = await this.oauthClient.getToken(code);
+        const { tokens } = await this.oauthClient.getToken({
+            code,
+            redirect_uri: process.env.GOOGLE_CALLBACK_URL,
+        });
         if (!tokens.access_token || !tokens.refresh_token) {
             throw new common_1.InternalServerErrorException('Google did not return tokens');
         }
@@ -58,7 +62,7 @@ let GoogleCalendarService = class GoogleCalendarService {
             update: {
                 accessToken: tokens.access_token,
                 refreshToken: tokens.refresh_token,
-                expiryDate: tokens.expiry_date || Date.now(),
+                expiryDate: new Date(tokens.expiry_date),
                 linked: true,
             },
             create: {
@@ -66,7 +70,7 @@ let GoogleCalendarService = class GoogleCalendarService {
                 userId: userId,
                 accessToken: tokens.access_token,
                 refreshToken: tokens.refresh_token,
-                expiryDate: tokens.expiry_date || Date.now(),
+                expiryDate: new Date(tokens.expiry_date),
                 linked: true,
             },
         });
@@ -122,6 +126,20 @@ let GoogleCalendarService = class GoogleCalendarService {
             requestBody: event,
         });
         return response.data;
+    }
+    async getUserCalendarLinked(userId) {
+        try {
+            const linked = await this.prisma.vendorCalendar.findFirst({
+                where: {
+                    userId,
+                    linked: true,
+                },
+            });
+            return (0, response_1.successResponse)({ linked }, 'Successfully fetched calendar linked status');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch dashboard stats.', error.message);
+        }
     }
 };
 exports.GoogleCalendarService = GoogleCalendarService;
