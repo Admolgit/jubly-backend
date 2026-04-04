@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
-import { BookingService } from './booking.service';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import { BookingService, DateFilter } from './booking.service';
 import type { IBooking } from './dto/booking.dto';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { RolesGuard, Roles } from 'src/auth/role.guard';
@@ -36,5 +37,42 @@ export class BookingController {
   ) {
     const userId = req.user.id;
     return this.bookingService.dashboardStats(userId, vendorId);
+  }
+
+  @Get('upcoming')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async getTopUpcoming(@Req() req) {
+    return this.bookingService.getNext24HoursBookings(req.user.id as string);
+  }
+
+  @Get('services-count')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async getServicesByCount(@Req() req) {
+    return this.bookingService.countBookingsByService(req.user.id as string);
+  }
+
+  @Get('')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async getBookings(
+    @Req() req: { user: { id: string } },
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: DateFilter,
+    @Query('date') date?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.bookingService.getBookings(
+      req.user.id,
+      page,
+      limit,
+      search as string,
+      dateFilter as DateFilter,
+      date as any,
+      status as string,
+    );
   }
 }
