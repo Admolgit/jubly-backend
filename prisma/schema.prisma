@@ -74,6 +74,7 @@ model Vendor {
   bankAccountNumber  String?
   bankCode           String?
   paystackSubaccount String?
+  vendorViews        Int?
 
   bookings           Booking[]
   vendorAvailability VendorAvailability[]
@@ -209,10 +210,10 @@ model Transaction {
 
 model vendorCalendar {
   id           String  @id @default(auto()) @map("_id") @db.ObjectId
-  userId       String  @db.ObjectId @unique
-  provider     String  
+  userId       String  @unique @db.ObjectId
+  provider     String
   accessToken  String
   refreshToken String
-  expiryDate   String
+  expiryDate   DateTime
   linked       Boolean
 }

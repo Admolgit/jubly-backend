@@ -15,21 +15,30 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BookingController = void 0;
 const common_1 = require("@nestjs/common");
 const booking_service_1 = require("./booking.service");
+const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const role_guard_1 = require("../auth/role.guard");
+const common_2 = require("@nestjs/common");
 let BookingController = class BookingController {
     constructor(bookingService) {
         this.bookingService = bookingService;
     }
     createBooking(req, dto) {
-        const userId = req.body.id;
+        const userId = req.user.id;
         return this.bookingService.createBooking(userId, dto);
     }
     paymentInitialize(dto) {
         return this.bookingService.initializeBookingPayment(dto.bookingId, dto);
     }
+    getDashboardStats(req, vendorId) {
+        const userId = req.user.id;
+        return this.bookingService.dashboardStats(userId, vendorId);
+    }
 };
 exports.BookingController = BookingController;
 __decorate([
     (0, common_1.Post)(''),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -43,6 +52,16 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "paymentInitialize", null);
+__decorate([
+    (0, common_1.Get)('dashboard-stats/:vendorId'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('vendorId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getDashboardStats", null);
 exports.BookingController = BookingController = __decorate([
     (0, common_1.Controller)('booking'),
     __metadata("design:paramtypes", [booking_service_1.BookingService])

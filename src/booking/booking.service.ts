@@ -196,4 +196,56 @@ export class BookingService {
       );
     }
   }
+
+  async dashboardStats(userId: string, vendorId: string) {
+    try {
+      const bookingCount = await this.prisma.booking.count({
+        where: {
+          userId,
+        },
+      });
+
+      const upcomingBooking = await this.prisma.booking.count({
+        where: {
+          userId,
+          status: 'PENDING',
+        },
+      });
+
+      const earnings = await this.prisma.transaction.aggregate({
+        where: {
+          vendorId,
+          status: 'SUCCESS',
+        },
+        _sum: {
+          amount: true,
+        },
+      });
+
+      const views = await this.prisma.vendor.findFirst({
+        where: {
+          userId,
+          id: vendorId,
+        },
+        select: {
+          vendorViews: true,
+        },
+      });
+
+      return successResponse(
+        {
+          bookingCount,
+          upcomingBooking,
+          earnings: earnings._sum.amount ?? 0,
+          views: views?.vendorViews ?? 0,
+        },
+        'Successful',
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch dashboard stats.',
+        error.message as string,
+      );
+    }
+  }
 }
