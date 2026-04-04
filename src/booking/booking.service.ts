@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -12,6 +13,21 @@ import { IBooking } from './dto/booking.dto';
 import { AuthService } from 'src/auth/auth.service';
 import { successResponse } from 'src/utils/response';
 import axios from 'axios';
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  endOfYear,
+} from 'date-fns';
+
+export enum DateFilter {
+  DAY = 'day',
+  WEEK = 'week',
+  MONTH = 'month',
+  YEAR = 'year',
+}
 
 @Injectable()
 export class BookingService {
@@ -250,5 +266,192 @@ export class BookingService {
         error.message as string,
       );
     }
+  }
+
+  async getNext24HoursBookings(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+
+      const now = new Date();
+
+      // ✅ 24 hours from now
+      const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          vendorId: vendor.id,
+          startTime: {
+            gte: now, // from now
+            lte: next24Hours, // within 24 hours
+          },
+        },
+        orderBy: {
+          startTime: 'asc', // nearest first
+        },
+        take: 3,
+        include: {
+          services: true,
+        },
+      });
+
+      return successResponse(
+        bookings,
+        'Successfully fetched next 24 hours bookings',
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch bookings.',
+        error.message as string,
+      );
+    }
+  }
+
+  async countBookingsByService(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+
+      const grouped = await this.prisma.booking.groupBy({
+        by: ['serviceId'],
+        where: {
+          vendorId: vendor.id,
+        },
+        _count: {
+          serviceId: true,
+        },
+        orderBy: {
+          _count: {
+            serviceId: 'desc',
+          },
+        },
+      });
+
+      const serviceIds = grouped.map((g) => g.serviceId);
+
+      const services = await this.prisma.service.findMany({
+        where: {
+          id: { in: serviceIds },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      const groupedService = grouped.map((g) => ({
+        serviceName:
+          services.find((s) => s.id === g.serviceId)?.name || 'Unknown',
+        count: g._count.serviceId,
+      }));
+
+      return successResponse(
+        groupedService,
+        'Successfully counted bookings by service',
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch count by service',
+        error.message as string,
+      );
+    }
+  }
+
+  async getBookings(
+    userId: string,
+    page: string,
+    limit: string,
+    search?: string,
+    dateFilter?: DateFilter,
+    date?: string,
+    status?: string,
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const baseDate = date ? new Date(date) : new Date();
+
+    const user = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const where: any = {};
+
+    if (userId) {
+      where.vendorId = user.id;
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (search) {
+      where.clientName = { contains: search, mode: 'insensitive' };
+    }
+
+    if (dateFilter) {
+      switch (dateFilter) {
+        case DateFilter.DAY:
+          where.createdAt = {
+            gte: new Date(baseDate.setHours(0, 0, 0, 0)),
+            lte: new Date(baseDate.setHours(23, 59, 59, 999)),
+          };
+          break;
+        case DateFilter.WEEK:
+          where.createdAt = {
+            gte: startOfWeek(baseDate, { weekStartsOn: 1 }),
+            lte: endOfWeek(baseDate, { weekStartsOn: 1 }),
+          };
+          break;
+        case DateFilter.MONTH:
+          where.createdAt = {
+            gte: startOfMonth(baseDate),
+            lte: endOfMonth(baseDate),
+          };
+          break;
+        case DateFilter.YEAR:
+          where.createdAt = {
+            gte: startOfYear(baseDate),
+            lte: endOfYear(baseDate),
+          };
+          break;
+      }
+    }
+
+    const bookings = await this.prisma.booking.findMany({
+      where,
+      skip: (pageNum - 1) * limitNum,
+      take: Number(limitNum),
+      orderBy: { createdAt: 'desc' },
+      include: {
+        services: {
+          select: {
+            name: true, // will return service.name
+            price: true,
+          },
+        },
+      },
+    });
+
+    const total = await this.prisma.booking.count({ where });
+
+    return successResponse(bookings, 'Successfully fetched bookings', 200, {
+      total,
+      page: pageNum,
+      lastPage: Math.ceil(total / limitNum),
+    });
   }
 }

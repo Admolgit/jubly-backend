@@ -33,6 +33,15 @@ let BookingController = class BookingController {
         const userId = req.user.id;
         return this.bookingService.dashboardStats(userId, vendorId);
     }
+    async getTopUpcoming(req) {
+        return this.bookingService.getNext24HoursBookings(req.user.id);
+    }
+    async getServicesByCount(req) {
+        return this.bookingService.countBookingsByService(req.user.id);
+    }
+    async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
+        return this.bookingService.getBookings(req.user.id, page, limit, search, dateFilter, date, status);
+    }
 };
 exports.BookingController = BookingController;
 __decorate([
@@ -62,6 +71,39 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getDashboardStats", null);
+__decorate([
+    (0, common_1.Get)('upcoming'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], BookingController.prototype, "getTopUpcoming", null);
+__decorate([
+    (0, common_1.Get)('services-count'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], BookingController.prototype, "getServicesByCount", null);
+__decorate([
+    (0, common_1.Get)(''),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('page')),
+    __param(2, (0, common_1.Query)('limit')),
+    __param(3, (0, common_1.Query)('search')),
+    __param(4, (0, common_1.Query)('dateFilter')),
+    __param(5, (0, common_1.Query)('date')),
+    __param(6, (0, common_1.Query)('status')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], BookingController.prototype, "getBookings", null);
 exports.BookingController = BookingController = __decorate([
     (0, common_1.Controller)('booking'),
     __metadata("design:paramtypes", [booking_service_1.BookingService])

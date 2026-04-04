@@ -12,13 +12,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BookingService = void 0;
+exports.BookingService = exports.DateFilter = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
 const response_1 = require("../utils/response");
 const axios_1 = __importDefault(require("axios"));
+const date_fns_1 = require("date-fns");
+var DateFilter;
+(function (DateFilter) {
+    DateFilter["DAY"] = "day";
+    DateFilter["WEEK"] = "week";
+    DateFilter["MONTH"] = "month";
+    DateFilter["YEAR"] = "year";
+})(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
     constructor(googleCalendarService, prisma, authService) {
         this.googleCalendarService = googleCalendarService;
@@ -208,6 +216,149 @@ let BookingService = class BookingService {
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch dashboard stats.', error.message);
         }
+    }
+    async getNext24HoursBookings(userId) {
+        try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const now = new Date();
+            const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            const bookings = await this.prisma.booking.findMany({
+                where: {
+                    vendorId: vendor.id,
+                    startTime: {
+                        gte: now,
+                        lte: next24Hours,
+                    },
+                },
+                orderBy: {
+                    startTime: 'asc',
+                },
+                take: 3,
+                include: {
+                    services: true,
+                },
+            });
+            return (0, response_1.successResponse)(bookings, 'Successfully fetched next 24 hours bookings');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
+        }
+    }
+    async countBookingsByService(userId) {
+        try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const grouped = await this.prisma.booking.groupBy({
+                by: ['serviceId'],
+                where: {
+                    vendorId: vendor.id,
+                },
+                _count: {
+                    serviceId: true,
+                },
+                orderBy: {
+                    _count: {
+                        serviceId: 'desc',
+                    },
+                },
+            });
+            const serviceIds = grouped.map((g) => g.serviceId);
+            const services = await this.prisma.service.findMany({
+                where: {
+                    id: { in: serviceIds },
+                },
+                select: {
+                    id: true,
+                    name: true,
+                },
+            });
+            const groupedService = grouped.map((g) => ({
+                serviceName: services.find((s) => s.id === g.serviceId)?.name || 'Unknown',
+                count: g._count.serviceId,
+            }));
+            return (0, response_1.successResponse)(groupedService, 'Successfully counted bookings by service');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch count by service', error.message);
+        }
+    }
+    async getBookings(userId, page, limit, search, dateFilter, date, status) {
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const baseDate = date ? new Date(date) : new Date();
+        const user = await this.prisma.vendor.findUnique({
+            where: { userId },
+        });
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        const where = {};
+        if (userId) {
+            where.vendorId = user.id;
+        }
+        if (status) {
+            where.status = status;
+        }
+        if (search) {
+            where.clientName = { contains: search, mode: 'insensitive' };
+        }
+        if (dateFilter) {
+            switch (dateFilter) {
+                case DateFilter.DAY:
+                    where.createdAt = {
+                        gte: new Date(baseDate.setHours(0, 0, 0, 0)),
+                        lte: new Date(baseDate.setHours(23, 59, 59, 999)),
+                    };
+                    break;
+                case DateFilter.WEEK:
+                    where.createdAt = {
+                        gte: (0, date_fns_1.startOfWeek)(baseDate, { weekStartsOn: 1 }),
+                        lte: (0, date_fns_1.endOfWeek)(baseDate, { weekStartsOn: 1 }),
+                    };
+                    break;
+                case DateFilter.MONTH:
+                    where.createdAt = {
+                        gte: (0, date_fns_1.startOfMonth)(baseDate),
+                        lte: (0, date_fns_1.endOfMonth)(baseDate),
+                    };
+                    break;
+                case DateFilter.YEAR:
+                    where.createdAt = {
+                        gte: (0, date_fns_1.startOfYear)(baseDate),
+                        lte: (0, date_fns_1.endOfYear)(baseDate),
+                    };
+                    break;
+            }
+        }
+        const bookings = await this.prisma.booking.findMany({
+            where,
+            skip: (pageNum - 1) * limitNum,
+            take: Number(limitNum),
+            orderBy: { createdAt: 'desc' },
+            include: {
+                services: {
+                    select: {
+                        name: true,
+                        price: true,
+                    },
+                },
+            },
+        });
+        const total = await this.prisma.booking.count({ where });
+        return (0, response_1.successResponse)(bookings, 'Successfully fetched bookings', 200, {
+            total,
+            page: pageNum,
+            lastPage: Math.ceil(total / limitNum),
+        });
     }
 };
 exports.BookingService = BookingService;
