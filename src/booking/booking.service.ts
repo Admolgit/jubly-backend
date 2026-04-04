@@ -147,9 +147,11 @@ export class BookingService {
           email: dto.clientEmail,
           amount: amount * 100,
           metadata: {
+            slug: vendorUser?.slug,
             vendorId: services.vendorId,
             clientId: client?.id ?? savedClientId,
             serviceId: dto.serviceId,
+            title: services.name,
             clientName: dto.clientName,
             email: dto.clientEmail,
             vendorEmail: vendorUser?.email,
