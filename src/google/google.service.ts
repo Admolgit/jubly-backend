@@ -102,13 +102,11 @@ export class GoogleCalendarService {
       process.env.GOOGLE_CALLBACK_URL,
     );
 
-    // ✅ FULL credentials
     oauth2Client.setCredentials({
       access_token: calendar.accessToken,
       refresh_token: calendar.refreshToken,
     });
 
-    // ✅ Handle expiry
     if (calendar.expiryDate && new Date() > calendar.expiryDate) {
       const { credentials } = await oauth2Client.refreshAccessToken();
 

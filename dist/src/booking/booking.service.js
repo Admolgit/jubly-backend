@@ -65,6 +65,7 @@ let BookingService = class BookingService {
                     clientEmail: dto.clientEmail,
                     startTime: new Date(dto.startTime),
                     endTime: new Date(dto.endTime),
+                    status: 'CONFIRMED',
                 },
             });
             if (calendarIntegration) {
@@ -124,9 +125,11 @@ let BookingService = class BookingService {
                 email: dto.clientEmail,
                 amount: amount * 100,
                 metadata: {
+                    slug: vendorUser?.slug,
                     vendorId: services.vendorId,
                     clientId: client?.id ?? savedClientId,
                     serviceId: dto.serviceId,
+                    title: services.name,
                     clientName: dto.clientName,
                     email: dto.clientEmail,
                     vendorEmail: vendorUser?.email,
@@ -168,13 +171,13 @@ let BookingService = class BookingService {
         try {
             const bookingCount = await this.prisma.booking.count({
                 where: {
-                    userId,
+                    vendorId,
                 },
             });
             const upcomingBooking = await this.prisma.booking.count({
                 where: {
-                    userId,
-                    status: 'PENDING',
+                    vendorId,
+                    status: 'CONFIRMED',
                 },
             });
             const earnings = await this.prisma.transaction.aggregate({

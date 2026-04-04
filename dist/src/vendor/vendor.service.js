@@ -424,6 +424,14 @@ let VendorService = class VendorService {
                     vendorId: vendor?.id,
                 },
             });
+            await this.prisma.vendor.update({
+                where: {
+                    id: vendor.id,
+                },
+                data: {
+                    vendorViews: { increment: 1 },
+                },
+            });
             return (0, response_1.successResponse)({ vendor, services, vendorAvailability }, 'Booking page fetched.');
         }
         catch (error) {

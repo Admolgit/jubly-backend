@@ -594,6 +594,15 @@ export class VendorService {
         },
       });
 
+      await this.prisma.vendor.update({
+        where: {
+          id: vendor.id,
+        },
+        data: {
+          vendorViews: { increment: 1 },
+        },
+      });
+
       return successResponse(
         { vendor, services, vendorAvailability },
         'Booking page fetched.',
