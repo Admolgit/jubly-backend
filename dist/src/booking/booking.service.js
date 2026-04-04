@@ -51,7 +51,12 @@ let BookingService = class BookingService {
             if (!vendor) {
                 throw new common_1.NotFoundException('Vendor not found');
             }
-            await this.googleCalendarService.verifyBooking(dto);
+            const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
+                where: {
+                    userId,
+                    provider: 'google',
+                },
+            });
             const booking = await this.prisma.booking.create({
                 data: {
                     vendorId: vendor.id,
@@ -62,16 +67,10 @@ let BookingService = class BookingService {
                     endTime: new Date(dto.endTime),
                 },
             });
-            const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
-                where: {
-                    userId,
-                    provider: 'google',
-                },
-            });
             if (calendarIntegration) {
                 try {
                     await this.googleCalendarService.verifyBooking({
-                        accessToken: calendarIntegration.accessToken,
+                        calendar: calendarIntegration,
                         startTime: new Date(dto.startTime),
                         endTime: new Date(dto.endTime),
                     });
