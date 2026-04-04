@@ -104,30 +104,37 @@ let GoogleCalendarService = class GoogleCalendarService {
         oauth2Client.setCredentials({
             access_token: calendarIntegration.accessToken,
             refresh_token: calendarIntegration.refreshToken,
-            expiry_date: new Date(calendarIntegration.expiryDate).getTime(),
         });
-        const calendar = googleapis_1.google.calendar({
+        if (calendarIntegration.expiryDate &&
+            new Date() > calendarIntegration.expiryDate) {
+            const { credentials } = await oauth2Client.refreshAccessToken();
+            oauth2Client.setCredentials(credentials);
+            await this.prisma.vendorCalendar.update({
+                where: { id: calendarIntegration.id },
+                data: {
+                    accessToken: credentials.access_token,
+                    expiryDate: new Date(credentials.expiry_date),
+                },
+            });
+        }
+        const calendarApi = googleapis_1.google.calendar({
             version: 'v3',
             auth: oauth2Client,
         });
-        const event = {
-            summary: booking.title,
-            description: booking.description,
-            start: {
-                dateTime: booking.startTime.toISOString(),
-                timeZone: 'UTC',
-            },
-            end: {
-                dateTime: booking.endTime.toISOString(),
-                timeZone: 'UTC',
-            },
-            attendees: [{ email: booking.attendeeEmail }],
-        };
-        const response = await calendar.events.insert({
+        return calendarApi.events.insert({
             calendarId: 'primary',
-            requestBody: event,
+            requestBody: {
+                summary: booking.title,
+                description: booking.description,
+                start: {
+                    dateTime: booking.startTime.toISOString(),
+                },
+                end: {
+                    dateTime: booking.endTime.toISOString(),
+                },
+                attendees: [{ email: booking.attendeeEmail }],
+            },
         });
-        return response.data;
     }
     async getUserCalendarLinked(userId) {
         try {
