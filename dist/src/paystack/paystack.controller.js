@@ -119,7 +119,7 @@ let PaystackController = class PaystackController {
                     data: {
                         vendorId: vendorId,
                         email: email,
-                        senderName: accountName ?? name,
+                        senderName: accountName ?? clie,
                         senderAccountNumber: accountNumber,
                         senderBankName: bank,
                         senderDescription: 'Payment via Paystack',
