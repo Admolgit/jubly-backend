@@ -50,6 +50,8 @@ let TransactionService = class TransactionService {
                     senderDetailsId: dto.senderDetailsId,
                     currency: 'NGN',
                     paidAt: new Date(),
+                    status: dto.status,
+                    percentageFee: dto.percentageFee,
                     providerRef: dto.providerRef,
                 },
             });
@@ -72,8 +74,8 @@ let TransactionService = class TransactionService {
             }
             const transactions = await this.prisma.transaction.findMany({
                 where,
-                skip: (page - 1) * limit,
-                take: Number(limit),
+                skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
+                take: limit ? Number(limit) : undefined,
                 orderBy: { createdAt: 'desc' },
                 include: {
                     senderDetails: {

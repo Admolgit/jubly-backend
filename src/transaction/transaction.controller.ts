@@ -8,15 +8,15 @@ export class TransactionController {
   @Get(':vendorId')
   findAllVendorTransactions(
     @Param('vendorId') vendorId: string,
-    @Query('page') page: number,
-    @Query('limit') limit: number,
-    @Query('search') search: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
   ) {
     return this.transactionService.findAllVendorTransactions(
       vendorId,
-      page,
-      limit,
-      search,
+      page as number,
+      limit as number,
+      search as string,
     );
   }
 
