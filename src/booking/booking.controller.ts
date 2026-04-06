@@ -75,4 +75,12 @@ export class BookingController {
       status as string,
     );
   }
+
+  @Get('clients/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getStats(@Req() req: { user: { id: string } }) {
+    const userId = req.user.id;
+    return this.bookingService.getClientsStats(userId);
+  }
 }

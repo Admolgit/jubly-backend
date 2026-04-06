@@ -76,8 +76,6 @@ export class BookingService {
         },
       });
 
-      // await this.googleCalendarService.verifyBooking();
-
       const booking = await this.prisma.booking.create({
         data: {
           vendorId: vendor.id,
@@ -269,47 +267,39 @@ export class BookingService {
   }
 
   async getNext24HoursBookings(userId: string) {
-    try {
-      const vendor = await this.prisma.vendor.findUnique({
-        where: { userId },
-      });
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId },
+    });
 
-      if (!vendor) {
-        throw new NotFoundException('Vendor not found');
-      }
-
-      const now = new Date();
-
-      // ✅ 24 hours from now
-      const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-
-      const bookings = await this.prisma.booking.findMany({
-        where: {
-          vendorId: vendor.id,
-          startTime: {
-            gte: now, // from now
-            lte: next24Hours, // within 24 hours
-          },
-        },
-        orderBy: {
-          startTime: 'asc', // nearest first
-        },
-        take: 3,
-        include: {
-          services: true,
-        },
-      });
-
-      return successResponse(
-        bookings,
-        'Successfully fetched next 24 hours bookings',
-      );
-    } catch (error) {
-      throw new InternalServerErrorException(
-        'Failed to fetch bookings.',
-        error.message as string,
-      );
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
     }
+
+    const now = new Date();
+    const next24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: 'CONFIRMED',
+        startTime: {
+          gte: now,
+          lte: next24Hours,
+        },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+      include: {
+        services: true,
+      },
+      take: 5,
+    });
+
+    return successResponse(
+      bookings,
+      'Successfully fetched next 24 hours bookings',
+    );
   }
 
   async countBookingsByService(userId: string) {
@@ -439,7 +429,7 @@ export class BookingService {
       include: {
         services: {
           select: {
-            name: true, // will return service.name
+            name: true,
             price: true,
           },
         },
@@ -453,5 +443,77 @@ export class BookingService {
       page: pageNum,
       lastPage: Math.ceil(total / limitNum),
     });
+  }
+
+  async getClientsStats(userId: string) {
+    // 1️⃣ Get vendor
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new Error('Vendor not found');
+    }
+
+    // 2️⃣ Total unique clients
+    const totalClients = await this.prisma.booking.groupBy({
+      by: ['clientEmail'],
+      where: {
+        vendorId: vendor.id,
+      },
+    });
+
+    // 3️⃣ Repeat clients (clients with more than 1 booking)
+    const repeatClients = await this.prisma.booking.groupBy({
+      by: ['clientEmail'],
+      where: {
+        vendorId: vendor.id,
+      },
+      _count: {
+        clientEmail: true,
+      },
+      having: {
+        clientEmail: {
+          _count: {
+            gt: 1,
+          },
+        },
+      },
+    });
+
+    // 4️⃣ Repeat rate
+    const repeatRate =
+      totalClients.length === 0
+        ? 0
+        : Math.round((repeatClients.length / totalClients.length) * 100);
+
+    // 5️⃣ Average booking value
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: 'CONFIRMED',
+      },
+      include: {
+        services: true,
+      },
+    });
+
+    const total = bookings.reduce(
+      (sum, b) => sum + (b.services?.price || 0),
+      0,
+    );
+
+    const avgBookingValue =
+      bookings.length === 0 ? 0 : Math.round(total / bookings.length);
+
+    return successResponse(
+      {
+        totalClients: totalClients.length,
+        repeatClients: repeatClients.length,
+        repeatRate,
+        avgBookingValue,
+      },
+      'Successfully fetched clients stats',
+    );
   }
 }

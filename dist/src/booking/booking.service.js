@@ -218,36 +218,32 @@ let BookingService = class BookingService {
         }
     }
     async getNext24HoursBookings(userId) {
-        try {
-            const vendor = await this.prisma.vendor.findUnique({
-                where: { userId },
-            });
-            if (!vendor) {
-                throw new common_1.NotFoundException('Vendor not found');
-            }
-            const now = new Date();
-            const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-            const bookings = await this.prisma.booking.findMany({
-                where: {
-                    vendorId: vendor.id,
-                    startTime: {
-                        gte: now,
-                        lte: next24Hours,
-                    },
-                },
-                orderBy: {
-                    startTime: 'asc',
-                },
-                take: 3,
-                include: {
-                    services: true,
-                },
-            });
-            return (0, response_1.successResponse)(bookings, 'Successfully fetched next 24 hours bookings');
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
         }
-        catch (error) {
-            throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
-        }
+        const now = new Date();
+        const next24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const bookings = await this.prisma.booking.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: 'CONFIRMED',
+                startTime: {
+                    gte: now,
+                    lte: next24Hours,
+                },
+            },
+            orderBy: {
+                startTime: 'asc',
+            },
+            include: {
+                services: true,
+            },
+            take: 5,
+        });
+        return (0, response_1.successResponse)(bookings, 'Successfully fetched next 24 hours bookings');
     }
     async countBookingsByService(userId) {
         try {
@@ -359,6 +355,56 @@ let BookingService = class BookingService {
             page: pageNum,
             lastPage: Math.ceil(total / limitNum),
         });
+    }
+    async getClientsStats(userId) {
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new Error('Vendor not found');
+        }
+        const totalClients = await this.prisma.booking.groupBy({
+            by: ['clientEmail'],
+            where: {
+                vendorId: vendor.id,
+            },
+        });
+        const repeatClients = await this.prisma.booking.groupBy({
+            by: ['clientEmail'],
+            where: {
+                vendorId: vendor.id,
+            },
+            _count: {
+                clientEmail: true,
+            },
+            having: {
+                clientEmail: {
+                    _count: {
+                        gt: 1,
+                    },
+                },
+            },
+        });
+        const repeatRate = totalClients.length === 0
+            ? 0
+            : Math.round((repeatClients.length / totalClients.length) * 100);
+        const bookings = await this.prisma.booking.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: 'CONFIRMED',
+            },
+            include: {
+                services: true,
+            },
+        });
+        const total = bookings.reduce((sum, b) => sum + (b.services?.price || 0), 0);
+        const avgBookingValue = bookings.length === 0 ? 0 : Math.round(total / bookings.length);
+        return (0, response_1.successResponse)({
+            totalClients: totalClients.length,
+            repeatClients: repeatClients.length,
+            repeatRate,
+            avgBookingValue,
+        }, 'Successfully fetched clients stats');
     }
 };
 exports.BookingService = BookingService;

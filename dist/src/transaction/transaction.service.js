@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TransactionService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const response_1 = require("../utils/response");
 let TransactionService = class TransactionService {
     constructor(prisma) {
         this.prisma = prisma;
@@ -33,6 +34,100 @@ let TransactionService = class TransactionService {
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to record this transactions', error.message);
+        }
+    }
+    async findAllVendorTransactions(vendorId, page, limit, search) {
+        try {
+            let where = {};
+            if (vendorId) {
+                where.vendorId = vendorId;
+            }
+            if (search) {
+                where.OR = [
+                    { title: { contains: search, mode: 'insensitive' } },
+                    { description: { contains: search, mode: 'insensitive' } },
+                ];
+            }
+            const transactions = await this.prisma.transaction.findMany({
+                where,
+                skip: (page - 1) * limit,
+                take: Number(limit),
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    senderDetails: {
+                        select: {
+                            id: true,
+                            senderName: true,
+                            senderDescription: true,
+                        },
+                    },
+                    booking: {
+                        select: {
+                            id: true,
+                            createdAt: true,
+                            updatedAt: true,
+                            clientEmail: true,
+                            status: true,
+                            startTime: true,
+                        },
+                    },
+                },
+            });
+            const total = await this.prisma.transaction.count({ where });
+            return (0, response_1.successResponse)({ transactions }, 'Successfully fetched transactions.', 200, {
+                total,
+                page,
+                limit,
+            });
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch this transactions', error.message);
+        }
+    }
+    async getTotalTransactionsAmountByVendorId(vendorId, view) {
+        try {
+            let where = {};
+            if (view === 'day') {
+                const today = new Date();
+                const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                where.vendorId = vendorId;
+                where.paidAt = {
+                    gte: startOfDay,
+                    lt: endOfDay,
+                };
+            }
+            else if (view === 'week') {
+                const today = new Date();
+                const dayOfWeek = today.getDay();
+                const startOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - dayOfWeek);
+                const endOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() + (7 - dayOfWeek));
+                where.vendorId = vendorId;
+                where.paidAt = {
+                    gte: startOfWeek,
+                    lt: endOfWeek,
+                };
+            }
+            else if (view === 'month') {
+                const today = new Date();
+                const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+                where.vendorId = vendorId;
+                where.paidAt = {
+                    gte: startOfMonth,
+                    lt: endOfMonth,
+                };
+            }
+            const total = await this.prisma.transaction.aggregate({
+                where,
+                _sum: {
+                    amount: true,
+                },
+            });
+            return (0, response_1.successResponse)({ total: total._sum.amount || 0 }, 'Successfully fetched transactions amount.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch this transactions', error.message);
         }
     }
 };

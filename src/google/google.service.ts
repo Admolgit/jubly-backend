@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
@@ -229,6 +230,125 @@ export class GoogleCalendarService {
         'Failed to fetch dashboard stats.',
         error.message as string,
       );
+    }
+  }
+
+  async getCalendar({
+    view,
+    year,
+    month,
+    date,
+    vendorId,
+  }: {
+    view: string;
+    year: number;
+    month: number;
+    date?: string;
+    vendorId?: string;
+  }) {
+    let startTime: Date = new Date();
+    let endTime: Date = new Date();
+
+    // ✅ MONTH VIEW
+    if (view === 'month') {
+      startTime = new Date(year, month - 1, 1);
+      endTime = new Date(year, month, 0, 23, 59, 59);
+    }
+
+    // ✅ WEEK VIEW
+    if (view === 'week') {
+      const current = new Date(date as string);
+      const day = current.getDay();
+
+      const diffToSunday = current.getDate() - day;
+      startTime = new Date(current.setDate(diffToSunday));
+      startTime.setHours(0, 0, 0, 0);
+
+      endTime = new Date(startTime);
+      endTime.setDate(startTime.getDate() + 6);
+      endTime.setHours(23, 59, 59);
+    }
+
+    // ✅ DAY VIEW
+    if (view === 'day') {
+      startTime = new Date(date as string);
+      startTime.setHours(0, 0, 0, 0);
+
+      endTime = new Date(date as string);
+      endTime.setHours(23, 59, 59);
+    }
+
+    // 🔥 FETCH BOOKINGS
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        vendorId,
+        status: 'CONFIRMED',
+        date: {
+          gte: startTime,
+          lte: endTime,
+        },
+      },
+      orderBy: {
+        startTime: 'asc',
+      },
+    });
+
+    return this.formatCalendarData(view, bookings, startTime);
+  }
+
+  formatCalendarData(view, bookings, startDate) {
+    if (view === 'month') {
+      const calendar: Record<string, any[]> = {};
+
+      bookings.forEach((b) => {
+        const key = b.date.toISOString().split('T')[0];
+
+        if (!calendar[key]) calendar[key] = [];
+
+        calendar[key].push({
+          id: b.id,
+          title: b.clientName || b.clientEmail,
+          startTime: b.startTime,
+          endTime: b.endTime,
+        });
+      });
+
+      return successResponse(
+        { view, calendar },
+        'Successfully fetched calendar.',
+      );
+    }
+    if (view === 'week') {
+      const days: any[] = [];
+
+      for (let i = 0; i < 7; i++) {
+        const current = new Date(startDate);
+        current.setDate(startDate.getDate() + i);
+
+        const key = current.toISOString().split('T')[0];
+
+        const dayBookings = bookings.filter(
+          (b) => b.date.toISOString().split('T')[0] === key,
+        );
+
+        days.push({
+          date: key,
+          bookings: dayBookings,
+        });
+      }
+
+      if (view === 'day') {
+        return successResponse(
+          {
+            view,
+            date: startDate,
+            bookings,
+          },
+          'Successfully fetched calendar.',
+        );
+      }
+
+      return successResponse({ view, days }, 'Successfully fetched calendar.');
     }
   }
 }
