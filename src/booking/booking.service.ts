@@ -21,6 +21,7 @@ import {
   startOfYear,
   endOfYear,
 } from 'date-fns';
+import { UserRole } from '@prisma/client';
 
 export enum DateFilter {
   DAY = 'day',
@@ -124,11 +125,12 @@ export class BookingService {
     try {
       const client = await this.prisma.user.findFirst({
         where: {
-          email: dto.email,
+          email: dto.clientEmail,
+          role: UserRole.CLIENT,
         },
       });
 
-      let savedClientId;
+      let savedClientId: string = '';
       if (!client) {
         const saved = await this.authService.registerClient({
           clientName: dto.clientName,

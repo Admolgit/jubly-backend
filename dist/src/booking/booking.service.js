@@ -20,6 +20,7 @@ const auth_service_1 = require("../auth/auth.service");
 const response_1 = require("../utils/response");
 const axios_1 = __importDefault(require("axios"));
 const date_fns_1 = require("date-fns");
+const client_1 = require("@prisma/client");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -105,10 +106,11 @@ let BookingService = class BookingService {
         try {
             const client = await this.prisma.user.findFirst({
                 where: {
-                    email: dto.email,
+                    email: dto.clientEmail,
+                    role: client_1.UserRole.CLIENT,
                 },
             });
-            let savedClientId;
+            let savedClientId = '';
             if (!client) {
                 const saved = await this.authService.registerClient({
                     clientName: dto.clientName,

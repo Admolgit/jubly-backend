@@ -19,6 +19,7 @@ import { successResponse } from 'src/utils/response';
 import Helper from 'src/utils/helpers';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { generateTempPassword } from 'src/utils/generateTempPassword';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -99,8 +100,7 @@ export class AuthService {
           password: hashed,
           firstName: dto.clientName,
           phone: dto.phone,
-          role: 'CLIENT',
-          codeExpiresAt: Helper.set24HourExpiry(),
+          role: UserRole.CLIENT,
           isVerified: true,
         },
       });
