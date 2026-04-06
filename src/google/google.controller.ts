@@ -1,25 +1,25 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
   Controller,
   Get,
+  Param,
   Query,
   Res,
-  // UseGuards,
+  UseGuards,
 } from '@nestjs/common';
 import { GoogleCalendarService } from './google.service';
-// import type { Response, Request } from 'express';
-// import { PrismaService } from 'prisma/prisma.service';
 import { AuthService } from 'src/auth/auth.service';
-// import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
-// import { Roles, RolesGuard } from 'src/auth/role.guard';
+import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Roles, RolesGuard } from 'src/auth/role.guard';
 
 @Controller('google')
 export class GoogleController {
   constructor(
     private googleService: GoogleCalendarService,
-    // private prisma: PrismaService,
     private authService: AuthService,
   ) {}
 
@@ -91,5 +91,24 @@ export class GoogleController {
   getCalenderLinkedStatus(@Query('userId') userId: string) {
     if (!userId) throw new BadRequestException('UserId required');
     return this.googleService.getUserCalendarLinked(userId);
+  }
+
+  @Get('calendar-list/:vendorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getCalendar(
+    @Query('view') view: 'month' | 'week' | 'day',
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('date') date?: string,
+    @Param('vendorId') vendorId?: string,
+  ) {
+    return this.googleService.getCalendar({
+      view,
+      year: Number(year),
+      month: Number(month),
+      date,
+      vendorId,
+    });
   }
 }

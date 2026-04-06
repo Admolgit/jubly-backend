@@ -42,6 +42,10 @@ let BookingController = class BookingController {
     async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
         return this.bookingService.getBookings(req.user.id, page, limit, search, dateFilter, date, status);
     }
+    getStats(req) {
+        const userId = req.user.id;
+        return this.bookingService.getClientsStats(userId);
+    }
 };
 exports.BookingController = BookingController;
 __decorate([
@@ -104,6 +108,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object, Object, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], BookingController.prototype, "getBookings", null);
+__decorate([
+    (0, common_1.Get)('clients/stats'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getStats", null);
 exports.BookingController = BookingController = __decorate([
     (0, common_1.Controller)('booking'),
     __metadata("design:paramtypes", [booking_service_1.BookingService])

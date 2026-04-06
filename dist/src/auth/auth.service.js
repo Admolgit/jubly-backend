@@ -56,6 +56,7 @@ const response_1 = require("../utils/response");
 const helpers_1 = __importDefault(require("../utils/helpers"));
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const generateTempPassword_1 = require("../utils/generateTempPassword");
+const client_1 = require("@prisma/client");
 let AuthService = class AuthService {
     constructor(prisma, jwtService, nodemailService) {
         this.prisma = prisma;
@@ -115,8 +116,7 @@ let AuthService = class AuthService {
                     password: hashed,
                     firstName: dto.clientName,
                     phone: dto.phone,
-                    role: 'CLIENT',
-                    codeExpiresAt: helpers_1.default.set24HourExpiry(),
+                    role: client_1.UserRole.CLIENT,
                     isVerified: true,
                 },
             });
