@@ -45,6 +45,8 @@ export class TransactionService {
           senderDetailsId: dto.senderDetailsId,
           currency: 'NGN',
           paidAt: new Date(),
+          status: dto.status,
+          percentageFee: dto.percentageFee,
           providerRef: dto.providerRef,
         },
       });
@@ -58,9 +60,9 @@ export class TransactionService {
 
   async findAllVendorTransactions(
     vendorId: string,
-    page: number,
-    limit: number,
-    search: string,
+    page?: number,
+    limit?: number,
+    search?: string,
   ) {
     try {
       let where: any = {};
@@ -77,8 +79,8 @@ export class TransactionService {
 
       const transactions = await this.prisma.transaction.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: Number(limit),
+        skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
+        take: limit ? Number(limit) : undefined,
         orderBy: { createdAt: 'desc' },
         include: {
           senderDetails: {
