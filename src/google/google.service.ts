@@ -158,6 +158,7 @@ export class GoogleCalendarService {
       startTime: Date;
       endTime: Date;
       attendeeEmail: string;
+      attendeeName: string;
     },
   ) {
     const oauth2Client = new google.auth.OAuth2(
@@ -207,7 +208,9 @@ export class GoogleCalendarService {
         end: {
           dateTime: booking.endTime.toISOString(),
         },
-        attendees: [{ email: booking.attendeeEmail }],
+        attendees: [
+          { email: booking.attendeeEmail, displayName: booking.attendeeName },
+        ],
       },
     });
   }

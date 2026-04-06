@@ -72,6 +72,7 @@ let BookingService = class BookingService {
                     serviceId: dto.serviceId,
                     date: new Date(dto.startTime.setHours(0, 0, 0, 0)),
                     clientEmail: dto.clientEmail,
+                    clientName: dto.clientName,
                     startTime: new Date(dto.startTime),
                     endTime: new Date(dto.endTime),
                     status: 'CONFIRMED',
@@ -90,6 +91,7 @@ let BookingService = class BookingService {
                         startTime: new Date(dto.startTime),
                         endTime: new Date(dto.endTime),
                         attendeeEmail: dto.clientEmail,
+                        attendeeName: dto.clientName,
                     });
                 }
                 catch (err) {

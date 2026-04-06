@@ -152,7 +152,9 @@ let GoogleCalendarService = class GoogleCalendarService {
                 end: {
                     dateTime: booking.endTime.toISOString(),
                 },
-                attendees: [{ email: booking.attendeeEmail }],
+                attendees: [
+                    { email: booking.attendeeEmail, displayName: booking.attendeeName },
+                ],
             },
         });
     }
