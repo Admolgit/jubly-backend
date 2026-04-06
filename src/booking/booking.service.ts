@@ -122,6 +122,7 @@ export class BookingService {
   }
 
   async initializeBookingPayment(bookingId: string, dto: any) {
+    console.log({ dto });
     try {
       const client = await this.prisma.user.findFirst({
         where: {
@@ -130,12 +131,12 @@ export class BookingService {
         },
       });
 
-      let savedClientId: string = '';
+      let savedClientId: string = client?.id ?? '';
       if (!client) {
         const saved = await this.authService.registerClient({
           clientName: dto.clientName,
           email: dto.clientEmail,
-          phone: dto.clientEmail,
+          phone: dto.phone,
         });
 
         savedClientId = saved.data.client.id;
@@ -165,7 +166,7 @@ export class BookingService {
           metadata: {
             slug: vendorUser?.slug,
             vendorId: services.vendorId,
-            clientId: client?.id ?? savedClientId,
+            clientId: savedClientId,
             serviceId: dto.serviceId,
             title: services.name,
             clientName: dto.clientName,

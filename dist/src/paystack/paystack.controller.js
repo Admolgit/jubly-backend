@@ -83,7 +83,6 @@ let PaystackController = class PaystackController {
                 throw new common_1.HttpException('Invalid signature', common_1.HttpStatus.UNAUTHORIZED);
             }
             const event = req.body;
-            console.log({ event });
             const paymentChannel = event.data.channel || event.data.authorization.channel || 'unknown';
             const auth = event.data.authorization;
             const bank = auth?.bank || null;
@@ -95,7 +94,6 @@ let PaystackController = class PaystackController {
                     status: 'COMPLETED',
                 },
             });
-            console.log({ transactionExists });
             if (transactionExists) {
                 console.log(`Transaction with reference ${event.data.reference} already exists. Skipping processing.`);
                 return { status: true };
@@ -129,7 +127,7 @@ let PaystackController = class PaystackController {
                 const dto = {
                     amount: event.data.amount,
                     senderDetailsId: senderDetails.id,
-                    status: 'success',
+                    status: 'COMPLETED',
                     providerRef: event.data.reference,
                     paidAt: event.data.paid_at,
                     percentageFee: 0.05,
@@ -139,7 +137,7 @@ let PaystackController = class PaystackController {
                     paymentMethod: paymentChannel,
                     description: 'Payment via Paystack',
                 };
-                console.log({ dto });
+                await this.transactionsService.create(userId, dto);
                 await this.mailService.sendClientBookingMail({
                     clientEmail: email,
                     serviceName: title,
@@ -162,7 +160,6 @@ let PaystackController = class PaystackController {
                     durationMins: durationMins,
                     phone,
                 });
-                await this.transactionsService.create(userId, dto);
             }
             if (event.event === 'charge.failed') {
                 const { slug, vendorId, bookingId, title, name, userId } = event.data.metadata;
