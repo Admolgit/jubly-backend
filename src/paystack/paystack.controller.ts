@@ -161,7 +161,7 @@ export class PaystackController {
           description: 'Payment via Paystack',
         };
 
-        await this.transactionsService.create(userId, dto);
+        await this.transactionsService.updateTransaction(userId, dto);
 
         await this.mailService.sendClientBookingMail({
           clientEmail: email,
