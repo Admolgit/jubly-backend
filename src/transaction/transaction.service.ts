@@ -31,6 +31,31 @@ export class TransactionService {
     }
   }
 
+  async updateTransaction(userId: string, dto: any) {
+    try {
+      await this.prisma.transaction.update({
+        where: {
+          providerRef: dto.providerRef,
+        },
+        data: {
+          vendorId: dto.vendorId,
+          title: dto.name,
+          bookingId: dto.bookingId,
+          amount: dto.amount,
+          senderDetailsId: dto.senderDetailsId,
+          currency: 'NGN',
+          paidAt: new Date(),
+          providerRef: dto.providerRef,
+        },
+      });
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to record this transactions',
+        error.message as string,
+      );
+    }
+  }
+
   async findAllVendorTransactions(
     vendorId: string,
     page: number,

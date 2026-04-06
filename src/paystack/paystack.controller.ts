@@ -72,7 +72,6 @@ export class PaystackController {
       }
 
       const event = req.body;
-      console.log({ event });
       const paymentChannel =
         event.data.channel || event.data.authorization.channel || 'unknown';
 
@@ -88,8 +87,6 @@ export class PaystackController {
           status: 'COMPLETED',
         },
       });
-
-      console.log({ transactionExists });
 
       if (transactionExists) {
         console.log(
@@ -153,7 +150,7 @@ export class PaystackController {
         const dto = {
           amount: event.data.amount,
           senderDetailsId: senderDetails.id,
-          status: 'success',
+          status: 'COMPLETED',
           providerRef: event.data.reference,
           paidAt: event.data.paid_at,
           percentageFee: 0.05,
@@ -164,7 +161,7 @@ export class PaystackController {
           description: 'Payment via Paystack',
         };
 
-        console.log({ dto });
+        await this.transactionsService.create(userId, dto);
 
         await this.mailService.sendClientBookingMail({
           clientEmail: email,
@@ -189,8 +186,6 @@ export class PaystackController {
           durationMins: durationMins,
           phone,
         });
-
-        await this.transactionsService.create(userId, dto);
       }
 
       if (event.event === 'charge.failed') {

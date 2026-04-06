@@ -36,6 +36,28 @@ let TransactionService = class TransactionService {
             throw new common_1.InternalServerErrorException('Failed to record this transactions', error.message);
         }
     }
+    async updateTransaction(userId, dto) {
+        try {
+            await this.prisma.transaction.update({
+                where: {
+                    providerRef: dto.providerRef,
+                },
+                data: {
+                    vendorId: dto.vendorId,
+                    title: dto.name,
+                    bookingId: dto.bookingId,
+                    amount: dto.amount,
+                    senderDetailsId: dto.senderDetailsId,
+                    currency: 'NGN',
+                    paidAt: new Date(),
+                    providerRef: dto.providerRef,
+                },
+            });
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to record this transactions', error.message);
+        }
+    }
     async findAllVendorTransactions(vendorId, page, limit, search) {
         try {
             let where = {};
