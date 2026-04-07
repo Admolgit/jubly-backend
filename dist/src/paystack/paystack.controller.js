@@ -91,7 +91,7 @@ let PaystackController = class PaystackController {
             const transactionExists = await this.prisma.transaction.findUnique({
                 where: {
                     providerRef: event.data.reference,
-                    status: 'COMPLETED',
+                    status: 'CONFIRMED',
                 },
             });
             if (transactionExists) {
@@ -127,7 +127,7 @@ let PaystackController = class PaystackController {
                 const dto = {
                     amount: event.data.amount,
                     senderDetailsId: senderDetails.id,
-                    status: 'COMPLETED',
+                    status: 'CONFIRMED',
                     providerRef: event.data.reference,
                     paidAt: event.data.paid_at,
                     percentageFee: 0.05,

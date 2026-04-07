@@ -36,6 +36,9 @@ let BookingController = class BookingController {
     async getTopUpcoming(req) {
         return this.bookingService.getNext24HoursBookings(req.user.id);
     }
+    getUpcomingBookings(req) {
+        return this.bookingService.getUpcomingBookings(req.user.id);
+    }
     async getServicesByCount(req) {
         return this.bookingService.countBookingsByService(req.user.id);
     }
@@ -84,6 +87,15 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], BookingController.prototype, "getTopUpcoming", null);
+__decorate([
+    (0, common_1.Get)('upcoming-bookings'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getUpcomingBookings", null);
 __decorate([
     (0, common_1.Get)('services-count'),
     (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),

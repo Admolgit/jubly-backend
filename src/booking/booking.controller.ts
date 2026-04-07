@@ -46,6 +46,13 @@ export class BookingController {
     return this.bookingService.getNext24HoursBookings(req.user.id as string);
   }
 
+  @Get('upcoming-bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getUpcomingBookings(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getUpcomingBookings(req.user.id);
+  }
+
   @Get('services-count')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
