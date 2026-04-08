@@ -118,6 +118,7 @@ let AuthService = class AuthService {
                     phone: dto.phone,
                     role: client_1.UserRole.CLIENT,
                     isVerified: true,
+                    clientVendorId: dto.clientVendorId,
                 },
             });
             await this.nodemailService.sendTempPassword(dto.email, generatedPassword);

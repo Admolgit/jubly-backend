@@ -1,5 +1,7 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
+import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Roles, RolesGuard } from 'src/auth/role.guard';
 
 @Controller('transactions')
 export class TransactionController {
@@ -29,5 +31,15 @@ export class TransactionController {
       vendorId,
       view,
     );
+  }
+
+  @Get('analytics/earnings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getAnalytics(
+    @Req() req: { user: { id: string } },
+    @Query('view') view: 'day' | 'week' | 'month' | 'year',
+  ) {
+    return this.transactionService.getEarningsAnalytics(req.user.id, view);
   }
 }

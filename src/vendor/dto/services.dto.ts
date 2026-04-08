@@ -41,3 +41,10 @@ export interface BulkUpdateItemDto {
     durationMins: number | null;
   }>;
 }
+
+export interface updateServices {
+  name: string;
+  description: string;
+  price: number;
+  durationMins: number | null;
+}

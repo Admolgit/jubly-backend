@@ -33,7 +33,13 @@ export class AuthController {
 
   @Post('client-register')
   registerClient(
-    @Body() dto: { email: string; clientName: string; phone: string },
+    @Body()
+    dto: {
+      email: string;
+      clientName: string;
+      phone: string;
+      clientVendorId: string;
+    },
   ) {
     return this.authService.registerClient(dto);
   }

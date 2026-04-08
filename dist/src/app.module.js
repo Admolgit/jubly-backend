@@ -25,6 +25,8 @@ const availability_module_1 = require("./availability/availability.module");
 const nodemailer_module_1 = require("./nodemailer/nodemailer.module");
 const google_module_1 = require("./google/google.module");
 const booking_module_1 = require("./booking/booking.module");
+const users_module_1 = require("./users/users.module");
+const services_module_1 = require("./services/services.module");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer
@@ -51,6 +53,8 @@ exports.AppModule = AppModule = __decorate([
             nodemailer_module_1.NodemailerModule,
             google_module_1.GoogleCalenderModule,
             booking_module_1.BookingModule,
+            users_module_1.UsersModule,
+            services_module_1.ServicesModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

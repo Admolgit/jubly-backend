@@ -124,7 +124,6 @@ export class BookingService {
   }
 
   async initializeBookingPayment(bookingId: string, dto: any) {
-    console.log({ dto });
     try {
       const client = await this.prisma.user.findFirst({
         where: {
@@ -139,6 +138,7 @@ export class BookingService {
           clientName: dto.clientName,
           email: dto.clientEmail,
           phone: dto.phone,
+          clientVendorId: dto.vendorId,
         });
 
         savedClientId = saved.data.client.id;
@@ -272,39 +272,87 @@ export class BookingService {
   }
 
   async getNext24HoursBookings(userId: string) {
-    const vendor = await this.prisma.vendor.findFirst({
-      where: { userId },
-    });
+    try {
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
 
-    if (!vendor) {
-      throw new NotFoundException('Vendor not found');
-    }
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
 
-    const now = new Date();
-    const next24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const next24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        vendorId: vendor.id,
-        status: 'CONFIRMED',
-        startTime: {
-          gte: now,
-          lte: next24Hours,
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: 'CONFIRMED',
+          startTime: {
+            gte: now,
+            lte: next24Hours,
+          },
         },
-      },
-      orderBy: {
-        startTime: 'asc',
-      },
-      include: {
-        services: true,
-      },
-      take: 5,
-    });
+        orderBy: {
+          startTime: 'asc',
+        },
+        include: {
+          services: true,
+        },
+        take: 5,
+      });
 
-    return successResponse(
-      bookings,
-      'Successfully fetched next 24 hours bookings',
-    );
+      return successResponse(
+        bookings,
+        'Successfully fetched next 24 hours bookings',
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch bookings.',
+        error.message as string,
+      );
+    }
+  }
+
+  async getUpcomingBookings(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+
+      const now = new Date();
+
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: 'CONFIRMED',
+          startTime: {
+            gte: now,
+          },
+        },
+        orderBy: {
+          startTime: 'asc',
+        },
+        include: {
+          services: true,
+        },
+        take: 5,
+      });
+
+      return successResponse(
+        bookings,
+        'Successfully fetched upcoming bookings',
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch upcoming bookings.',
+        error.message as string,
+      );
+    }
   }
 
   async countBookingsByService(userId: string) {

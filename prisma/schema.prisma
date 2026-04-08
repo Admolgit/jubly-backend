@@ -48,6 +48,7 @@ model User {
   provider         AuthProvider @default(EMAIL)
   isVerified       Boolean      @default(false)
   slug             String?
+  clientVendorId   String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   vendor           Vendor?

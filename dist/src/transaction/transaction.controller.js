@@ -15,6 +15,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TransactionController = void 0;
 const common_1 = require("@nestjs/common");
 const transaction_service_1 = require("./transaction.service");
+const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const role_guard_1 = require("../auth/role.guard");
 let TransactionController = class TransactionController {
     constructor(transactionService) {
         this.transactionService = transactionService;
@@ -24,6 +26,9 @@ let TransactionController = class TransactionController {
     }
     getTotalTransactionsAmountByVendorId(vendorId, view) {
         return this.transactionService.getTotalTransactionsAmountByVendorId(vendorId, view);
+    }
+    getAnalytics(req, view) {
+        return this.transactionService.getEarningsAnalytics(req.user.id, view);
     }
 };
 exports.TransactionController = TransactionController;
@@ -45,6 +50,16 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], TransactionController.prototype, "getTotalTransactionsAmountByVendorId", null);
+__decorate([
+    (0, common_1.Get)('analytics/earnings'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('view')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], TransactionController.prototype, "getAnalytics", null);
 exports.TransactionController = TransactionController = __decorate([
     (0, common_1.Controller)('transactions'),
     __metadata("design:paramtypes", [transaction_service_1.TransactionService])

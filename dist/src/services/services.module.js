@@ -6,19 +6,18 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UsersModule = void 0;
+exports.ServicesModule = void 0;
 const common_1 = require("@nestjs/common");
-const users_controller_1 = require("./users.controller");
-const users_service_1 = require("./users.service");
-const prisma_module_1 = require("../../prisma/prisma.module");
-const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
-let UsersModule = class UsersModule {
+const services_controller_1 = require("./services.controller");
+const services_service_1 = require("./services.service");
+const prisma_service_1 = require("../../prisma/prisma.service");
+let ServicesModule = class ServicesModule {
 };
-exports.UsersModule = UsersModule;
-exports.UsersModule = UsersModule = __decorate([
+exports.ServicesModule = ServicesModule;
+exports.ServicesModule = ServicesModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule],
-        controllers: [users_controller_1.UsersController],
-        providers: [users_service_1.UsersService, cloudinary_service_1.CloudinaryService],
+        controllers: [services_controller_1.ServicesController],
+        providers: [services_service_1.ServicesService, prisma_service_1.PrismaService],
+        exports: [],
     })
-], UsersModule);
+], ServicesModule);

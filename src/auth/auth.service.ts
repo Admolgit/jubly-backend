@@ -80,6 +80,7 @@ export class AuthService {
     email: string;
     clientName: string;
     phone: string;
+    clientVendorId: string;
   }) {
     try {
       const existingUser = await this.prisma.user.findUnique({
@@ -102,6 +103,7 @@ export class AuthService {
           phone: dto.phone,
           role: UserRole.CLIENT,
           isVerified: true,
+          clientVendorId: dto.clientVendorId,
         },
       });
 

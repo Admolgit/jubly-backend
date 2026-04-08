@@ -11,11 +11,14 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersService = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
 const response_1 = require("../utils/response");
 let UsersService = class UsersService {
-    constructor(prisma) {
+    constructor(prisma, cloudinaryService) {
         this.prisma = prisma;
+        this.cloudinaryService = cloudinaryService;
     }
     async getMe(userId) {
         const user = await this.prisma.user.findUnique({
@@ -26,9 +29,88 @@ let UsersService = class UsersService {
         }
         return (0, response_1.successResponse)({ user }, 'successful');
     }
+    async updateProfile(userId, dto) {
+        try {
+            const updatedUser = await this.prisma.user.update({
+                where: { id: userId },
+                data: {
+                    firstName: dto.firstName,
+                    lastName: dto.lastName,
+                    phone: dto.phone,
+                },
+            });
+            return (0, response_1.successResponse)({ updatedUser }, 'Profile updated successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
+        }
+    }
+    async updateProfilePicture(userId, file) {
+        try {
+            const imageUrl = await this.cloudinaryService.uploadImage(file);
+            const updatedPicture = await this.prisma.vendor.update({
+                where: { userId },
+                data: {
+                    profileImage: imageUrl,
+                },
+            });
+            return (0, response_1.successResponse)({ updatedPicture }, 'Profile picture updated successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to update profile pics', error.message);
+        }
+    }
+    async getUserById(userId) {
+        try {
+            const user = await this.prisma.user.findUnique({
+                where: { id: userId },
+            });
+            if (!user) {
+                throw new common_1.NotFoundException('User not found');
+            }
+            return (0, response_1.successResponse)({ user }, 'User fetched successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
+        }
+    }
+    async getClientsByVendor(vendorId, page, limit, search) {
+        try {
+            let where = {};
+            if (vendorId) {
+                where.clientVendorId = vendorId;
+                where.role = client_1.UserRole.CLIENT;
+            }
+            if (search) {
+                where.OR = [
+                    { title: { contains: search, mode: 'insensitive' } },
+                    { description: { contains: search, mode: 'insensitive' } },
+                ];
+            }
+            const clients = await this.prisma.user.findMany({
+                where,
+                skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
+                take: limit ? Number(limit) : undefined,
+                include: {
+                    bookings: true,
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            const total = await this.prisma.user.count({ where });
+            return (0, response_1.successResponse)({ clients }, 'Successfully fetched clients.', 200, {
+                total,
+                page,
+                limit,
+            });
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
+        }
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        cloudinary_service_1.CloudinaryService])
 ], UsersService);

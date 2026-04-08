@@ -1,9 +1,29 @@
+/* eslint-disable no-case-declarations */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { successResponse } from 'src/utils/response';
+// import {
+//   startOfWeek,
+//   endOfWeek,
+//   startOfMonth,
+//   endOfMonth,
+//   startOfYear,
+//   endOfYear,
+// } from 'date-fns';
+
+export enum DateFilter {
+  DAY = 'day',
+  WEEK = 'week',
+  MONTH = 'month',
+  YEAR = 'year',
+}
 
 @Injectable()
 export class TransactionService {
@@ -195,6 +215,170 @@ export class TransactionService {
       throw new InternalServerErrorException(
         'Failed to fetch this transactions',
         error.message as string,
+      );
+    }
+  }
+
+  async getEarningsAnalytics(
+    userId: string,
+    view: 'day' | 'week' | 'month' | 'year',
+  ) {
+    try {
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date;
+
+      // =========================
+      // 📅 DATE RANGE
+      // =========================
+      switch (view) {
+        case 'day':
+          startDate = new Date(now);
+          startDate.setHours(0, 0, 0, 0);
+
+          endDate = new Date(now);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+
+        case 'week':
+          const day = now.getDay(); // 0 (Sun) - 6 (Sat)
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1); // start Monday
+          startDate = new Date(now);
+          startDate.setDate(diff);
+          startDate.setHours(0, 0, 0, 0);
+
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + 6);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+
+        case 'year':
+          startDate = new Date(now.getFullYear(), 0, 1);
+          endDate = new Date(now.getFullYear(), 11, 31);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+      }
+
+      // =========================
+      // 📦 FETCH DATA
+      // =========================
+      const transactions = await this.prisma.transaction.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: { in: ['CONFIRMED', 'COMPLETED'] },
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        select: {
+          amount: true,
+          createdAt: true,
+        },
+      });
+
+      let data: { label: string; amount: number }[] = [];
+
+      // =========================
+      // 📊 GROUPING
+      // =========================
+      switch (view) {
+        case 'day':
+          // Just total for the day
+          const totalAmount = transactions.reduce(
+            (sum, t) => sum + (t.amount || 0),
+            0,
+          );
+          data = [
+            {
+              label: startDate.toDateString(),
+              amount: totalAmount,
+            },
+          ];
+          break;
+
+        case 'week':
+          const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          const weekData = days.map((d) => ({ label: d, amount: 0 }));
+
+          transactions.forEach((t) => {
+            const jsDay = new Date(t.createdAt).getDay(); // 0–6
+            const index = jsDay === 0 ? 6 : jsDay - 1; // Mon–Sun
+            weekData[index].amount += t.amount || 0;
+          });
+
+          data = weekData;
+          break;
+
+        case 'month':
+          const daysInMonth = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            0,
+          ).getDate();
+          const monthData = Array.from({ length: daysInMonth }, (_, i) => ({
+            label: (i + 1).toString(),
+            amount: 0,
+          }));
+
+          transactions.forEach((t) => {
+            const d = new Date(t.createdAt).getDate();
+            monthData[d - 1].amount += t.amount || 0;
+          });
+
+          data = monthData;
+          break;
+
+        case 'year':
+          const months = [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ];
+          const yearData = months.map((m) => ({ label: m, amount: 0 }));
+
+          transactions.forEach((t) => {
+            const m = new Date(t.createdAt).getMonth(); // 0–11
+            yearData[m].amount += t.amount || 0;
+          });
+
+          data = yearData;
+          break;
+      }
+
+      // =========================
+      // 💰 TOTAL
+      // =========================
+      const total = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+      return successResponse({ total, data }, 'Analytics fetched successfully');
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to fetch analytics',
+        error.message,
       );
     }
   }
