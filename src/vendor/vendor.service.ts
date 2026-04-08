@@ -46,7 +46,7 @@ export class VendorService {
         'Onboarding completed successfully',
         201,
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException('Failed', error.message);
     }
   }
@@ -312,7 +312,7 @@ export class VendorService {
         'Vendor profile updated successfully',
         201,
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to update vendor profile',
         error.message,
@@ -349,7 +349,7 @@ export class VendorService {
         { updatedServices },
         'Service updated successfully.',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to update vendor services',
         error.message,
@@ -369,7 +369,7 @@ export class VendorService {
         { services },
         'Vendor services fetched successfully.',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch vendor services',
         error.message,
@@ -387,7 +387,7 @@ export class VendorService {
         { pendingVendors },
         'Pending vendors retrieved successfully',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to get pending vendors',
         error.message,
@@ -408,7 +408,7 @@ export class VendorService {
         { vendor },
         'Pending vendor fetched successfully.',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch pending vendor',
         error.message,
@@ -424,7 +424,7 @@ export class VendorService {
       }
 
       return successResponse({ vendors }, 'Vendors retrieved successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to get all vendors',
         error.message,
@@ -444,7 +444,7 @@ export class VendorService {
       });
 
       return successResponse({ approveVendor }, 'Vendor approved successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to approve vendor',
         error.message,
@@ -470,7 +470,7 @@ export class VendorService {
         { status },
         'Vendor status retrieved successfully',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to get vendor status',
         error.message,
@@ -490,7 +490,7 @@ export class VendorService {
       });
 
       return successResponse({ rejectVendor }, 'Vendor rejected successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to reject vendor',
         error.message,
@@ -542,7 +542,7 @@ export class VendorService {
       });
 
       return successResponse({ vendor }, 'Vendor fetched successfully.');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch vendor profile',
         error.message,
@@ -607,7 +607,7 @@ export class VendorService {
         { vendor, services, vendorAvailability },
         'Booking page fetched.',
       );
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -628,7 +628,7 @@ export class VendorService {
       });
 
       return successResponse({ service }, 'Service fetched successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetched service',
         error.message,
@@ -657,7 +657,7 @@ export class VendorService {
       ]);
 
       return successResponse({ data, total }, 'Successful');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetched vendors',
         error.message,

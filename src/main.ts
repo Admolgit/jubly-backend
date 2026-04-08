@@ -50,11 +50,7 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://jubly-frontend.vercel.app',
-    ],
+    origin: true,
     credentials: true,
   });
 

@@ -18,6 +18,7 @@ import { NodemailerModule } from './nodemailer/nodemailer.module';
 import { GoogleCalenderModule } from './google/google.module';
 import { BookingModule } from './booking/booking.module';
 import { UsersModule } from './users/users.module';
+import { ServicesModule } from './services/services.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { UsersModule } from './users/users.module';
     GoogleCalenderModule,
     BookingModule,
     UsersModule,
+    ServicesModule,
   ],
   controllers: [AppController],
   providers: [

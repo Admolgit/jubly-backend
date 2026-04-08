@@ -35,11 +35,7 @@ async function bootstrap() {
     app.setGlobalPrefix('api/v1');
     app.enableVersioning({ type: common_1.VersioningType.URI });
     app.enableCors({
-        origin: [
-            'http://localhost:5173',
-            'http://localhost:5174',
-            'https://jubly-frontend.vercel.app',
-        ],
+        origin: true,
         credentials: true,
     });
     app.use((0, cookie_parser_1.default)());
