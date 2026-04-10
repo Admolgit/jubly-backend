@@ -210,8 +210,8 @@ model Transaction {
 }
 
 model vendorCalendar {
-  id           String  @id @default(auto()) @map("_id") @db.ObjectId
-  userId       String  @unique @db.ObjectId
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @unique @db.ObjectId
   provider     String
   accessToken  String
   refreshToken String
