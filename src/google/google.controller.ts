@@ -6,8 +6,8 @@ import {
   BadRequestException,
   Controller,
   Get,
-  Param,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -93,7 +93,7 @@ export class GoogleController {
     return this.googleService.getUserCalendarLinked(userId);
   }
 
-  @Get('calendar-list/:vendorId')
+  @Get('/calendar-list/:vendorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   getCalendar(
@@ -101,7 +101,7 @@ export class GoogleController {
     @Query('year') year?: string,
     @Query('month') month?: string,
     @Query('date') date?: string,
-    @Param('vendorId') vendorId?: string,
+    @Query('vendorId') vendorId?: string,
   ) {
     return this.googleService.getCalendar({
       view,
@@ -109,6 +109,25 @@ export class GoogleController {
       month: Number(month),
       date,
       vendorId,
+    });
+  }
+
+  @Get('/client/calendar-list')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  getClientCalendar(
+    @Req() req: { user: { id: string } },
+    @Query('view') view: 'month' | 'week' | 'day',
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.googleService.getClientCalendar({
+      userId: req.user.id,
+      view,
+      year: Number(year),
+      month: Number(month),
+      date,
     });
   }
 }

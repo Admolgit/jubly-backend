@@ -39,11 +39,17 @@ let BookingController = class BookingController {
     getUpcomingBookings(req) {
         return this.bookingService.getUpcomingBookings(req.user.id);
     }
+    getClientUpcomingBookings(req) {
+        return this.bookingService.getClientUpcomingBookings(req.user.id);
+    }
     async getServicesByCount(req) {
         return this.bookingService.countBookingsByService(req.user.id);
     }
     async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
         return this.bookingService.getBookings(req.user.id, page, limit, search, dateFilter, date, status);
+    }
+    async getClientsBookings(req, page = '1', limit = '10', search, dateFilter, date, status, email) {
+        return this.bookingService.getClientsBookings(req.user.id, page, limit, search, dateFilter, date, status, email);
     }
     getStats(req) {
         const userId = req.user.id;
@@ -97,6 +103,15 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getUpcomingBookings", null);
 __decorate([
+    (0, common_1.Get)('client/upcoming-bookings'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getClientUpcomingBookings", null);
+__decorate([
     (0, common_1.Get)('services-count'),
     (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
@@ -120,6 +135,22 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object, Object, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], BookingController.prototype, "getBookings", null);
+__decorate([
+    (0, common_1.Get)('clients'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('page')),
+    __param(2, (0, common_1.Query)('limit')),
+    __param(3, (0, common_1.Query)('search')),
+    __param(4, (0, common_1.Query)('dateFilter')),
+    __param(5, (0, common_1.Query)('date')),
+    __param(6, (0, common_1.Query)('status')),
+    __param(7, (0, common_1.Query)('email')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object, String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], BookingController.prototype, "getClientsBookings", null);
 __decorate([
     (0, common_1.Get)('clients/stats'),
     (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),

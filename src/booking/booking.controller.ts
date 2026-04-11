@@ -53,6 +53,13 @@ export class BookingController {
     return this.bookingService.getUpcomingBookings(req.user.id);
   }
 
+  @Get('client/upcoming-bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  getClientUpcomingBookings(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getClientUpcomingBookings(req.user.id);
+  }
+
   @Get('services-count')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
@@ -80,6 +87,31 @@ export class BookingController {
       dateFilter as DateFilter,
       date as any,
       status as string,
+    );
+  }
+
+  @Get('clients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  async getClientsBookings(
+    @Req() req: { user: { id: string } },
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: DateFilter,
+    @Query('date') date?: string,
+    @Query('status') status?: string,
+    @Query('email') email?: string,
+  ) {
+    return this.bookingService.getClientsBookings(
+      req.user.id,
+      page,
+      limit,
+      search as string,
+      dateFilter as DateFilter,
+      date as any,
+      status as string,
+      email,
     );
   }
 
