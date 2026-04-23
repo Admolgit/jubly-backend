@@ -55,6 +55,19 @@ let BookingController = class BookingController {
         const userId = req.user.id;
         return this.bookingService.getClientsStats(userId);
     }
+    getBookingStats(req) {
+        const userId = req.user.id;
+        return this.bookingService.getClientBookingsStats(userId);
+    }
+    rescheduleBooking(req, dto, bookingId) {
+        return this.bookingService.rescheduleBooking(bookingId, dto, req.user.id);
+    }
+    cancleBooking(bookingId, req) {
+        return this.bookingService.cancelBooking(bookingId, req.user.id);
+    }
+    markAsComplete(bookingId, req) {
+        return this.bookingService.markAsCmpleted(bookingId, req.user.id);
+    }
 };
 exports.BookingController = BookingController;
 __decorate([
@@ -160,6 +173,46 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getStats", null);
+__decorate([
+    (0, common_1.Get)('clients/booking-stats'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getBookingStats", null);
+__decorate([
+    (0, common_1.Patch)('reschedule/:bookingId'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Param)('bookingId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, String]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "rescheduleBooking", null);
+__decorate([
+    (0, common_1.Patch)(':bookingId/cancel'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Param)('bookingId')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "cancleBooking", null);
+__decorate([
+    (0, common_1.Patch)(':bookingId/mark-as-completed'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Param)('bookingId')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "markAsComplete", null);
 exports.BookingController = BookingController = __decorate([
     (0, common_1.Controller)('booking'),
     __metadata("design:paramtypes", [booking_service_1.BookingService])

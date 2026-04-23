@@ -21,6 +21,7 @@ const response_1 = require("../utils/response");
 const axios_1 = __importDefault(require("axios"));
 const date_fns_1 = require("date-fns");
 const client_1 = require("@prisma/client");
+const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -29,10 +30,11 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
-    constructor(googleCalendarService, prisma, authService) {
+    constructor(googleCalendarService, prisma, authService, nodemailerService) {
         this.googleCalendarService = googleCalendarService;
         this.prisma = prisma;
         this.authService = authService;
+        this.nodemailerService = nodemailerService;
     }
     async createBooking(userId, dto) {
         try {
@@ -572,10 +574,62 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
         }
     }
-    async cancelBooking(userId, bookingId) {
+    async getClientBookingsStats(userId) {
         try {
+            const user = await this.prisma.user.findUnique({
+                where: {
+                    id: userId,
+                },
+            });
+            if (!user) {
+                throw new common_1.NotFoundException('User not found');
+            }
+            const booking = await this.prisma.booking.findMany({
+                where: {
+                    clientEmail: user.email,
+                    status: {
+                        in: ['COMPLETED', 'CONFIRMED'],
+                    },
+                },
+                include: {
+                    services: {
+                        select: {
+                            price: true,
+                        },
+                    },
+                },
+            });
+            const activeBooking = await this.prisma.booking.count({
+                where: {
+                    clientEmail: user.email,
+                    status: 'CONFIRMED',
+                },
+            });
+            const total = booking.reduce((acc, sum) => {
+                return acc + sum.services.price;
+            }, 0);
+            return (0, response_1.successResponse)({ activeBooking, total }, 'Stats fetched successfully');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch bookings stats.', error.message);
+        }
+    }
+    async cancelBooking(bookingId, userId) {
+        try {
+            const user = await this.prisma.user.findUnique({
+                where: {
+                    id: userId,
+                },
+            });
+            if (!user) {
+                throw new common_1.NotFoundException('User not found');
+            }
             const booking = await this.prisma.booking.findUnique({
                 where: { id: bookingId },
+                include: {
+                    services: true,
+                    vendor: true,
+                },
             });
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
@@ -586,16 +640,118 @@ let BookingService = class BookingService {
                     status: 'CANCELLED',
                 },
             });
+            await this.nodemailerService.bookingStatusChangeMail({
+                subject: 'Your Booking Has Been Cancelled',
+                name: booking.clientName,
+                role: user.role,
+                vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',
+                serviceName: booking.services.name,
+                vendorName: booking.vendor.businessName,
+                email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
+                action: 'Cancel',
+            });
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to cancel booking.', error.message);
         }
     }
-    async rescheduleBooking(userId, bookingId, newStartTime, newEndTime) {
+    async rescheduleBooking(bookingId, dto, userId) {
         try {
+            const { date, startTime, endTime } = dto;
+            const start = new Date(`${date}T${startTime}`);
+            const end = new Date(`${date}T${endTime}`);
+            const bookingDate = new Date(date);
+            const user = await this.prisma.user.findUnique({
+                where: {
+                    id: userId,
+                },
+            });
+            if (!user) {
+                throw new common_1.NotFoundException('User not found');
+            }
+            if (start >= end) {
+                throw new common_1.BadRequestException('End time must be after start time');
+            }
             const booking = await this.prisma.booking.findUnique({
                 where: { id: bookingId },
+                include: {
+                    services: true,
+                    vendor: true,
+                },
+            });
+            if (!booking) {
+                throw new common_1.NotFoundException('Booking not found');
+            }
+            if (booking.clientEmail !== user.email && booking.vendorId !== userId) {
+                throw new common_1.ForbiddenException('Not allowed to reschedule this booking');
+            }
+            if (start < new Date()) {
+                throw new common_1.BadRequestException('Cannot reschedule to a past time');
+            }
+            const conflict = await this.prisma.booking.findFirst({
+                where: {
+                    vendorId: booking.vendorId,
+                    id: { not: bookingId },
+                    AND: [
+                        {
+                            startTime: { lt: end },
+                        },
+                        {
+                            endTime: { gt: start },
+                        },
+                    ],
+                },
+            });
+            if (conflict) {
+                throw new common_1.BadRequestException('Time slot already booked');
+            }
+            const updated = await this.prisma.booking.update({
+                where: { id: bookingId },
+                data: {
+                    startTime: start,
+                    endTime: end,
+                    date: bookingDate,
+                },
+            });
+            await this.nodemailerService.bookingStatusChangeMail({
+                subject: 'Your Booking Has Been Cancelled',
+                name: booking.clientName,
+                role: user.role,
+                vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',
+                serviceName: booking.services.name,
+                vendorName: booking.vendor.businessName,
+                email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
+                oldDate: booking.date,
+                oldStart: booking.startTime,
+                oldEnd: booking.endTime,
+                newDate: new Date(date),
+                newStart: new Date(startTime),
+                newEnd: new Date(endTime),
+                action: 'Reschedule',
+            });
+            return (0, response_1.successResponse)(updated, 'Rescheduled successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to reschedule booking.', error.message);
+        }
+    }
+    async markAsCmpleted(bookingId, userId) {
+        try {
+            const user = await this.prisma.user.findUnique({
+                where: {
+                    id: userId,
+                },
+            });
+            if (!user) {
+                throw new common_1.NotFoundException('User not found');
+            }
+            const booking = await this.prisma.booking.findUnique({
+                where: { id: bookingId },
+                include: {
+                    services: true,
+                    vendor: true,
+                },
             });
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
@@ -603,14 +759,23 @@ let BookingService = class BookingService {
             const updatedBooking = await this.prisma.booking.update({
                 where: { id: bookingId },
                 data: {
-                    startTime: newStartTime,
-                    endTime: newEndTime,
+                    status: 'COMPLETED',
                 },
             });
-            return (0, response_1.successResponse)(updatedBooking, 'Booking rescheduled successfully.');
+            await this.nodemailerService.bookingStatusChangeMail({
+                subject: 'Your Booking Has Been Mark As Completed',
+                name: booking.clientName,
+                role: user.role,
+                vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',
+                serviceName: booking.services.name,
+                vendorName: booking.vendor.businessName,
+                email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
+                action: 'Mark As Completed',
+            });
+            return (0, response_1.successResponse)(updatedBooking, 'Booking mark as completed successfully');
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException('Failed to reschedule booking.', error.message);
+            throw new common_1.InternalServerErrorException('Failed to cancel booking.', error.message);
         }
     }
 };
@@ -619,5 +784,6 @@ exports.BookingService = BookingService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [google_service_1.GoogleCalendarService,
         prisma_service_1.PrismaService,
-        auth_service_1.AuthService])
+        auth_service_1.AuthService,
+        nodemailer_service_1.NodemailerService])
 ], BookingService);

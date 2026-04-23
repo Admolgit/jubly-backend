@@ -64,7 +64,7 @@ export class AuthService {
       await this.nodemailService.sendOTP(dto.email, otpGenerated);
 
       return successResponse({ user, token }, 'Registration successful', 201);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
@@ -114,7 +114,7 @@ export class AuthService {
         'Client is registered successfully.',
         201,
       );
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
@@ -139,12 +139,64 @@ export class AuthService {
         throw new UnauthorizedException('Invalid credentials');
       }
 
+      if (user.role === 'VENDOR' && !user.isVerified) {
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '7d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+        return successResponse(
+          { user, token, refreshToken },
+          'User not verfied',
+          400,
+        );
+      }
+
       const vendor = await this.prisma.vendor.findUnique({
         where: { userId: user.id },
       });
 
       if (user.role === 'VENDOR' && !vendor) {
-        throw new UnauthorizedException('Vendor account not found');
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '7d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+        return successResponse(
+          { user, token, refreshToken },
+          'Complete registration',
+          404,
+        );
       }
 
       if (
@@ -185,8 +237,7 @@ export class AuthService {
       });
 
       return successResponse({ user, token, refreshToken }, 'Login successful');
-    } catch (error) {
-      // preserve existing HTTP exceptions
+    } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
@@ -255,7 +306,7 @@ export class AuthService {
         HttpStatus.OK,
         { isSignup, requestedRedirectUrl, alreadyExists },
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Google Login/Register failed',
         error.message,
@@ -296,7 +347,7 @@ export class AuthService {
       return {
         accessToken,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.log(error);
       throw new InternalServerErrorException(
         'Refresh token expired or invalid',
@@ -321,7 +372,7 @@ export class AuthService {
         data: { password: hash },
       });
       return successResponse(null, 'Password reset successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Password reset failed',
         error.message,
@@ -360,7 +411,7 @@ export class AuthService {
         data: { password: hash },
       });
       return successResponse(null, 'Password changed successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Change password failed',
         error.message,
@@ -394,7 +445,7 @@ export class AuthService {
       });
 
       return successResponse(null, 'Email verified successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to verify email',
         error.message,
@@ -422,7 +473,7 @@ export class AuthService {
       await this.nodemailService.sendOTP(user.email, verificationCode);
 
       return successResponse(null, 'Verification code resent successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Resend OTP failed',
         error.message,
@@ -439,7 +490,7 @@ export class AuthService {
       });
 
       return successResponse({ user }, 'successful');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException('User failed', error.message);
     }
   }

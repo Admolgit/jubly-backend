@@ -126,4 +126,48 @@ export class NodemailerService {
     `,
     });
   }
+
+  async bookingStatusChangeMail(data: {
+    subject: string;
+    name: string;
+    role: string;
+    vendor: string;
+    serviceName: string;
+    vendorName: string;
+    oldDate?: Date;
+    oldStart?: Date;
+    oldEnd?: Date;
+    newDate?: Date;
+    newStart?: Date;
+    newEnd?: Date;
+    email?: string;
+    action?: string;
+  }) {
+    await this.mailerService.sendMail({
+      to: data?.email,
+      subject: `${data?.subject}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi ${data.name},</h2>
+        <h2 style="color:#111;">This booking has been ${data.action} by the ${data.vendor}.</h2>
+
+        <p>📅 Updated Booking Details:</p>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service: </strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          <p><strong>Previous Time:</strong> ${String(data.oldDate)} at ${String(data.oldStart)} - ${String(data.oldEnd)}</p>
+          <p><strong>New Time:</strong>${String(data.newDate)} at ${String(data.newStart)} - ${String(data.newEnd)}</p>
+        </div>
+
+        <p>If the new time does not work for you, you can ${data.action} from your dashboard.</p>
+
+        <p>We apologize for any inconvenience.</p>
+
+        <p>Best regards,</p>
+        <p>${data.vendorName} Team</p>
+        </div>
+      `,
+    });
+  }
 }
