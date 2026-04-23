@@ -140,11 +140,36 @@ let AuthService = class AuthService {
                 !(await (0, hash_1.comparePassword)(dto.password, user.password ?? ''))) {
                 throw new common_2.UnauthorizedException('Invalid credentials');
             }
+            if (user.role === 'VENDOR' && !user.isVerified) {
+                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
+                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        refreshTokenHash,
+                        lastLogin: new Date(),
+                        isOnline: true,
+                    },
+                });
+                return (0, response_1.successResponse)({ user, token, refreshToken }, 'User not verfied', 400);
+            }
             const vendor = await this.prisma.vendor.findUnique({
                 where: { userId: user.id },
             });
             if (user.role === 'VENDOR' && !vendor) {
-                throw new common_2.UnauthorizedException('Vendor account not found');
+                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
+                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        refreshTokenHash,
+                        lastLogin: new Date(),
+                        isOnline: true,
+                    },
+                });
+                return (0, response_1.successResponse)({ user, token, refreshToken }, 'Complete registration', 404);
             }
             if (vendor &&
                 vendor.isApproved === false &&

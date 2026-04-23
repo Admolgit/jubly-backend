@@ -65,7 +65,6 @@ async function bootstrap() {
         res.setHeader('Cache-Control', 'no-store');
         next();
     });
-    redis_keepAlive_1.keepServerAliveDeployment.start();
     const clientBuildPath = (0, path_1.join)(__dirname, '..', 'client');
     if ((0, fs_1.existsSync)(clientBuildPath)) {
         app.useStaticAssets(clientBuildPath);
@@ -78,6 +77,7 @@ async function bootstrap() {
             }
         }));
     }
+    redis_keepAlive_1.keepServerAliveDeployment.start();
     const port = process.env.PORT ?? 4001;
     await app.listen(port, '0.0.0.0');
 }

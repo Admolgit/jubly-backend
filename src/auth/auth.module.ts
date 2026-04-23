@@ -8,6 +8,7 @@ import { VendorService } from 'src/vendor/vendor.service';
 import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
+import { GoogleLoginStrategy } from 'src/middlewares/google-login-strategy.middleware';
 
 @Module({
   controllers: [AuthController],
@@ -26,6 +27,7 @@ import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
     VendorService,
     CloudinaryService,
     PaystackService,
+    GoogleLoginStrategy,
   ],
   exports: [JwtModule, PassportModule, NodemailerModule],
 })

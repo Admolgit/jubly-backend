@@ -1,7 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { BookingService, DateFilter } from './booking.service';
 import type { IBooking } from './dto/booking.dto';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
@@ -53,6 +62,13 @@ export class BookingController {
     return this.bookingService.getUpcomingBookings(req.user.id);
   }
 
+  @Get('client/upcoming-bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  getClientUpcomingBookings(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getClientUpcomingBookings(req.user.id);
+  }
+
   @Get('services-count')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
@@ -83,11 +99,75 @@ export class BookingController {
     );
   }
 
+  @Get('clients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  async getClientsBookings(
+    @Req() req: { user: { id: string } },
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: DateFilter,
+    @Query('date') date?: string,
+    @Query('status') status?: string,
+    @Query('email') email?: string,
+  ) {
+    return this.bookingService.getClientsBookings(
+      req.user.id,
+      page,
+      limit,
+      search as string,
+      dateFilter as DateFilter,
+      date as any,
+      status as string,
+      email,
+    );
+  }
+
   @Get('clients/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   getStats(@Req() req: { user: { id: string } }) {
     const userId = req.user.id;
     return this.bookingService.getClientsStats(userId);
+  }
+
+  @Get('clients/booking-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  getBookingStats(@Req() req: { user: { id: string } }) {
+    const userId = req.user.id;
+    return this.bookingService.getClientBookingsStats(userId);
+  }
+
+  @Patch('reschedule/:bookingId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  rescheduleBooking(
+    @Req() req: { user: { id: string } },
+    @Body() dto: { date: string; startTime: string; endTime: string },
+    @Param('bookingId') bookingId: string,
+  ) {
+    return this.bookingService.rescheduleBooking(bookingId, dto, req.user.id);
+  }
+
+  @Patch(':bookingId/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  cancleBooking(
+    @Param('bookingId') bookingId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.bookingService.cancelBooking(bookingId, req.user.id);
+  }
+
+  @Patch(':bookingId/mark-as-completed')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  markAsComplete(
+    @Param('bookingId') bookingId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.bookingService.markAsCmpleted(bookingId, req.user.id);
   }
 }

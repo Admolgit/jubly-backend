@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -22,6 +23,7 @@ import {
   endOfYear,
 } from 'date-fns';
 import { UserRole } from '@prisma/client';
+import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 
 export enum DateFilter {
   DAY = 'day',
@@ -36,6 +38,7 @@ export class BookingService {
     private googleCalendarService: GoogleCalendarService,
     private prisma: PrismaService,
     private authService: AuthService,
+    private nodemailerService: NodemailerService,
   ) {}
 
   async createBooking(userId: string, dto: IBooking) {
@@ -109,13 +112,13 @@ export class BookingService {
               attendeeName: dto.clientName,
             },
           );
-        } catch (err) {
+        } catch (err: any) {
           console.error('Google Calendar failed:', err.message);
         }
       }
 
       return booking;
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Internal server error',
         error.message as string,
@@ -211,7 +214,7 @@ export class BookingService {
         'Successful',
         201,
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to initialize payment',
         error.message as string,
@@ -263,7 +266,7 @@ export class BookingService {
         },
         'Successful',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch dashboard stats.',
         error.message as string,
@@ -306,7 +309,7 @@ export class BookingService {
         bookings,
         'Successfully fetched next 24 hours bookings',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch bookings.',
         error.message as string,
@@ -347,7 +350,52 @@ export class BookingService {
         bookings,
         'Successfully fetched upcoming bookings',
       );
-    } catch (error) {
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to fetch upcoming bookings.',
+        error.message as string,
+      );
+    }
+  }
+  async getClientUpcomingBookings(userId: string) {
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const now = new Date();
+
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          clientEmail: user.email,
+          status: 'CONFIRMED',
+          startTime: {
+            gte: now,
+          },
+        },
+        orderBy: {
+          startTime: 'asc',
+        },
+        include: {
+          services: true,
+          vendor: {
+            select: {
+              businessName: true,
+            },
+          },
+        },
+        take: 5,
+      });
+
+      return successResponse(
+        bookings,
+        'Successfully fetched upcoming bookings',
+      );
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch upcoming bookings.',
         error.message as string,
@@ -402,7 +450,7 @@ export class BookingService {
         groupedService,
         'Successfully counted bookings by service',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch count by service',
         error.message as string,
@@ -419,154 +467,526 @@ export class BookingService {
     date?: string,
     status?: string,
   ) {
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const baseDate = date ? new Date(date) : new Date();
+    try {
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const baseDate = date ? new Date(date) : new Date();
 
-    const user = await this.prisma.vendor.findUnique({
-      where: { userId },
-    });
+      const user = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const where: any = {};
-
-    if (userId) {
-      where.vendorId = user.id;
-    }
-
-    if (status) {
-      where.status = status;
-    }
-
-    if (search) {
-      where.clientName = { contains: search, mode: 'insensitive' };
-    }
-
-    if (dateFilter) {
-      switch (dateFilter) {
-        case DateFilter.DAY:
-          where.createdAt = {
-            gte: new Date(baseDate.setHours(0, 0, 0, 0)),
-            lte: new Date(baseDate.setHours(23, 59, 59, 999)),
-          };
-          break;
-        case DateFilter.WEEK:
-          where.createdAt = {
-            gte: startOfWeek(baseDate, { weekStartsOn: 1 }),
-            lte: endOfWeek(baseDate, { weekStartsOn: 1 }),
-          };
-          break;
-        case DateFilter.MONTH:
-          where.createdAt = {
-            gte: startOfMonth(baseDate),
-            lte: endOfMonth(baseDate),
-          };
-          break;
-        case DateFilter.YEAR:
-          where.createdAt = {
-            gte: startOfYear(baseDate),
-            lte: endOfYear(baseDate),
-          };
-          break;
+      if (!user) {
+        throw new NotFoundException('User not found');
       }
-    }
 
-    const bookings = await this.prisma.booking.findMany({
-      where,
-      skip: (pageNum - 1) * limitNum,
-      take: Number(limitNum),
-      orderBy: { createdAt: 'desc' },
-      include: {
-        services: {
-          select: {
-            name: true,
-            price: true,
+      const where: any = {};
+
+      if (userId) {
+        where.vendorId = user.id;
+      }
+
+      if (status) {
+        where.status = status;
+      }
+
+      if (search) {
+        where.clientName = { contains: search, mode: 'insensitive' };
+      }
+
+      if (dateFilter) {
+        switch (dateFilter) {
+          case DateFilter.DAY:
+            where.createdAt = {
+              gte: new Date(baseDate.setHours(0, 0, 0, 0)),
+              lte: new Date(baseDate.setHours(23, 59, 59, 999)),
+            };
+            break;
+          case DateFilter.WEEK:
+            where.createdAt = {
+              gte: startOfWeek(baseDate, { weekStartsOn: 1 }),
+              lte: endOfWeek(baseDate, { weekStartsOn: 1 }),
+            };
+            break;
+          case DateFilter.MONTH:
+            where.createdAt = {
+              gte: startOfMonth(baseDate),
+              lte: endOfMonth(baseDate),
+            };
+            break;
+          case DateFilter.YEAR:
+            where.createdAt = {
+              gte: startOfYear(baseDate),
+              lte: endOfYear(baseDate),
+            };
+            break;
+        }
+      }
+
+      const bookings = await this.prisma.booking.findMany({
+        where,
+        skip: (pageNum - 1) * limitNum,
+        take: Number(limitNum),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          services: {
+            select: {
+              name: true,
+              price: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    const total = await this.prisma.booking.count({ where });
+      const total = await this.prisma.booking.count({ where });
 
-    return successResponse(bookings, 'Successfully fetched bookings', 200, {
-      total,
-      page: pageNum,
-      lastPage: Math.ceil(total / limitNum),
-    });
+      return successResponse(bookings, 'Successfully fetched bookings', 200, {
+        total,
+        page: pageNum,
+        lastPage: Math.ceil(total / limitNum),
+      });
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to fetch bookings.',
+        error.message,
+      );
+    }
+  }
+
+  async getClientsBookings(
+    userId: string,
+    page: string,
+    limit: string,
+    search?: string,
+    dateFilter?: DateFilter,
+    date?: string,
+    status?: string,
+    email?: string,
+  ) {
+    try {
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const baseDate = date ? new Date(date) : new Date();
+
+      const user = await this.prisma.user.findUnique({
+        where: { email: email },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const where: any = {};
+
+      if (userId) {
+        where.clientEmail = user.email;
+      }
+
+      if (status) {
+        where.status = status;
+      }
+
+      if (search) {
+        where.clientName = { contains: search, mode: 'insensitive' };
+      }
+
+      if (dateFilter) {
+        switch (dateFilter) {
+          case DateFilter.DAY:
+            where.createdAt = {
+              gte: new Date(baseDate.setHours(0, 0, 0, 0)),
+              lte: new Date(baseDate.setHours(23, 59, 59, 999)),
+            };
+            break;
+          case DateFilter.WEEK:
+            where.createdAt = {
+              gte: startOfWeek(baseDate, { weekStartsOn: 1 }),
+              lte: endOfWeek(baseDate, { weekStartsOn: 1 }),
+            };
+            break;
+          case DateFilter.MONTH:
+            where.createdAt = {
+              gte: startOfMonth(baseDate),
+              lte: endOfMonth(baseDate),
+            };
+            break;
+          case DateFilter.YEAR:
+            where.createdAt = {
+              gte: startOfYear(baseDate),
+              lte: endOfYear(baseDate),
+            };
+            break;
+        }
+      }
+
+      const bookings = await this.prisma.booking.findMany({
+        where,
+        skip: (pageNum - 1) * limitNum,
+        take: Number(limitNum),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          services: {
+            select: {
+              name: true,
+              price: true,
+            },
+          },
+          vendor: {
+            select: {
+              businessName: true,
+            },
+          },
+        },
+      });
+
+      const total = await this.prisma.booking.count({ where });
+
+      return successResponse(bookings, 'Successfully fetched bookings', 200, {
+        total,
+        page: pageNum,
+        lastPage: Math.ceil(total / limitNum),
+      });
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to fetch bookings.',
+        error.message,
+      );
+    }
   }
 
   async getClientsStats(userId: string) {
-    // 1️⃣ Get vendor
-    const vendor = await this.prisma.vendor.findFirst({
-      where: { userId },
-    });
+    try {
+      // 1️⃣ Get vendor
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
 
-    if (!vendor) {
-      throw new Error('Vendor not found');
-    }
+      if (!vendor) {
+        throw new Error('Vendor not found');
+      }
 
-    // 2️⃣ Total unique clients
-    const totalClients = await this.prisma.booking.groupBy({
-      by: ['clientEmail'],
-      where: {
-        vendorId: vendor.id,
-      },
-    });
+      // 2️⃣ Total unique clients
+      const totalClients = await this.prisma.booking.groupBy({
+        by: ['clientEmail'],
+        where: {
+          vendorId: vendor.id,
+        },
+      });
 
-    // 3️⃣ Repeat clients (clients with more than 1 booking)
-    const repeatClients = await this.prisma.booking.groupBy({
-      by: ['clientEmail'],
-      where: {
-        vendorId: vendor.id,
-      },
-      _count: {
-        clientEmail: true,
-      },
-      having: {
-        clientEmail: {
-          _count: {
-            gt: 1,
+      // 3️⃣ Repeat clients (clients with more than 1 booking)
+      const repeatClients = await this.prisma.booking.groupBy({
+        by: ['clientEmail'],
+        where: {
+          vendorId: vendor.id,
+        },
+        _count: {
+          clientEmail: true,
+        },
+        having: {
+          clientEmail: {
+            _count: {
+              gt: 1,
+            },
           },
         },
-      },
-    });
+      });
 
-    // 4️⃣ Repeat rate
-    const repeatRate =
-      totalClients.length === 0
-        ? 0
-        : Math.round((repeatClients.length / totalClients.length) * 100);
+      // 4️⃣ Repeat rate
+      const repeatRate =
+        totalClients.length === 0
+          ? 0
+          : Math.round((repeatClients.length / totalClients.length) * 100);
 
-    // 5️⃣ Average booking value
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        vendorId: vendor.id,
-        status: 'CONFIRMED',
-      },
-      include: {
-        services: true,
-      },
-    });
+      // 5️⃣ Average booking value
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: 'CONFIRMED',
+        },
+        include: {
+          services: true,
+        },
+      });
 
-    const total = bookings.reduce(
-      (sum, b) => sum + (b.services?.price || 0),
-      0,
-    );
+      const total = bookings.reduce(
+        (sum, b) => sum + (b.services?.price || 0),
+        0,
+      );
 
-    const avgBookingValue =
-      bookings.length === 0 ? 0 : Math.round(total / bookings.length);
+      const avgBookingValue =
+        bookings.length === 0 ? 0 : Math.round(total / bookings.length);
 
-    return successResponse(
-      {
-        totalClients: totalClients.length,
-        repeatClients: repeatClients.length,
-        repeatRate,
-        avgBookingValue,
-      },
-      'Successfully fetched clients stats',
-    );
+      return successResponse(
+        {
+          totalClients: totalClients.length,
+          repeatClients: repeatClients.length,
+          repeatRate,
+          avgBookingValue,
+        },
+        'Successfully fetched clients stats',
+      );
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to fetch bookings.',
+        error.message as string,
+      );
+    }
+  }
+
+  async getClientBookingsStats(userId: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const booking = await this.prisma.booking.findMany({
+        where: {
+          clientEmail: user.email,
+          status: {
+            in: ['COMPLETED', 'CONFIRMED'],
+          },
+        },
+        include: {
+          services: {
+            select: {
+              price: true,
+            },
+          },
+        },
+      });
+
+      const activeBooking = await this.prisma.booking.count({
+        where: {
+          clientEmail: user.email,
+          status: 'CONFIRMED',
+        },
+      });
+
+      const total = booking.reduce((acc, sum) => {
+        return acc + sum.services.price;
+      }, 0);
+
+      return successResponse(
+        { activeBooking, total },
+        'Stats fetched successfully',
+      );
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to fetch bookings stats.',
+        error.message as string,
+      );
+    }
+  }
+
+  async cancelBooking(bookingId: string, userId: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          services: true,
+          vendor: true,
+        },
+      });
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      const updatedBooking = await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'CANCELLED',
+        },
+      });
+
+      await this.nodemailerService.bookingStatusChangeMail({
+        subject: 'Your Booking Has Been Cancelled',
+        name: booking.clientName as string,
+        role: user.role,
+        vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',
+        serviceName: booking.services.name,
+        vendorName: booking.vendor.businessName,
+        email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
+        action: 'Cancel',
+      });
+
+      return successResponse(updatedBooking, 'Booking cancelled successfully');
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to cancel booking.',
+        error.message as string,
+      );
+    }
+  }
+
+  async rescheduleBooking(
+    bookingId: string,
+    dto: { date: string; startTime: string; endTime: string },
+    userId: string,
+  ) {
+    try {
+      const { date, startTime, endTime } = dto;
+
+      const start = new Date(`${date}T${startTime}`);
+      const end = new Date(`${date}T${endTime}`);
+      const bookingDate = new Date(date);
+
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (start >= end) {
+        throw new BadRequestException('End time must be after start time');
+      }
+
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          services: true,
+          vendor: true,
+        },
+      });
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      if (booking.clientEmail !== user.email && booking.vendorId !== userId) {
+        throw new ForbiddenException('Not allowed to reschedule this booking');
+      }
+
+      if (start < new Date()) {
+        throw new BadRequestException('Cannot reschedule to a past time');
+      }
+
+      const conflict = await this.prisma.booking.findFirst({
+        where: {
+          vendorId: booking.vendorId,
+          id: { not: bookingId },
+          AND: [
+            {
+              startTime: { lt: end },
+            },
+            {
+              endTime: { gt: start },
+            },
+          ],
+        },
+      });
+
+      if (conflict) {
+        throw new BadRequestException('Time slot already booked');
+      }
+
+      // ✅ Update booking
+      const updated = await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          startTime: start,
+          endTime: end,
+          date: bookingDate,
+        },
+      });
+
+      await this.nodemailerService.bookingStatusChangeMail({
+        subject: 'Your Booking Has Been Cancelled',
+        name: booking.clientName as string,
+        role: user.role,
+        vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',
+        serviceName: booking.services.name,
+        vendorName: booking.vendor.businessName,
+        email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
+        oldDate: booking.date,
+        oldStart: booking.startTime,
+        oldEnd: booking.endTime,
+        newDate: new Date(date),
+        newStart: new Date(startTime),
+        newEnd: new Date(endTime),
+        action: 'Reschedule',
+      });
+
+      return successResponse(updated, 'Rescheduled successfully.');
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to reschedule booking.',
+        error.message as string,
+      );
+    }
+  }
+
+  async markAsCmpleted(bookingId: string, userId: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          services: true,
+          vendor: true,
+        },
+      });
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      const updatedBooking = await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'COMPLETED',
+        },
+      });
+
+      await this.nodemailerService.bookingStatusChangeMail({
+        subject: 'Your Booking Has Been Mark As Completed',
+        name: booking.clientName as string,
+        role: user.role,
+        vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',
+        serviceName: booking.services.name,
+        vendorName: booking.vendor.businessName,
+        email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
+        action: 'Mark As Completed',
+      });
+
+      return successResponse(
+        updatedBooking,
+        'Booking mark as completed successfully',
+      );
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to cancel booking.',
+        error.message as string,
+      );
+    }
   }
 }

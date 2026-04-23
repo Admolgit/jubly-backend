@@ -91,9 +91,6 @@ async function bootstrap() {
     next();
   });
 
-  // Keep server alive (if using Redis)
-  keepServerAliveDeployment.start();
-
   // Serve React static build
   const clientBuildPath = join(__dirname, '..', 'client'); // adjust to your React build
   if (existsSync(clientBuildPath)) {
@@ -108,6 +105,9 @@ async function bootstrap() {
       }
     }) as express.RequestHandler);
   }
+
+  // Keep server alive (if using Redis)
+  keepServerAliveDeployment.start();
 
   // Start server
   const port = process.env.PORT ?? 4001;

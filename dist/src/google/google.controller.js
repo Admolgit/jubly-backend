@@ -72,6 +72,15 @@ let GoogleController = class GoogleController {
             vendorId,
         });
     }
+    getClientCalendar(req, view, year, month, date) {
+        return this.googleService.getClientCalendar({
+            userId: req.user.id,
+            view,
+            year: Number(year),
+            month: Number(month),
+            date,
+        });
+    }
 };
 exports.GoogleController = GoogleController;
 __decorate([
@@ -99,18 +108,31 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], GoogleController.prototype, "getCalenderLinkedStatus", null);
 __decorate([
-    (0, common_1.Get)('calendar-list/:vendorId'),
+    (0, common_1.Get)('/calendar-list/:vendorId'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Query)('view')),
     __param(1, (0, common_1.Query)('year')),
     __param(2, (0, common_1.Query)('month')),
     __param(3, (0, common_1.Query)('date')),
-    __param(4, (0, common_1.Param)('vendorId')),
+    __param(4, (0, common_1.Query)('vendorId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, String, String, String]),
     __metadata("design:returntype", void 0)
 ], GoogleController.prototype, "getCalendar", null);
+__decorate([
+    (0, common_1.Get)('/client/calendar-list'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('view')),
+    __param(2, (0, common_1.Query)('year')),
+    __param(3, (0, common_1.Query)('month')),
+    __param(4, (0, common_1.Query)('date')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, String, String]),
+    __metadata("design:returntype", void 0)
+], GoogleController.prototype, "getClientCalendar", null);
 exports.GoogleController = GoogleController = __decorate([
     (0, common_1.Controller)('google'),
     __metadata("design:paramtypes", [google_service_1.GoogleCalendarService,
