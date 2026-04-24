@@ -45,6 +45,12 @@ let BookingController = class BookingController {
     async getServicesByCount(req) {
         return this.bookingService.countBookingsByService(req.user.id);
     }
+    getAdminBookingStats() {
+        return this.bookingService.getAdminBookingStats();
+    }
+    async getAdminBookings(page = '1', limit = '10', search, dateFilter, date, status, startDate, endDate) {
+        return this.bookingService.getAdminBookings(page, limit, search, dateFilter, date, status, startDate, endDate);
+    }
     async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
         return this.bookingService.getBookings(req.user.id, page, limit, search, dateFilter, date, status);
     }
@@ -133,6 +139,30 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], BookingController.prototype, "getServicesByCount", null);
+__decorate([
+    (0, common_1.Get)('admin/stats'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getAdminBookingStats", null);
+__decorate([
+    (0, common_1.Get)('admin'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Query)('page')),
+    __param(1, (0, common_1.Query)('limit')),
+    __param(2, (0, common_1.Query)('search')),
+    __param(3, (0, common_1.Query)('dateFilter')),
+    __param(4, (0, common_1.Query)('date')),
+    __param(5, (0, common_1.Query)('status')),
+    __param(6, (0, common_1.Query)('startDate')),
+    __param(7, (0, common_1.Query)('endDate')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, String, String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], BookingController.prototype, "getAdminBookings", null);
 __decorate([
     (0, common_1.Get)(''),
     (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
