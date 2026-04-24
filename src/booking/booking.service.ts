@@ -74,6 +74,28 @@ export class BookingService {
     }
   }
 
+  private getDateRange(startDate?: string, endDate?: string) {
+    if (!startDate && !endDate) {
+      return undefined;
+    }
+
+    const range: { gte?: Date; lte?: Date } = {};
+
+    if (startDate) {
+      range.gte = new Date(`${startDate}T00:00:00.000`);
+    }
+
+    if (endDate) {
+      range.lte = new Date(`${endDate}T23:59:59.999`);
+    }
+
+    if (range.gte && range.lte && range.gte > range.lte) {
+      throw new BadRequestException('startDate cannot be later than endDate');
+    }
+
+    return range;
+  }
+
   async createBooking(userId: string, dto: IBooking) {
     try {
       const user = await this.prisma.user.findUnique({
@@ -567,6 +589,8 @@ export class BookingService {
     dateFilter?: DateFilter,
     date?: string,
     status?: string,
+    startDate?: string,
+    endDate?: string,
   ) {
     try {
       const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
@@ -581,6 +605,11 @@ export class BookingService {
       const createdAtRange = this.getCreatedAtRange(dateFilter, date);
       if (createdAtRange) {
         where.createdAt = createdAtRange;
+      }
+
+      const scheduledRange = this.getDateRange(startDate, endDate);
+      if (scheduledRange) {
+        where.startTime = scheduledRange;
       }
 
       if (search) {

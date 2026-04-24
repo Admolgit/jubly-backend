@@ -93,6 +93,8 @@ export class BookingController {
     @Query('dateFilter') dateFilter?: DateFilter,
     @Query('date') date?: string,
     @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
     return this.bookingService.getAdminBookings(
       page,
@@ -101,6 +103,8 @@ export class BookingController {
       dateFilter as DateFilter,
       date as string,
       status as string,
+      startDate as string,
+      endDate as string,
     );
   }
 

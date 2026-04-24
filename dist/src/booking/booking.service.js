@@ -66,6 +66,22 @@ let BookingService = class BookingService {
                 return undefined;
         }
     }
+    getDateRange(startDate, endDate) {
+        if (!startDate && !endDate) {
+            return undefined;
+        }
+        const range = {};
+        if (startDate) {
+            range.gte = new Date(`${startDate}T00:00:00.000`);
+        }
+        if (endDate) {
+            range.lte = new Date(`${endDate}T23:59:59.999`);
+        }
+        if (range.gte && range.lte && range.gte > range.lte) {
+            throw new common_1.BadRequestException('startDate cannot be later than endDate');
+        }
+        return range;
+    }
     async createBooking(userId, dto) {
         try {
             const user = await this.prisma.user.findUnique({
@@ -448,7 +464,7 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to fetch admin booking stats.', error.message);
         }
     }
-    async getAdminBookings(page, limit, search, dateFilter, date, status) {
+    async getAdminBookings(page, limit, search, dateFilter, date, status, startDate, endDate) {
         try {
             const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
             const limitNum = Math.max(Number.parseInt(limit, 10) || 10, 1);
@@ -459,6 +475,10 @@ let BookingService = class BookingService {
             const createdAtRange = this.getCreatedAtRange(dateFilter, date);
             if (createdAtRange) {
                 where.createdAt = createdAtRange;
+            }
+            const scheduledRange = this.getDateRange(startDate, endDate);
+            if (scheduledRange) {
+                where.startTime = scheduledRange;
             }
             if (search) {
                 where.OR = [
