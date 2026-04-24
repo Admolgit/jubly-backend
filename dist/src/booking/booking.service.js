@@ -36,6 +36,36 @@ let BookingService = class BookingService {
         this.authService = authService;
         this.nodemailerService = nodemailerService;
     }
+    getCreatedAtRange(dateFilter, date) {
+        if (!dateFilter) {
+            return undefined;
+        }
+        const baseDate = date ? new Date(date) : new Date();
+        switch (dateFilter) {
+            case DateFilter.DAY:
+                return {
+                    gte: new Date(baseDate.setHours(0, 0, 0, 0)),
+                    lte: new Date(baseDate.setHours(23, 59, 59, 999)),
+                };
+            case DateFilter.WEEK:
+                return {
+                    gte: (0, date_fns_1.startOfWeek)(baseDate, { weekStartsOn: 1 }),
+                    lte: (0, date_fns_1.endOfWeek)(baseDate, { weekStartsOn: 1 }),
+                };
+            case DateFilter.MONTH:
+                return {
+                    gte: (0, date_fns_1.startOfMonth)(baseDate),
+                    lte: (0, date_fns_1.endOfMonth)(baseDate),
+                };
+            case DateFilter.YEAR:
+                return {
+                    gte: (0, date_fns_1.startOfYear)(baseDate),
+                    lte: (0, date_fns_1.endOfYear)(baseDate),
+                };
+            default:
+                return undefined;
+        }
+    }
     async createBooking(userId, dto) {
         try {
             const user = await this.prisma.user.findUnique({
@@ -364,6 +394,140 @@ let BookingService = class BookingService {
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch count by service', error.message);
+        }
+    }
+    async getAdminBookingStats() {
+        try {
+            const now = new Date();
+            const startOfTodayDate = new Date();
+            startOfTodayDate.setHours(0, 0, 0, 0);
+            const endOfTodayDate = new Date(startOfTodayDate);
+            endOfTodayDate.setDate(endOfTodayDate.getDate() + 1);
+            const [totalBookings, pendingBookings, confirmedBookings, completedBookings, cancelledBookings, todayBookings, upcomingBookings,] = await Promise.all([
+                this.prisma.booking.count(),
+                this.prisma.booking.count({
+                    where: { status: 'PENDING' },
+                }),
+                this.prisma.booking.count({
+                    where: { status: 'CONFIRMED' },
+                }),
+                this.prisma.booking.count({
+                    where: { status: 'COMPLETED' },
+                }),
+                this.prisma.booking.count({
+                    where: { status: 'CANCELLED' },
+                }),
+                this.prisma.booking.count({
+                    where: {
+                        startTime: {
+                            gte: startOfTodayDate,
+                            lt: endOfTodayDate,
+                        },
+                    },
+                }),
+                this.prisma.booking.count({
+                    where: {
+                        status: 'CONFIRMED',
+                        startTime: {
+                            gte: now,
+                        },
+                    },
+                }),
+            ]);
+            return (0, response_1.successResponse)({
+                totalBookings,
+                pendingBookings,
+                confirmedBookings,
+                completedBookings,
+                cancelledBookings,
+                todayBookings,
+                upcomingBookings,
+            }, 'Successfully fetched admin booking stats');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch admin booking stats.', error.message);
+        }
+    }
+    async getAdminBookings(page, limit, search, dateFilter, date, status) {
+        try {
+            const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
+            const limitNum = Math.max(Number.parseInt(limit, 10) || 10, 1);
+            const where = {};
+            if (status) {
+                where.status = status;
+            }
+            const createdAtRange = this.getCreatedAtRange(dateFilter, date);
+            if (createdAtRange) {
+                where.createdAt = createdAtRange;
+            }
+            if (search) {
+                where.OR = [
+                    {
+                        clientName: {
+                            contains: search,
+                            mode: 'insensitive',
+                        },
+                    },
+                    {
+                        clientEmail: {
+                            contains: search,
+                            mode: 'insensitive',
+                        },
+                    },
+                    {
+                        vendor: {
+                            is: {
+                                businessName: {
+                                    contains: search,
+                                    mode: 'insensitive',
+                                },
+                            },
+                        },
+                    },
+                    {
+                        services: {
+                            is: {
+                                name: {
+                                    contains: search,
+                                    mode: 'insensitive',
+                                },
+                            },
+                        },
+                    },
+                ];
+            }
+            const bookings = await this.prisma.booking.findMany({
+                where,
+                skip: (pageNum - 1) * limitNum,
+                take: limitNum,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    services: {
+                        select: {
+                            name: true,
+                            price: true,
+                        },
+                    },
+                    vendor: {
+                        select: {
+                            businessName: true,
+                            category: true,
+                            city: true,
+                            state: true,
+                        },
+                    },
+                },
+            });
+            const total = await this.prisma.booking.count({ where });
+            return (0, response_1.successResponse)({ bookings }, 'Successfully fetched admin bookings', 200, {
+                total,
+                page: pageNum,
+                lastPage: Math.max(1, Math.ceil(total / limitNum)),
+                limit: limitNum,
+            });
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch admin bookings.', error.message);
         }
     }
     async getBookings(userId, page, limit, search, dateFilter, date, status) {

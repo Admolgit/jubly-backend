@@ -76,6 +76,34 @@ export class BookingController {
     return this.bookingService.countBookingsByService(req.user.id as string);
   }
 
+  @Get('admin/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAdminBookingStats() {
+    return this.bookingService.getAdminBookingStats();
+  }
+
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async getAdminBookings(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: DateFilter,
+    @Query('date') date?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.bookingService.getAdminBookings(
+      page,
+      limit,
+      search as string,
+      dateFilter as DateFilter,
+      date as string,
+      status as string,
+    );
+  }
+
   @Get('')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
