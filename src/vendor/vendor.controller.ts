@@ -99,11 +99,8 @@ export class VendorController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   createServices(@Req() req, @Body() body: CreateServicesDto) {
-    return this.vendorService.createServices(
-      req.user.id,
-      body.services,
-      req.user.id,
-    );
+    console.log({ body }, req.user.id);
+    return this.vendorService.createServices(req.user.id, body.services);
   }
 
   @Patch('onboarding/update-services')

@@ -44,10 +44,23 @@ let AvailabilityService = class AvailabilityService {
             throw new common_1.InternalServerErrorException('Failed to fetch vendor availability', error?.message);
         }
     }
+    isSameDay(a, b) {
+        return (a.getFullYear() === b.getFullYear() &&
+            a.getMonth() === b.getMonth() &&
+            a.getDate() === b.getDate());
+    }
+    isPastDay(date) {
+        const today = new Date();
+        const d1 = new Date(date);
+        d1.setHours(0, 0, 0, 0);
+        const d2 = new Date(today);
+        d2.setHours(0, 0, 0, 0);
+        return d1 < d2;
+    }
     async getAvailableSlots(vendorId, serviceId, date) {
         try {
             const vendor = await this.prisma.vendor.findUnique({
-                where: { id: vendorId },
+                where: { userId: vendorId },
                 include: {
                     vendorAvailability: true,
                     bookings: true,
@@ -70,8 +83,17 @@ let AvailabilityService = class AvailabilityService {
             const duration = services[0].durationMins;
             const slots = this.generateSlots(start, end, duration);
             const bookings = vendor.bookings;
+            const now = new Date();
+            const isToday = this.isSameDay(dateObj, now);
+            if (this.isPastDay(dateObj)) {
+                return (0, response_1.successResponse)({ availableSlots: [] }, 'No slots for past dates');
+            }
             const availableSlots = slots.filter((slot) => {
-                return !bookings.some((b) => slot.startTime < b.endTime && slot.endTime > b.startTime);
+                if (isToday && slot.startTime <= now) {
+                    return false;
+                }
+                return !bookings.some((b) => slot.startTime < new Date(b.endTime) &&
+                    slot.endTime > new Date(b.startTime));
             });
             return (0, response_1.successResponse)({ availableSlots }, 'Available slot fetched successfully.');
         }
@@ -117,8 +139,10 @@ let AvailabilityService = class AvailabilityService {
             }
             const updatedAvailabilities = await Promise.all(dto.availabilities.map((item) => this.prisma.vendorAvailability.upsert({
                 where: {
-                    vendorId: vendor.id,
-                    dayOfWeek: item.dayOfWeek,
+                    vendorId_dayOfWeek: {
+                        vendorId: vendor.id,
+                        dayOfWeek: item.dayOfWeek,
+                    },
                 },
                 update: {
                     startTime: item.startTime,

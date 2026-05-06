@@ -54,7 +54,8 @@ let VendorController = class VendorController {
         return this.vendorService.createProfile(userId, dto);
     }
     createServices(req, body) {
-        return this.vendorService.createServices(req.user.id, body.services, req.user.id);
+        console.log({ body }, req.user.id);
+        return this.vendorService.createServices(req.user.id, body.services);
     }
     bulkUpdateServices(req, body) {
         return this.vendorService.bulkUpdateServices(req.user.id, body.updates);

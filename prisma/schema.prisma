@@ -81,9 +81,10 @@ model Vendor {
   vendorAvailability VendorAvailability[]
   transaction        Transaction[]        @relation("Transaction")
 
-  kycStatus  KYCStatus @default(NOT_SUBMITTED)
-  isApproved Boolean   @default(false)
-  isActive   Boolean   @default(false)
+  kycStatus           KYCStatus @default(NOT_SUBMITTED)
+  isApproved          Boolean   @default(false)
+  isActive            Boolean   @default(false)
+  onboardingCompleted Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,7 +107,7 @@ model Service {
   vendorId  String?   @db.ObjectId
   booking   Booking[]
 
-  @@index([userId])
+  @@unique([userId, name])
 }
 
 model VendorAvailability {
@@ -118,10 +119,10 @@ model VendorAvailability {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  Vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
   vendorId String? @db.ObjectId
 
-  @@unique([dayOfWeek])
+  @@unique([vendorId, dayOfWeek])
 }
 
 model Booking {

@@ -207,11 +207,13 @@ export class TransactionService {
         },
       });
 
+      const totalSum = total._sum.amount ?? 0 / 100;
+
       return successResponse(
-        { total: total._sum.amount || 0 },
+        { total: totalSum },
         'Successfully fetched transactions amount.',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch this transactions',
         error.message as string,
@@ -293,14 +295,11 @@ export class TransactionService {
 
       let data: { label: string; amount: number }[] = [];
 
-      // =========================
-      // 📊 GROUPING
-      // =========================
       switch (view) {
         case 'day':
           // Just total for the day
           const totalAmount = transactions.reduce(
-            (sum, t) => sum + (t.amount || 0),
+            (sum, t) => sum + (t.amount / 100 || 0),
             0,
           );
           data = [
@@ -318,7 +317,7 @@ export class TransactionService {
           transactions.forEach((t) => {
             const jsDay = new Date(t.createdAt).getDay(); // 0–6
             const index = jsDay === 0 ? 6 : jsDay - 1; // Mon–Sun
-            weekData[index].amount += t.amount || 0;
+            weekData[index].amount += t.amount / 100 || 0;
           });
 
           data = weekData;
@@ -337,7 +336,7 @@ export class TransactionService {
 
           transactions.forEach((t) => {
             const d = new Date(t.createdAt).getDate();
-            monthData[d - 1].amount += t.amount || 0;
+            monthData[d - 1].amount += t.amount / 100 || 0;
           });
 
           data = monthData;
@@ -362,20 +361,20 @@ export class TransactionService {
 
           transactions.forEach((t) => {
             const m = new Date(t.createdAt).getMonth(); // 0–11
-            yearData[m].amount += t.amount || 0;
+            yearData[m].amount += t.amount / 100 || 0;
           });
 
           data = yearData;
           break;
       }
 
-      // =========================
-      // 💰 TOTAL
-      // =========================
-      const total = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const total = transactions.reduce(
+        (sum, t) => sum + (t.amount / 100 || 0),
+        0,
+      );
 
       return successResponse({ total, data }, 'Analytics fetched successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch analytics',
         error.message,

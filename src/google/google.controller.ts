@@ -15,12 +15,14 @@ import { GoogleCalendarService } from './google.service';
 import { AuthService } from 'src/auth/auth.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
+import { PrismaService } from 'prisma/prisma.service';
 
 @Controller('google')
 export class GoogleController {
   constructor(
     private googleService: GoogleCalendarService,
     private authService: AuthService,
+    private prisma: PrismaService,
   ) {}
 
   @Get('calendar')
@@ -77,10 +79,19 @@ export class GoogleController {
       result.userId as string,
     )}&accessToken=${encodeURIComponent(result.accessToken as string)}&access_token=${encodeURIComponent(appJwt)}`;
     if (parsedState.direction === 'onboarding') {
-      frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/onboard/availability?calendarLinked=true&userId=${encodeURIComponent(
+      frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/vendor-availability?calendarLinked=true&userId=${encodeURIComponent(
         result.userId as string,
       )}&accessToken=${encodeURIComponent(result.accessToken as string)}&access_token=${encodeURIComponent(appJwt)}`;
     }
+
+    await this.prisma.vendor.update({
+      where: {
+        userId: parsedState.userId,
+      },
+      data: {
+        onboardingCompleted: true,
+      },
+    });
 
     return res.redirect(frontendRedirectUrl);
   }

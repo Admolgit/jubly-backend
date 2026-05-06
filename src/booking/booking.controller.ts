@@ -202,4 +202,18 @@ export class BookingController {
   ) {
     return this.bookingService.markAsCmpleted(bookingId, req.user.id);
   }
+
+  @Get('status/filter')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  async getBookingsStatusFilter() {
+    return this.bookingService.getBookingsStatusFilter();
+  }
+
+  @Get('insights')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getInsights() {
+    return this.bookingService.getBusinessInsights();
+  }
 }

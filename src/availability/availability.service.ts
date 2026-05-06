@@ -41,7 +41,7 @@ export class AvailabilityService {
         where: { vendorId: vendor.id },
         orderBy: { dayOfWeek: 'asc' },
       });
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch vendor availability',
         error?.message,
@@ -49,10 +49,31 @@ export class AvailabilityService {
     }
   }
 
+  isSameDay(a: Date, b: Date) {
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+
+  isPastDay(date: Date) {
+    const today = new Date();
+
+    // normalize both to midnight
+    const d1 = new Date(date);
+    d1.setHours(0, 0, 0, 0);
+
+    const d2 = new Date(today);
+    d2.setHours(0, 0, 0, 0);
+
+    return d1 < d2;
+  }
+
   async getAvailableSlots(vendorId: string, serviceId: string, date: Date) {
     try {
       const vendor = await this.prisma.vendor.findUnique({
-        where: { id: vendorId },
+        where: { userId: vendorId },
         include: {
           vendorAvailability: true,
           bookings: true,
@@ -86,9 +107,28 @@ export class AvailabilityService {
 
       const bookings = vendor.bookings;
 
+      const now = new Date();
+
+      const isToday = this.isSameDay(dateObj, now);
+
+      if (this.isPastDay(dateObj)) {
+        return successResponse(
+          { availableSlots: [] },
+          'No slots for past dates',
+        );
+      }
+
       const availableSlots = slots.filter((slot) => {
+        // ONLY filter past slots if it's today
+        if (isToday && slot.startTime <= now) {
+          return false;
+        }
+
+        // Remove booked slots
         return !bookings.some(
-          (b) => slot.startTime < b.endTime && slot.endTime > b.startTime,
+          (b) =>
+            slot.startTime < new Date(b.endTime) &&
+            slot.endTime > new Date(b.startTime),
         );
       });
 
@@ -96,7 +136,7 @@ export class AvailabilityService {
         { availableSlots },
         'Available slot fetched successfully.',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch vendor availabile slot',
         error?.message,
@@ -127,7 +167,7 @@ export class AvailabilityService {
       });
 
       return successResponse({ grouped }, 'Availability fetched successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch vendor availability',
         error?.message,
@@ -155,8 +195,10 @@ export class AvailabilityService {
         dto.availabilities.map((item) =>
           this.prisma.vendorAvailability.upsert({
             where: {
-              vendorId: vendor.id,
-              dayOfWeek: item.dayOfWeek,
+              vendorId_dayOfWeek: {
+                vendorId: vendor.id,
+                dayOfWeek: item.dayOfWeek,
+              },
             },
             update: {
               startTime: item.startTime,
@@ -176,7 +218,7 @@ export class AvailabilityService {
         { updatedAvailabilities },
         'Availability updated successfully',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to set vendor availability',
         error?.message,
@@ -199,7 +241,7 @@ export class AvailabilityService {
       }
 
       return successResponse({ deleted }, 'Availability deleted successfully');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to set vendor availability',
         error?.message,

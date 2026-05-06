@@ -54,150 +54,183 @@ let VendorService = class VendorService {
         });
         return (0, response_1.successResponse)({ vendor }, 'Vendor created successfully', 201);
     }
-    async createServices(userId, services, vendorId, tx) {
-        const prisma = tx ?? this.prisma;
-        const user = await prisma.user.findUnique({ where: { id: userId } });
+    async createServices(userId, services, tx) {
+        if (tx) {
+            return this._createServicesLogic(tx, userId, services);
+        }
+        return this.prisma.$transaction((db) => this._createServicesLogic(db, userId, services));
+    }
+    async _createServicesLogic(db, userId, services) {
+        const user = await db.user.findUnique({ where: { id: userId } });
         if (!user)
             throw new common_1.NotFoundException('User not found');
-        if (!Array.isArray(services)) {
-            throw new common_1.BadRequestException('Services must be an array');
-        }
-        const created = await Promise.all(services.map((s) => prisma.service.create({
-            data: {
-                vendorId,
+        const created = await Promise.all(services.map((s) => db.service.upsert({
+            where: {
+                userId_name: {
+                    userId,
+                    name: s.name ?? '',
+                },
+            },
+            update: {
+                description: s.description ?? '',
+                price: s.price ?? 0,
+                durationMins: s.durationMins ?? null,
+            },
+            create: {
                 userId,
                 name: s.name ?? '',
                 description: s.description ?? '',
                 price: s.price ?? 0,
                 durationMins: s.durationMins ?? null,
+                vendorId: null,
             },
         })));
         return (0, response_1.successResponse)({ created }, 'Services successfully created', 201);
     }
     async createPaystackSubaccount(userId, dto) {
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        if (!user)
-            throw new common_1.NotFoundException('User not found');
-        const vendor = await this.prisma.vendor.findFirst({
-            where: { userId: user.id },
-        });
-        if (!vendor)
-            throw new common_1.NotFoundException('Vendor not found');
-        const doesAccountExists = await this.prisma.subAccount.findFirst({
-            where: {
-                userId: user.id,
-                accountNumber: dto.accountNumber,
-            },
-        });
-        if (doesAccountExists) {
-            throw new common_1.BadRequestException('This bank account is already linked to your vendor profile.');
+        try {
+            const user = await this.prisma.user.findUnique({ where: { id: userId } });
+            if (!user)
+                throw new common_1.NotFoundException('User not found');
+            const vendor = await this.prisma.vendor.findFirst({
+                where: { userId: user.id },
+            });
+            if (!vendor)
+                throw new common_1.NotFoundException('Vendor not found');
+            const doesAccountExists = await this.prisma.subAccount.findFirst({
+                where: {
+                    userId: user.id,
+                    accountNumber: dto.accountNumber,
+                },
+            });
+            if (doesAccountExists) {
+                throw new common_1.BadRequestException('This bank account is already linked to your vendor profile.');
+            }
+            const verifyAccount = await this.paystackService.resolveBankAccount(dto.accountNumber, dto.settlementBank);
+            if (!verifyAccount.status) {
+                throw new common_1.BadRequestException('Account details does not match.');
+            }
+            const res = await this.paystackService.createSubaccount({
+                business_name: dto.businessName,
+                settlement_bank: dto.settlementBank,
+                account_number: dto.accountNumber,
+                percentage_charge: 0.1,
+                charge_cap: 5000,
+            });
+            const paystackSubId = res?.data?.data?.subaccount_code ??
+                res?.data?.data?.subaccount_id ??
+                res?.data?.data?.id ??
+                null;
+            if (!paystackSubId) {
+                throw new common_1.InternalServerErrorException('Paystack subaccount creation failed');
+            }
+            const verifyRes = await this.paystackService.verifySubaccount(paystackSubId);
+            if (!verifyRes.status) {
+                throw new common_1.BadRequestException('Paystack subaccount creation failed');
+            }
+            const pastackUserAccount = await this.prisma.subAccount.create({
+                data: {
+                    userId,
+                    paystackAccountId: paystackSubId,
+                    bankName: dto.settlementBank,
+                    accountNumber: dto.accountNumber,
+                    accountName: dto.businessName,
+                    limit: 5000000,
+                },
+            });
+            await this.prisma.vendor.update({
+                where: { userId },
+                data: {
+                    paystackSubaccount: paystackSubId,
+                    bankAccountNumber: dto.accountNumber,
+                    bankCode: dto.settlementBank,
+                },
+            });
+            return (0, response_1.successResponse)(pastackUserAccount, 'Paystack subaccount created and verified successfully', 201);
         }
-        const verifyAccount = await this.paystackService.resolveBankAccount(dto.accountNumber, dto.settlementBank);
-        if (!verifyAccount.status) {
-            throw new common_1.BadRequestException('Account details does not match.');
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to create subaccount', error.message);
         }
-        const res = await this.paystackService.createSubaccount({
-            business_name: dto.businessName,
-            settlement_bank: dto.settlementBank,
-            account_number: dto.accountNumber,
-            percentage_charge: 0.1,
-            charge_cap: 5000,
-        });
-        const paystackSubId = res?.data?.data?.subaccount_code ??
-            res?.data?.data?.subaccount_id ??
-            res?.data?.data?.id ??
-            null;
-        if (!paystackSubId) {
-            throw new common_1.InternalServerErrorException('Paystack subaccount creation failed');
-        }
-        const verifyRes = await this.paystackService.verifySubaccount(paystackSubId);
-        if (!verifyRes.status) {
-            throw new common_1.BadRequestException('Paystack subaccount creation failed');
-        }
-        const pastackUserAccount = await this.prisma.subAccount.create({
-            data: {
-                userId,
-                paystackAccountId: paystackSubId,
-                bankName: dto.settlementBank,
-                accountNumber: dto.accountNumber,
-                accountName: dto.businessName,
-                limit: 5000000,
-            },
-        });
-        await this.prisma.vendor.update({
-            where: { userId },
-            data: {
-                paystackSubaccount: paystackSubId,
-                bankAccountNumber: dto.accountNumber,
-                bankCode: dto.settlementBank,
-            },
-        });
-        return (0, response_1.successResponse)(pastackUserAccount, 'Paystack subaccount created and verified successfully', 201);
     }
     async submitProfileImage(userId, file) {
-        if (!file) {
-            throw new common_1.BadRequestException('Profile image is required');
+        try {
+            if (!file) {
+                throw new common_1.BadRequestException('Profile image is required');
+            }
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const uploadResult = await this.cloudinaryService.uploadImage(file);
+            const updatedVendor = await this.prisma.vendor.update({
+                where: { userId },
+                data: {
+                    profileImage: uploadResult,
+                },
+            });
+            return (0, response_1.successResponse)({ updatedVendor }, 'Profile image submitted successfully');
         }
-        const vendor = await this.prisma.vendor.findUnique({
-            where: { userId },
-        });
-        if (!vendor) {
-            throw new common_1.NotFoundException('Vendor not found');
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to submit image', error.message);
         }
-        const uploadResult = await this.cloudinaryService.uploadImage(file);
-        const updatedVendor = await this.prisma.vendor.update({
-            where: { userId },
-            data: {
-                profileImage: uploadResult,
-            },
-        });
-        return (0, response_1.successResponse)({ updatedVendor }, 'Profile image submitted successfully');
     }
     async submitIdentity(userId, identityType, files) {
-        if (!identityType) {
-            throw new common_1.BadRequestException('Identity type is required');
+        try {
+            if (!identityType) {
+                throw new common_1.BadRequestException('Identity type is required');
+            }
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const frontFile = files.documentFront;
+            if (!frontFile) {
+                throw new common_1.BadRequestException('Front identity images are required');
+            }
+            const frontUpload = await this.cloudinaryService.uploadImage(frontFile);
+            const updatedVendor = await this.prisma.vendor.update({
+                where: { userId },
+                data: {
+                    identityType: identityType,
+                    documentFrontUrl: frontUpload,
+                },
+            });
+            return (0, response_1.successResponse)({ updatedVendor }, 'Identity image submitted successfully');
         }
-        const vendor = await this.prisma.vendor.findUnique({
-            where: { userId },
-        });
-        if (!vendor) {
-            throw new common_1.NotFoundException('Vendor not found');
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to submit identity', error.message);
         }
-        const frontFile = files.documentFront;
-        if (!frontFile) {
-            throw new common_1.BadRequestException('Front identity images are required');
-        }
-        const frontUpload = await this.cloudinaryService.uploadImage(frontFile);
-        const updatedVendor = await this.prisma.vendor.update({
-            where: { userId },
-            data: {
-                identityType: identityType,
-                documentFrontUrl: frontUpload,
-            },
-        });
-        return (0, response_1.successResponse)({ updatedVendor }, 'Identity image submitted successfully');
     }
     async uploadPortfolio(userId, files) {
-        if (!files?.length) {
-            throw new common_1.BadRequestException('At least one image is required');
-        }
-        const vendor = await this.prisma.vendor.findUnique({
-            where: { userId },
-        });
-        if (!vendor) {
-            throw new common_1.NotFoundException('Vendor not found');
-        }
-        const uploads = await Promise.all(files.map((file) => this.cloudinaryService.uploadImage(file)));
-        const uploadedPortfolios = await this.prisma.vendor.update({
-            where: { userId },
-            data: {
-                portfolioImages: {
-                    push: uploads,
+        try {
+            if (!files?.length) {
+                throw new common_1.BadRequestException('At least one image is required');
+            }
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const uploads = await Promise.all(files.map((file) => this.cloudinaryService.uploadImage(file)));
+            const uploadedPortfolios = await this.prisma.vendor.update({
+                where: { userId },
+                data: {
+                    portfolioImages: {
+                        push: uploads,
+                    },
+                    kycStatus: 'PENDING',
                 },
-                kycStatus: 'PENDING',
-            },
-        });
-        return (0, response_1.successResponse)({ uploadedPortfolios }, 'Uploaded portfolio successfully');
+            });
+            return (0, response_1.successResponse)({ uploadedPortfolios }, 'Uploaded portfolio successfully');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to upload portfolio.', error.message);
+        }
     }
     async updateProfile(userId, dto) {
         try {
@@ -295,8 +328,8 @@ let VendorService = class VendorService {
         }
     }
     async approveVendor(vendorId) {
-        try {
-            const approveVendor = await this.prisma.vendor.update({
+        return await this.prisma.$transaction(async (db) => {
+            const vendor = await db.vendor.update({
                 where: { id: vendorId },
                 data: {
                     kycStatus: 'APPROVED',
@@ -304,11 +337,20 @@ let VendorService = class VendorService {
                     isActive: true,
                 },
             });
-            return (0, response_1.successResponse)({ approveVendor }, 'Vendor approved successfully');
-        }
-        catch (error) {
-            throw new common_1.InternalServerErrorException('Failed to approve vendor', error.message);
-        }
+            await db.service.updateMany({
+                where: {
+                    userId: vendor.userId,
+                    OR: [
+                        { vendorId: null },
+                        { vendorId: { not: vendorId } },
+                    ],
+                },
+                data: {
+                    vendorId: vendorId,
+                },
+            });
+            return (0, response_1.successResponse)({ vendor }, 'Vendor approved successfully');
+        });
     }
     async getVendorStatus(userId) {
         try {
