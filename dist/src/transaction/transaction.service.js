@@ -155,7 +155,8 @@ let TransactionService = class TransactionService {
                     amount: true,
                 },
             });
-            return (0, response_1.successResponse)({ total: total._sum.amount || 0 }, 'Successfully fetched transactions amount.');
+            const totalSum = total._sum.amount ?? 0 / 100;
+            return (0, response_1.successResponse)({ total: totalSum }, 'Successfully fetched transactions amount.');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch this transactions', error.message);
@@ -217,7 +218,7 @@ let TransactionService = class TransactionService {
             let data = [];
             switch (view) {
                 case 'day':
-                    const totalAmount = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+                    const totalAmount = transactions.reduce((sum, t) => sum + (t.amount / 100 || 0), 0);
                     data = [
                         {
                             label: startDate.toDateString(),
@@ -231,7 +232,7 @@ let TransactionService = class TransactionService {
                     transactions.forEach((t) => {
                         const jsDay = new Date(t.createdAt).getDay();
                         const index = jsDay === 0 ? 6 : jsDay - 1;
-                        weekData[index].amount += t.amount || 0;
+                        weekData[index].amount += t.amount / 100 || 0;
                     });
                     data = weekData;
                     break;
@@ -243,7 +244,7 @@ let TransactionService = class TransactionService {
                     }));
                     transactions.forEach((t) => {
                         const d = new Date(t.createdAt).getDate();
-                        monthData[d - 1].amount += t.amount || 0;
+                        monthData[d - 1].amount += t.amount / 100 || 0;
                     });
                     data = monthData;
                     break;
@@ -265,12 +266,12 @@ let TransactionService = class TransactionService {
                     const yearData = months.map((m) => ({ label: m, amount: 0 }));
                     transactions.forEach((t) => {
                         const m = new Date(t.createdAt).getMonth();
-                        yearData[m].amount += t.amount || 0;
+                        yearData[m].amount += t.amount / 100 || 0;
                     });
                     data = yearData;
                     break;
             }
-            const total = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+            const total = transactions.reduce((sum, t) => sum + (t.amount / 100 || 0), 0);
             return (0, response_1.successResponse)({ total, data }, 'Analytics fetched successfully');
         }
         catch (error) {

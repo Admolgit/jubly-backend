@@ -9,3 +9,11 @@ export interface IBooking {
   date: string;
   status: string;
 }
+
+export enum BookingFilter {
+  ALL = 'all',
+  UPCOMING = 'upcoming',
+  CONFIRMED = 'confirmed',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}

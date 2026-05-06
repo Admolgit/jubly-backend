@@ -22,7 +22,7 @@ import {
   startOfYear,
   endOfYear,
 } from 'date-fns';
-import { UserRole } from '@prisma/client';
+import { BookingStatus, UserRole } from '@prisma/client';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 
 export enum DateFilter {
@@ -40,6 +40,59 @@ export class BookingService {
     private authService: AuthService,
     private nodemailerService: NodemailerService,
   ) {}
+
+  private readonly bookingTimezone = 'Africa/Lagos';
+
+  private parseDateInput(value: string | Date, fieldName: string) {
+    const parsed = value instanceof Date ? new Date(value) : new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(`${fieldName} is invalid`);
+    }
+
+    return parsed;
+  }
+
+  private getDatePartsInBookingTimezone(value: Date) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: this.bookingTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(value);
+
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+
+    if (!year || !month || !day) {
+      throw new InternalServerErrorException('Failed to resolve booking date');
+    }
+
+    return { year, month, day };
+  }
+
+  // Store the booking day as midnight in Africa/Lagos so date-only values do not drift.
+  private toBookingDate(value?: string | Date, fallbackDate?: Date) {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return new Date(`${value}T00:00:00.000+01:00`);
+    }
+
+    const baseDate =
+      value instanceof Date
+        ? new Date(value)
+        : typeof value === 'string'
+          ? this.parseDateInput(value, 'date')
+          : fallbackDate;
+
+    if (!baseDate) {
+      throw new BadRequestException('date is required');
+    }
+
+    const { year, month, day } = this.getDatePartsInBookingTimezone(baseDate);
+
+    return new Date(`${year}-${month}-${day}T00:00:00.000+01:00`);
+  }
 
   private getCreatedAtRange(dateFilter?: DateFilter, date?: string) {
     if (!dateFilter) {
@@ -98,6 +151,14 @@ export class BookingService {
 
   async createBooking(userId: string, dto: IBooking) {
     try {
+      const startTime = this.parseDateInput(dto.startTime, 'startTime');
+      const endTime = this.parseDateInput(dto.endTime, 'endTime');
+      const bookingDate = this.toBookingDate(dto.date, startTime);
+
+      if (endTime <= startTime) {
+        throw new BadRequestException('endTime must be later than startTime');
+      }
+
       const user = await this.prisma.user.findUnique({
         where: {
           id: userId,
@@ -139,11 +200,11 @@ export class BookingService {
         data: {
           vendorId: vendor.id,
           serviceId: dto.serviceId,
-          date: new Date(dto.startTime.setHours(0, 0, 0, 0)),
+          date: bookingDate,
           clientEmail: dto.clientEmail,
           clientName: dto.clientName,
-          startTime: new Date(dto.startTime),
-          endTime: new Date(dto.endTime),
+          startTime,
+          endTime,
           status: 'CONFIRMED',
         },
       });
@@ -152,8 +213,8 @@ export class BookingService {
         try {
           await this.googleCalendarService.verifyBooking({
             calendar: calendarIntegration,
-            startTime: new Date(dto.startTime),
-            endTime: new Date(dto.endTime),
+            startTime,
+            endTime,
           });
 
           await this.googleCalendarService.createCalendarEvent(
@@ -161,8 +222,8 @@ export class BookingService {
             {
               title: service.name,
               description: service.description ?? 'No description',
-              startTime: new Date(dto.startTime),
-              endTime: new Date(dto.endTime),
+              startTime,
+              endTime,
               attendeeEmail: dto.clientEmail,
               attendeeName: dto.clientName,
             },
@@ -189,6 +250,7 @@ export class BookingService {
           role: UserRole.CLIENT,
         },
       });
+      console.log({ client });
 
       let savedClientId: string = client?.id ?? '';
       if (!client) {
@@ -1078,9 +1140,9 @@ export class BookingService {
     try {
       const { date, startTime, endTime } = dto;
 
-      const start = new Date(`${date}T${startTime}`);
-      const end = new Date(`${date}T${endTime}`);
-      const bookingDate = new Date(date);
+      const start = this.parseDateInput(`${date}T${startTime}`, 'startTime');
+      const end = this.parseDateInput(`${date}T${endTime}`, 'endTime');
+      const bookingDate = this.toBookingDate(date, start);
 
       const user = await this.prisma.user.findUnique({
         where: {
@@ -1223,5 +1285,120 @@ export class BookingService {
         error.message as string,
       );
     }
+  }
+
+  async getBookingsStatusFilter() {
+    const [all, pending, confirmed, completed, cancelled] = await Promise.all([
+      this.prisma.booking.count(),
+
+      this.prisma.booking.count({
+        where: {
+          status: BookingStatus.PENDING,
+        },
+      }),
+
+      this.prisma.booking.count({
+        where: { status: BookingStatus.CONFIRMED },
+      }),
+
+      this.prisma.booking.count({
+        where: { status: BookingStatus.COMPLETED },
+      }),
+
+      this.prisma.booking.count({
+        where: { status: BookingStatus.CANCELLED },
+      }),
+    ]);
+
+    return successResponse(
+      {
+        all,
+        pending,
+        confirmed,
+        completed,
+        cancelled,
+      },
+      'Status fetched successfully',
+    );
+  }
+
+  async getBusinessInsights() {
+    // 1. GROUP BOOKINGS BY DAY
+    const bookingsByDay = await this.prisma.booking.groupBy({
+      by: ['date'],
+      _count: {
+        id: true,
+      },
+    });
+
+    // Convert dates → day names (Mon, Tue...)
+    const dayMap: Record<string, number> = {};
+
+    bookingsByDay.forEach((b) => {
+      const day = new Date(b.date).toLocaleDateString('en-US', {
+        weekday: 'long',
+      });
+
+      dayMap[day] = (dayMap[day] || 0) + b._count.id;
+    });
+
+    // Find best day
+    let bestDay = '';
+    let maxBookings = 0;
+
+    Object.entries(dayMap).forEach(([day, count]) => {
+      if (count > maxBookings) {
+        bestDay = day;
+        maxBookings = count;
+      }
+    });
+
+    const totalBookings = await this.prisma.booking.count();
+
+    const bestDayPercentage = totalBookings
+      ? Math.round((maxBookings / totalBookings) * 100)
+      : 0;
+
+    // 2. AVERAGE BOOKING AMOUNT
+    const avg = await this.prisma.booking.findMany({
+      include: {
+        services: true,
+      },
+    });
+
+    const bookingAvg = avg.reduce((a, b) => {
+      return a + b.services.price;
+    }, 0);
+
+    const averageBooking = bookingAvg / totalBookings || 0;
+
+    // 3. REPEAT CLIENTS
+    const repeatClientsData = await this.prisma.booking.groupBy({
+      by: ['clientId'],
+      _count: {
+        clientId: true,
+      },
+      having: {
+        clientId: {
+          _count: {
+            gt: 1,
+          },
+        },
+      },
+    });
+
+    const repeatClients = repeatClientsData.length;
+
+    return successResponse(
+      {
+        bestDay: {
+          day: bestDay || 'N/A',
+          percentage: bestDayPercentage,
+        },
+        averageBooking,
+        repeatClients,
+      },
+      'Business insight fetched',
+    );
   }
 }

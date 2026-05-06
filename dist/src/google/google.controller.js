@@ -18,10 +18,12 @@ const google_service_1 = require("./google.service");
 const auth_service_1 = require("../auth/auth.service");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
 const role_guard_1 = require("../auth/role.guard");
+const prisma_service_1 = require("../../prisma/prisma.service");
 let GoogleController = class GoogleController {
-    constructor(googleService, authService) {
+    constructor(googleService, authService, prisma) {
         this.googleService = googleService;
         this.authService = authService;
+        this.prisma = prisma;
     }
     connectGoogleCalendar(userId, direction) {
         if (!userId)
@@ -54,8 +56,16 @@ let GoogleController = class GoogleController {
         const appJwt = this.authService.generateJwt(parsedState.userId);
         let frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
         if (parsedState.direction === 'onboarding') {
-            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/onboard/availability?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
+            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/vendor-availability?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
         }
+        await this.prisma.vendor.update({
+            where: {
+                userId: parsedState.userId,
+            },
+            data: {
+                onboardingCompleted: true,
+            },
+        });
         return res.redirect(frontendRedirectUrl);
     }
     getCalenderLinkedStatus(userId) {
@@ -136,5 +146,6 @@ __decorate([
 exports.GoogleController = GoogleController = __decorate([
     (0, common_1.Controller)('google'),
     __metadata("design:paramtypes", [google_service_1.GoogleCalendarService,
-        auth_service_1.AuthService])
+        auth_service_1.AuthService,
+        prisma_service_1.PrismaService])
 ], GoogleController);

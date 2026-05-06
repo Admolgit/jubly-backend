@@ -157,6 +157,7 @@ let AuthService = class AuthService {
             const vendor = await this.prisma.vendor.findUnique({
                 where: { userId: user.id },
             });
+            console.log({ vendor });
             if (user.role === 'VENDOR' && !vendor) {
                 const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
                 const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
@@ -175,6 +176,23 @@ let AuthService = class AuthService {
                 vendor.isApproved === false &&
                 vendor.kycStatus === 'NOT_SUBMITTED') {
                 throw new common_2.UnauthorizedException('Complete your onboarding');
+            }
+            if (vendor &&
+                vendor.isApproved === true &&
+                vendor.onboardingCompleted === false) {
+                console.log('HEREREEEEEEEEE');
+                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
+                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        refreshTokenHash,
+                        lastLogin: new Date(),
+                        isOnline: true,
+                    },
+                });
+                return (0, response_1.successResponse)({ user, token, refreshToken }, 'Onboarding not completed', 404);
             }
             if (vendor &&
                 vendor.isApproved === false &&

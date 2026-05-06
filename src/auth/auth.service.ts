@@ -171,6 +171,8 @@ export class AuthService {
         where: { userId: user.id },
       });
 
+      console.log({ vendor });
+
       if (user.role === 'VENDOR' && !vendor) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
@@ -205,6 +207,40 @@ export class AuthService {
         vendor.kycStatus === 'NOT_SUBMITTED'
       ) {
         throw new UnauthorizedException('Complete your onboarding');
+      }
+
+      if (
+        vendor &&
+        vendor.isApproved === true &&
+        vendor.onboardingCompleted === false
+      ) {
+        console.log('HEREREEEEEEEEE');
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '7d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+
+        return successResponse(
+          { user, token, refreshToken },
+          'Onboarding not completed',
+          404,
+        );
       }
 
       if (
