@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -191,27 +193,42 @@ export class AvailabilityService {
         }
       }
 
-      const updatedAvailabilities = await Promise.all(
-        dto.availabilities.map((item) =>
-          this.prisma.vendorAvailability.upsert({
+      const updatedAvailabilities = await this.prisma.$transaction(
+        async (tx) => {
+          const selectedDays = dto.availabilities.map((item) => item.dayOfWeek);
+
+          await tx.vendorAvailability.deleteMany({
             where: {
-              vendorId_dayOfWeek: {
-                vendorId: vendor.id,
-                dayOfWeek: item.dayOfWeek,
+              vendorId: vendor.id,
+              dayOfWeek: {
+                notIn: selectedDays,
               },
             },
-            update: {
-              startTime: item.startTime,
-              endTime: item.endTime,
-            },
-            create: {
-              vendorId: vendor.id,
-              dayOfWeek: item.dayOfWeek,
-              startTime: item.startTime,
-              endTime: item.endTime,
-            },
-          }),
-        ),
+          });
+
+          await Promise.all(
+            dto.availabilities.map((item) =>
+              tx.vendorAvailability.upsert({
+                where: {
+                  vendorId_dayOfWeek: {
+                    vendorId: vendor.id,
+                    dayOfWeek: item.dayOfWeek,
+                  },
+                },
+                update: {
+                  startTime: item.startTime,
+                  endTime: item.endTime,
+                },
+                create: {
+                  vendorId: vendor.id,
+                  dayOfWeek: item.dayOfWeek,
+                  startTime: item.startTime,
+                  endTime: item.endTime,
+                },
+              }),
+            ),
+          );
+        },
       );
 
       return successResponse(
@@ -245,6 +262,65 @@ export class AvailabilityService {
       throw new InternalServerErrorException(
         'Failed to set vendor availability',
         error?.message,
+      );
+    }
+  }
+
+  async updateBufferTime(userId: string, dto: { bufferTime: number }) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    const updatedBuffer = await this.prisma.vendorBookingSettings.upsert({
+      where: {
+        vendorId: vendor.id,
+      },
+
+      update: {
+        bufferTime: dto.bufferTime,
+      },
+
+      create: {
+        vendorId: vendor.id,
+        bufferTime: dto.bufferTime,
+      },
+    });
+
+    return successResponse(updatedBuffer, 'Buffer time updated successfully.');
+  }
+
+  async getExistingBufferTime(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+      const existingBuffer = await this.prisma.vendorBookingSettings.findUnique(
+        {
+          where: {
+            vendorId: vendor.id,
+          },
+          select: {
+            bufferTime: true,
+          },
+        },
+      );
+
+      return successResponse(
+        existingBuffer,
+        'Existing buffer time fetched successfully.',
+      );
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to fetch existing buffer time.',
+        error.message as string,
       );
     }
   }

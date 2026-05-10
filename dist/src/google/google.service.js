@@ -143,18 +143,37 @@ let GoogleCalendarService = class GoogleCalendarService {
         });
         return calendarApi.events.insert({
             calendarId: 'primary',
+            sendUpdates: 'all',
             requestBody: {
                 summary: booking.title,
                 description: booking.description,
                 start: {
                     dateTime: booking.startTime.toISOString(),
+                    timeZone: 'Africa/Lagos',
                 },
                 end: {
                     dateTime: booking.endTime.toISOString(),
+                    timeZone: 'Africa/Lagos',
                 },
                 attendees: [
-                    { email: booking.attendeeEmail, displayName: booking.attendeeName },
+                    {
+                        email: booking.attendeeEmail,
+                        displayName: booking.attendeeName,
+                    },
                 ],
+                reminders: {
+                    useDefault: false,
+                    overrides: [
+                        {
+                            method: 'email',
+                            minutes: 60,
+                        },
+                        {
+                            method: 'popup',
+                            minutes: 30,
+                        },
+                    ],
+                },
             },
         });
     }
@@ -277,6 +296,7 @@ let GoogleCalendarService = class GoogleCalendarService {
                         title: b.clientName || b.clientEmail,
                         startTime: b.startTime,
                         endTime: b.endTime,
+                        status: b.status,
                     });
                 });
                 return (0, response_1.successResponse)({ view, calendar }, 'Successfully fetched calendar.');

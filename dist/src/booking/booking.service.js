@@ -275,21 +275,81 @@ let BookingService = class BookingService {
     }
     async dashboardStats(userId, vendorId) {
         try {
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay());
             const bookingCount = await this.prisma.booking.count({
                 where: {
                     vendorId,
+                },
+            });
+            const currentMonthBookings = await this.prisma.booking.count({
+                where: {
+                    vendorId,
+                    createdAt: {
+                        gte: startOfMonth,
+                    },
+                },
+            });
+            const lastMonthBookings = await this.prisma.booking.count({
+                where: {
+                    vendorId,
+                    createdAt: {
+                        gte: startOfLastMonth,
+                        lte: endOfLastMonth,
+                    },
                 },
             });
             const upcomingBooking = await this.prisma.booking.count({
                 where: {
                     vendorId,
                     status: 'CONFIRMED',
+                    startTime: {
+                        gte: now,
+                    },
+                },
+            });
+            const thisWeekUpcoming = await this.prisma.booking.count({
+                where: {
+                    vendorId,
+                    status: 'CONFIRMED',
+                    startTime: {
+                        gte: startOfWeek,
+                    },
                 },
             });
             const earnings = await this.prisma.transaction.aggregate({
                 where: {
                     vendorId,
-                    status: 'SUCCESS',
+                    status: 'CONFIRMED',
+                },
+                _sum: {
+                    amount: true,
+                },
+            });
+            const currentMonthEarnings = await this.prisma.transaction.aggregate({
+                where: {
+                    vendorId,
+                    status: 'CONFIRMED',
+                    createdAt: {
+                        gte: startOfMonth,
+                    },
+                },
+                _sum: {
+                    amount: true,
+                },
+            });
+            const lastMonthEarnings = await this.prisma.transaction.aggregate({
+                where: {
+                    vendorId,
+                    status: 'CONFIRMED',
+                    createdAt: {
+                        gte: startOfLastMonth,
+                        lte: endOfLastMonth,
+                    },
                 },
                 _sum: {
                     amount: true,
@@ -304,11 +364,31 @@ let BookingService = class BookingService {
                     vendorViews: true,
                 },
             });
+            const calculateGrowth = (current, previous) => {
+                if (previous === 0) {
+                    return current > 0 ? 100 : 0;
+                }
+                return Math.round(((current - previous) / previous) * 100);
+            };
+            const bookingGrowth = calculateGrowth(currentMonthBookings, lastMonthBookings);
+            const earningsGrowth = calculateGrowth(currentMonthEarnings._sum.amount ?? 0, lastMonthEarnings._sum.amount ?? 0);
             return (0, response_1.successResponse)({
-                bookingCount,
-                upcomingBooking,
-                earnings: earnings._sum.amount ?? 0,
-                views: views?.vendorViews ?? 0,
+                bookingCount: {
+                    total: bookingCount,
+                    growth: bookingGrowth,
+                },
+                upcomingBooking: {
+                    total: upcomingBooking,
+                    growth: thisWeekUpcoming,
+                },
+                earnings: {
+                    total: earnings._sum.amount ?? 0,
+                    growth: earningsGrowth,
+                },
+                views: {
+                    total: views?.vendorViews ?? 0,
+                    growth: 8,
+                },
             }, 'Successful');
         }
         catch (error) {
@@ -879,6 +959,21 @@ let BookingService = class BookingService {
                 email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
                 action: 'Cancel',
             });
+            const transaction = await this.prisma.transaction.findFirst({
+                where: {
+                    bookingId: bookingId,
+                },
+            });
+            if (transaction) {
+                await this.prisma.transaction.update({
+                    where: {
+                        id: transaction.id,
+                    },
+                    data: {
+                        status: 'CANCELLED',
+                    },
+                });
+            }
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }
         catch (error) {
@@ -944,7 +1039,7 @@ let BookingService = class BookingService {
                 },
             });
             await this.nodemailerService.bookingStatusChangeMail({
-                subject: 'Your Booking Has Been Cancelled',
+                subject: 'Your Booking Has Been Rescheldule',
                 name: booking.clientName,
                 role: user.role,
                 vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',

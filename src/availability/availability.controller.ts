@@ -10,6 +10,7 @@ import {
   Delete,
   Param,
   ParseIntPipe,
+  Patch,
 } from '@nestjs/common';
 import { AvailabilityService } from './availability.service';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
@@ -64,5 +65,20 @@ export class AvailabilityController {
     @Param('dayOfWeek', ParseIntPipe) dayOfWeek: number,
   ) {
     return this.availabilityService.deleteAvailability(req.user.id, dayOfWeek);
+  }
+
+  @Patch('buffer-time')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  updateBufferTime(@Body() dto: { bufferTime: number }, @Req() req) {
+    return this.availabilityService.updateBufferTime(req.user.id, dto);
+  }
+
+  @Get('buffer-time')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  getBufferTime(@Req() req) {
+    const userId = req.user.id as string;
+    return this.availabilityService.getExistingBufferTime(userId);
   }
 }

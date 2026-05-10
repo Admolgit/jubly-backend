@@ -137,24 +137,35 @@ let AvailabilityService = class AvailabilityService {
                     throw new common_1.BadRequestException(`startTime (${item.startTime}) must be before endTime (${item.endTime}) for day ${item.dayOfWeek}`);
                 }
             }
-            const updatedAvailabilities = await Promise.all(dto.availabilities.map((item) => this.prisma.vendorAvailability.upsert({
-                where: {
-                    vendorId_dayOfWeek: {
+            const updatedAvailabilities = await this.prisma.$transaction(async (tx) => {
+                const selectedDays = dto.availabilities.map((item) => item.dayOfWeek);
+                await tx.vendorAvailability.deleteMany({
+                    where: {
+                        vendorId: vendor.id,
+                        dayOfWeek: {
+                            notIn: selectedDays,
+                        },
+                    },
+                });
+                await Promise.all(dto.availabilities.map((item) => tx.vendorAvailability.upsert({
+                    where: {
+                        vendorId_dayOfWeek: {
+                            vendorId: vendor.id,
+                            dayOfWeek: item.dayOfWeek,
+                        },
+                    },
+                    update: {
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                    },
+                    create: {
                         vendorId: vendor.id,
                         dayOfWeek: item.dayOfWeek,
+                        startTime: item.startTime,
+                        endTime: item.endTime,
                     },
-                },
-                update: {
-                    startTime: item.startTime,
-                    endTime: item.endTime,
-                },
-                create: {
-                    vendorId: vendor.id,
-                    dayOfWeek: item.dayOfWeek,
-                    startTime: item.startTime,
-                    endTime: item.endTime,
-                },
-            })));
+                })));
+            });
             return (0, response_1.successResponse)({ updatedAvailabilities }, 'Availability updated successfully');
         }
         catch (error) {
@@ -176,6 +187,49 @@ let AvailabilityService = class AvailabilityService {
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to set vendor availability', error?.message);
+        }
+    }
+    async updateBufferTime(userId, dto) {
+        const vendor = await this.prisma.vendor.findUnique({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
+        }
+        const updatedBuffer = await this.prisma.vendorBookingSettings.upsert({
+            where: {
+                vendorId: vendor.id,
+            },
+            update: {
+                bufferTime: dto.bufferTime,
+            },
+            create: {
+                vendorId: vendor.id,
+                bufferTime: dto.bufferTime,
+            },
+        });
+        return (0, response_1.successResponse)(updatedBuffer, 'Buffer time updated successfully.');
+    }
+    async getExistingBufferTime(userId) {
+        try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const existingBuffer = await this.prisma.vendorBookingSettings.findUnique({
+                where: {
+                    vendorId: vendor.id,
+                },
+                select: {
+                    bufferTime: true,
+                },
+            });
+            return (0, response_1.successResponse)(existingBuffer, 'Existing buffer time fetched successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch existing buffer time.', error.message);
         }
     }
 };

@@ -34,3 +34,9 @@ export class CreateVendorAvailabilityDto {
   @Type(() => VendorAvailabilityItemDto)
   availabilities: VendorAvailabilityItemDto[];
 }
+
+export class UpdateBufferTimeDto {
+  @IsInt()
+  @Min(0)
+  bufferTime: number;
+}

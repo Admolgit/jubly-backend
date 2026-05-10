@@ -86,8 +86,9 @@ model Vendor {
   isActive            Boolean   @default(false)
   onboardingCompleted Boolean   @default(false)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  VendorBookingSettings VendorBookingSettings?
 }
 
 model Service {
@@ -123,6 +124,18 @@ model VendorAvailability {
   vendorId String? @db.ObjectId
 
   @@unique([vendorId, dayOfWeek])
+}
+
+model VendorBookingSettings {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId String @unique @db.ObjectId
+
+  bufferTime Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
 }
 
 model Booking {

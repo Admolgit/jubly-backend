@@ -39,6 +39,13 @@ let AvailabilityController = class AvailabilityController {
     deleteAvailability(req, dayOfWeek) {
         return this.availabilityService.deleteAvailability(req.user.id, dayOfWeek);
     }
+    updateBufferTime(dto, req) {
+        return this.availabilityService.updateBufferTime(req.user.id, dto);
+    }
+    getBufferTime(req) {
+        const userId = req.user.id;
+        return this.availabilityService.getExistingBufferTime(userId);
+    }
 };
 exports.AvailabilityController = AvailabilityController;
 __decorate([
@@ -88,6 +95,25 @@ __decorate([
     __metadata("design:paramtypes", [Object, Number]),
     __metadata("design:returntype", void 0)
 ], AvailabilityController.prototype, "deleteAvailability", null);
+__decorate([
+    (0, common_1.Patch)('buffer-time'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)(client_1.UserRole.VENDOR),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], AvailabilityController.prototype, "updateBufferTime", null);
+__decorate([
+    (0, common_1.Get)('buffer-time'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)(client_1.UserRole.VENDOR),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AvailabilityController.prototype, "getBufferTime", null);
 exports.AvailabilityController = AvailabilityController = __decorate([
     (0, common_1.Controller)('availability'),
     __metadata("design:paramtypes", [availability_service_1.AvailabilityService])

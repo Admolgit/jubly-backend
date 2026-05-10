@@ -6,6 +6,7 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Param,
   Query,
   Req,
   Res,
@@ -112,7 +113,7 @@ export class GoogleController {
     @Query('year') year?: string,
     @Query('month') month?: string,
     @Query('date') date?: string,
-    @Query('vendorId') vendorId?: string,
+    @Param('vendorId') vendorId?: string,
   ) {
     return this.googleService.getCalendar({
       view,

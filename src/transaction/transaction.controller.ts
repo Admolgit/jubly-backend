@@ -7,6 +7,14 @@ import { Roles, RolesGuard } from 'src/auth/role.guard';
 export class TransactionController {
   constructor(private transactionService: TransactionService) {}
 
+  @Get('transactions-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async dashboardStats(@Req() req: { user: { id: string } }) {
+    const userId = req.user.id;
+    return this.transactionService.getDashboardStats(userId);
+  }
+
   @Get(':vendorId')
   findAllVendorTransactions(
     @Param('vendorId') vendorId: string,
