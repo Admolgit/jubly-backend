@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CreateVendorAvailabilityDto = exports.VendorAvailabilityItemDto = void 0;
+exports.UpdateBufferTimeDto = exports.CreateVendorAvailabilityDto = exports.VendorAvailabilityItemDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 class VendorAvailabilityItemDto {
@@ -44,3 +44,11 @@ __decorate([
     (0, class_transformer_1.Type)(() => VendorAvailabilityItemDto),
     __metadata("design:type", Array)
 ], CreateVendorAvailabilityDto.prototype, "availabilities", void 0);
+class UpdateBufferTimeDto {
+}
+exports.UpdateBufferTimeDto = UpdateBufferTimeDto;
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateBufferTimeDto.prototype, "bufferTime", void 0);

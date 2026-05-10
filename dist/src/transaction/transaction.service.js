@@ -45,6 +45,7 @@ let TransactionService = class TransactionService {
     }
     async updateTransaction(userId, dto) {
         try {
+            const convertedAmount = dto.amount / 100;
             await this.prisma.transaction.update({
                 where: {
                     providerRef: dto.providerRef,
@@ -53,7 +54,7 @@ let TransactionService = class TransactionService {
                     vendorId: dto.vendorId,
                     title: dto.name,
                     bookingId: dto.bookingId,
-                    amount: dto.amount,
+                    amount: convertedAmount,
                     senderDetailsId: dto.senderDetailsId,
                     currency: 'NGN',
                     paidAt: new Date(),
@@ -72,6 +73,9 @@ let TransactionService = class TransactionService {
             let where = {};
             if (vendorId) {
                 where.vendorId = vendorId;
+                where.status = {
+                    in: ['CONFIRMED', 'COMPLETED'],
+                };
             }
             if (search) {
                 where.OR = [
@@ -277,6 +281,71 @@ let TransactionService = class TransactionService {
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch analytics', error.message);
         }
+    }
+    async getDashboardStats(userId) {
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
+        }
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        const currentTransactions = await this.prisma.transaction.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: 'CONFIRMED',
+                createdAt: {
+                    gte: currentMonthStart,
+                },
+            },
+        });
+        const previousTransactions = await this.prisma.transaction.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: 'CONFIRMED',
+                createdAt: {
+                    gte: previousMonthStart,
+                    lte: previousMonthEnd,
+                },
+            },
+        });
+        const calculateAmount = (transactions) => {
+            return transactions.reduce((acc, item) => acc + item.amount, 0);
+        };
+        const calculateGrowth = (current, previous) => {
+            if (previous === 0 && current > 0)
+                return 100;
+            if (previous === 0)
+                return 0;
+            return Number((((current - previous) / previous) * 100).toFixed(1));
+        };
+        const totalPayouts = calculateAmount(currentTransactions);
+        const previousTotalPayouts = calculateAmount(previousTransactions);
+        const completedTransactions = currentTransactions.filter((item) => item.status === 'CONFIRMED');
+        const previousCompletedTransactions = previousTransactions.filter((item) => item.status === 'CONFIRMED');
+        const completed = calculateAmount(completedTransactions);
+        const previousCompleted = calculateAmount(previousCompletedTransactions);
+        const processingTransactions = currentTransactions.filter((item) => item.status === 'pending');
+        const previousProcessingTransactions = previousTransactions.filter((item) => item.status === 'pending');
+        const processing = calculateAmount(processingTransactions);
+        const previousProcessing = calculateAmount(previousProcessingTransactions);
+        const failedTransactions = currentTransactions.filter((item) => item.status === 'FAILED');
+        const previousFailedTransactions = previousTransactions.filter((item) => item.status === 'FAILED');
+        const failed = calculateAmount(failedTransactions);
+        const previousFailed = calculateAmount(previousFailedTransactions);
+        return {
+            totalPayouts,
+            completed,
+            processing,
+            failed,
+            totalGrowth: calculateGrowth(totalPayouts, previousTotalPayouts),
+            completedGrowth: calculateGrowth(completed, previousCompleted),
+            processingGrowth: calculateGrowth(processing, previousProcessing),
+            failedGrowth: calculateGrowth(failed, previousFailed),
+        };
     }
 };
 exports.TransactionService = TransactionService;

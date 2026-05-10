@@ -125,7 +125,7 @@ __decorate([
     __param(1, (0, common_1.Query)('year')),
     __param(2, (0, common_1.Query)('month')),
     __param(3, (0, common_1.Query)('date')),
-    __param(4, (0, common_1.Query)('vendorId')),
+    __param(4, (0, common_1.Param)('vendorId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, String, String, String]),
     __metadata("design:returntype", void 0)

@@ -21,6 +21,10 @@ let TransactionController = class TransactionController {
     constructor(transactionService) {
         this.transactionService = transactionService;
     }
+    async dashboardStats(req) {
+        const userId = req.user.id;
+        return this.transactionService.getDashboardStats(userId);
+    }
     findAllVendorTransactions(vendorId, page, limit, search) {
         return this.transactionService.findAllVendorTransactions(vendorId, page, limit, search);
     }
@@ -32,6 +36,15 @@ let TransactionController = class TransactionController {
     }
 };
 exports.TransactionController = TransactionController;
+__decorate([
+    (0, common_1.Get)('transactions-stats'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], TransactionController.prototype, "dashboardStats", null);
 __decorate([
     (0, common_1.Get)(':vendorId'),
     __param(0, (0, common_1.Param)('vendorId')),
