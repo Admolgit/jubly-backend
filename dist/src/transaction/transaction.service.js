@@ -222,7 +222,7 @@ let TransactionService = class TransactionService {
             let data = [];
             switch (view) {
                 case 'day':
-                    const totalAmount = transactions.reduce((sum, t) => sum + (t.amount / 100 || 0), 0);
+                    const totalAmount = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
                     data = [
                         {
                             label: startDate.toDateString(),
@@ -236,7 +236,7 @@ let TransactionService = class TransactionService {
                     transactions.forEach((t) => {
                         const jsDay = new Date(t.createdAt).getDay();
                         const index = jsDay === 0 ? 6 : jsDay - 1;
-                        weekData[index].amount += t.amount / 100 || 0;
+                        weekData[index].amount += t.amount || 0;
                     });
                     data = weekData;
                     break;
@@ -248,7 +248,7 @@ let TransactionService = class TransactionService {
                     }));
                     transactions.forEach((t) => {
                         const d = new Date(t.createdAt).getDate();
-                        monthData[d - 1].amount += t.amount / 100 || 0;
+                        monthData[d - 1].amount += t.amount || 0;
                     });
                     data = monthData;
                     break;
@@ -270,12 +270,12 @@ let TransactionService = class TransactionService {
                     const yearData = months.map((m) => ({ label: m, amount: 0 }));
                     transactions.forEach((t) => {
                         const m = new Date(t.createdAt).getMonth();
-                        yearData[m].amount += t.amount / 100 || 0;
+                        yearData[m].amount += t.amount || 0;
                     });
                     data = yearData;
                     break;
             }
-            const total = transactions.reduce((sum, t) => sum + (t.amount / 100 || 0), 0);
+            const total = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
             return (0, response_1.successResponse)({ total, data }, 'Analytics fetched successfully');
         }
         catch (error) {
@@ -296,7 +296,9 @@ let TransactionService = class TransactionService {
         const currentTransactions = await this.prisma.transaction.findMany({
             where: {
                 vendorId: vendor.id,
-                status: 'CONFIRMED',
+                status: {
+                    in: ['CONFIRMED', 'COMPLETED'],
+                },
                 createdAt: {
                     gte: currentMonthStart,
                 },
@@ -305,7 +307,9 @@ let TransactionService = class TransactionService {
         const previousTransactions = await this.prisma.transaction.findMany({
             where: {
                 vendorId: vendor.id,
-                status: 'CONFIRMED',
+                status: {
+                    in: ['CONFIRMED', 'COMPLETED'],
+                },
                 createdAt: {
                     gte: previousMonthStart,
                     lte: previousMonthEnd,
@@ -332,8 +336,8 @@ let TransactionService = class TransactionService {
         const previousProcessingTransactions = previousTransactions.filter((item) => item.status === 'pending');
         const processing = calculateAmount(processingTransactions);
         const previousProcessing = calculateAmount(previousProcessingTransactions);
-        const failedTransactions = currentTransactions.filter((item) => item.status === 'FAILED');
-        const previousFailedTransactions = previousTransactions.filter((item) => item.status === 'FAILED');
+        const failedTransactions = currentTransactions.filter((item) => item.status === 'failed');
+        const previousFailedTransactions = previousTransactions.filter((item) => item.status === 'failed');
         const failed = calculateAmount(failedTransactions);
         const previousFailed = calculateAmount(previousFailedTransactions);
         return {

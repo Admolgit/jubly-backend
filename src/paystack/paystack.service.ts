@@ -94,7 +94,7 @@ export class PaystackService {
       );
 
       return res;
-    } catch (error) {
+    } catch (error: any) {
       console.log(error, 'Paystack subaccount creation failed', 500);
     }
   }
@@ -121,7 +121,7 @@ export class PaystackService {
         response.data.data,
         'Transaction verified successfully',
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Paystack verification error:', error);
       throw new HttpException(
         (error.response?.data?.message as string) ||
@@ -145,7 +145,7 @@ export class PaystackService {
       if (!response.status)
         throw new HttpException('Subaccount not found', 404);
       return response.data;
-    } catch (err) {
+    } catch (err: any) {
       throw new HttpException(
         err.response?.data || err.message,
         err.response?.status || 500,
@@ -165,7 +165,7 @@ export class PaystackService {
       if (!response.status)
         throw new HttpException('Bank account verification failed', 400);
       return response.data;
-    } catch (err) {
+    } catch (err: any) {
       return err;
     }
   }
