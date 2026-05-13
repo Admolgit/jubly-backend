@@ -25,6 +25,13 @@ let ServicesController = class ServicesController {
         const { page = 1, limit = 10, search } = query;
         return this.servicesService.getAllServices(req.user.id, page, limit, search);
     }
+    updateServiceActive(req, serviceId, dto) {
+        console.log({ serviceId, active: dto.active });
+        return this.servicesService.updateServiceActive(serviceId, req.user.id, dto.active);
+    }
+    getService(req, serviceId) {
+        return this.servicesService.getServiceById(req.user.id, serviceId);
+    }
 };
 exports.ServicesController = ServicesController;
 __decorate([
@@ -37,6 +44,27 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], ServicesController.prototype, "getAllServices", null);
+__decorate([
+    (0, common_1.Patch)('update/:serviceId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('serviceId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, Object]),
+    __metadata("design:returntype", void 0)
+], ServicesController.prototype, "updateServiceActive", null);
+__decorate([
+    (0, common_1.Get)(':serviceId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('serviceId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], ServicesController.prototype, "getService", null);
 exports.ServicesController = ServicesController = __decorate([
     (0, common_1.Controller)('services'),
     __metadata("design:paramtypes", [services_service_1.ServicesService])

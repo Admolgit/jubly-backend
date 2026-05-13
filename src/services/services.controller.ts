@@ -1,4 +1,13 @@
-import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ServicesService } from './services.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
@@ -21,5 +30,31 @@ export class ServicesController {
       limit,
       search,
     );
+  }
+
+  @Patch('update/:serviceId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  updateServiceActive(
+    @Req() req: { user: { id: string } },
+    @Param('serviceId') serviceId: string,
+    @Body() dto: { active: string },
+  ) {
+    console.log({ serviceId, active: dto.active });
+    return this.servicesService.updateServiceActive(
+      serviceId,
+      req.user.id,
+      dto.active,
+    );
+  }
+
+  @Get(':serviceId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getService(
+    @Req() req: { user: { id: string } },
+    @Param('serviceId') serviceId: string,
+  ) {
+    return this.servicesService.getServiceById(req.user.id, serviceId);
   }
 }

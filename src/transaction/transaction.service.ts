@@ -303,7 +303,7 @@ export class TransactionService {
         case 'day':
           // Just total for the day
           const totalAmount = transactions.reduce(
-            (sum, t) => sum + (t.amount / 100 || 0),
+            (sum, t) => sum + (t.amount || 0),
             0,
           );
           data = [
@@ -321,7 +321,7 @@ export class TransactionService {
           transactions.forEach((t) => {
             const jsDay = new Date(t.createdAt).getDay(); // 0–6
             const index = jsDay === 0 ? 6 : jsDay - 1; // Mon–Sun
-            weekData[index].amount += t.amount / 100 || 0;
+            weekData[index].amount += t.amount || 0;
           });
 
           data = weekData;
@@ -340,7 +340,7 @@ export class TransactionService {
 
           transactions.forEach((t) => {
             const d = new Date(t.createdAt).getDate();
-            monthData[d - 1].amount += t.amount / 100 || 0;
+            monthData[d - 1].amount += t.amount || 0;
           });
 
           data = monthData;
@@ -365,17 +365,14 @@ export class TransactionService {
 
           transactions.forEach((t) => {
             const m = new Date(t.createdAt).getMonth(); // 0–11
-            yearData[m].amount += t.amount / 100 || 0;
+            yearData[m].amount += t.amount || 0;
           });
 
           data = yearData;
           break;
       }
 
-      const total = transactions.reduce(
-        (sum, t) => sum + (t.amount / 100 || 0),
-        0,
-      );
+      const total = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
 
       return successResponse({ total, data }, 'Analytics fetched successfully');
     } catch (error: any) {
@@ -416,7 +413,9 @@ export class TransactionService {
     const currentTransactions = await this.prisma.transaction.findMany({
       where: {
         vendorId: vendor.id,
-        status: 'CONFIRMED',
+        status: {
+          in: ['CONFIRMED', 'COMPLETED'],
+        },
         createdAt: {
           gte: currentMonthStart,
         },
@@ -426,7 +425,9 @@ export class TransactionService {
     const previousTransactions = await this.prisma.transaction.findMany({
       where: {
         vendorId: vendor.id,
-        status: 'CONFIRMED',
+        status: {
+          in: ['CONFIRMED', 'COMPLETED'],
+        },
         createdAt: {
           gte: previousMonthStart,
           lte: previousMonthEnd,
@@ -477,11 +478,11 @@ export class TransactionService {
     const previousProcessing = calculateAmount(previousProcessingTransactions);
 
     const failedTransactions = currentTransactions.filter(
-      (item) => item.status === 'FAILED',
+      (item) => item.status === 'failed',
     );
 
     const previousFailedTransactions = previousTransactions.filter(
-      (item) => item.status === 'FAILED',
+      (item) => item.status === 'failed',
     );
 
     const failed = calculateAmount(failedTransactions);

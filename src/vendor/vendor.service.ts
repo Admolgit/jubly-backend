@@ -131,67 +131,6 @@ export class VendorService {
     return successResponse({ created }, 'Services successfully created', 201);
   }
 
-  // async createServices(
-  //   userId: string,
-  //   services: ServiceItemDto[],
-  //   vendorId: string,
-  //   tx?: Prisma.TransactionClient,
-  // ) {
-  //   try {
-  //     const prisma = tx ?? this.prisma;
-
-  //     const created = await prisma.$transaction(async (db) => {
-  //       const user = await db.user.findUnique({ where: { id: userId } });
-  //       if (!user) throw new NotFoundException('User not found');
-
-  //       if (!Array.isArray(services)) {
-  //         throw new BadRequestException('Services must be an array');
-  //       }
-
-  //       const results = [];
-
-  //       for (const s of services) {
-  //         const service = await db.service.upsert({
-  //           where: {
-  //             userId_name: {
-  //               userId,
-  //               name: s.name,
-  //             },
-  //           },
-  //           update: {
-  //             description: s.description ?? '',
-  //             price: s.price ?? 0,
-  //             durationMins: s.durationMins ?? null,
-  //           },
-  //           create: {
-  //             userId,
-  //             name: s.name ?? '',
-  //             description: s.description ?? '',
-  //             price: s.price ?? 0,
-  //             durationMins: s.durationMins ?? null,
-  //             vendorId: null, // 👈 important
-  //           },
-  //         });
-
-  //         results.push(service);
-  //       }
-
-  //       return successResponse(
-  //         { services: results },
-  //         'Services synced successfully',
-  //         200,
-  //       );
-  //     });
-
-  //     return successResponse({ created }, 'Services successfully created', 201);
-  //   } catch (error: any) {
-  //     throw new InternalServerErrorException(
-  //       'Failed to create service',
-  //       error.message,
-  //     );
-  //   }
-  // }
-
   async createPaystackSubaccount(userId: string, dto: CreateSubaccountDto) {
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId } });

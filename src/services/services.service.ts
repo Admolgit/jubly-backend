@@ -58,11 +58,11 @@ export class ServicesService {
     }
   }
 
-  async updateServiceStatus(serviceId: string, userId: string, active: string) {
+  async updateServiceActive(serviceId: string, userId: string, active: string) {
     try {
       const isActive = active === 'true';
 
-      const service = await this.prisma.service.update({
+      await this.prisma.service.update({
         where: {
           id: serviceId,
           userId,
@@ -71,9 +71,28 @@ export class ServicesService {
           active: isActive,
         },
       });
+
+      return successResponse(null, 'Service status updated successfully.');
     } catch (error: unknown) {
       throw new InternalServerErrorException(
-        'Failed to fetch services',
+        'Failed to update service status',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+    }
+  }
+
+  async getServiceById(userId: string, serviceId: string) {
+    try {
+      const service = await this.prisma.service.findFirst({
+        where: {
+          id: serviceId,
+          userId,
+        },
+      });
+      return successResponse(service, 'Service fetched successfully.');
+    } catch (error: unknown) {
+      throw new InternalServerErrorException(
+        'Failed to fetch service',
         error instanceof Error ? error.message : 'Unknown error',
       );
     }

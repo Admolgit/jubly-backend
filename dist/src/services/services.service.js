@@ -55,10 +55,10 @@ let ServicesService = class ServicesService {
             throw new common_1.InternalServerErrorException('Failed to fetch services', error instanceof Error ? error.message : 'Unknown error');
         }
     }
-    async updateServiceStatus(serviceId, userId, active) {
+    async updateServiceActive(serviceId, userId, active) {
         try {
             const isActive = active === 'true';
-            const service = await this.prisma.service.update({
+            await this.prisma.service.update({
                 where: {
                     id: serviceId,
                     userId,
@@ -67,9 +67,24 @@ let ServicesService = class ServicesService {
                     active: isActive,
                 },
             });
+            return (0, response_1.successResponse)(null, 'Service status updated successfully.');
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException('Failed to fetch services', error instanceof Error ? error.message : 'Unknown error');
+            throw new common_1.InternalServerErrorException('Failed to update service status', error instanceof Error ? error.message : 'Unknown error');
+        }
+    }
+    async getServiceById(userId, serviceId) {
+        try {
+            const service = await this.prisma.service.findFirst({
+                where: {
+                    id: serviceId,
+                    userId,
+                },
+            });
+            return (0, response_1.successResponse)(service, 'Service fetched successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch service', error instanceof Error ? error.message : 'Unknown error');
         }
     }
 };
