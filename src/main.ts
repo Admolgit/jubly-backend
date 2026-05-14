@@ -50,8 +50,24 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        'https://jubly-frontend.vercel.app',
+        'http://localhost:5173',
+        'http://localhost:8081',
+        'exp://192.168.100.6:8081',
+      ];
+
+      // Allow requests with no origin (React Native, Expo, mobile apps, Postman)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked: ${origin}`));
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   });
 
   // Security middlewares
