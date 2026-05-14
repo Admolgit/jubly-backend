@@ -35,8 +35,23 @@ async function bootstrap() {
     app.setGlobalPrefix('api/v1');
     app.enableVersioning({ type: common_1.VersioningType.URI });
     app.enableCors({
-        origin: true,
+        origin: (origin, callback) => {
+            const allowedOrigins = [
+                'https://jubly-frontend.vercel.app',
+                'http://localhost:5173',
+                'http://localhost:8081',
+                'exp://192.168.100.6:8081',
+            ];
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            }
+            else {
+                callback(new Error(`CORS blocked: ${origin}`));
+            }
+        },
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
     });
     app.use((0, cookie_parser_1.default)());
     app.use((0, helmet_1.default)());
