@@ -34,6 +34,9 @@ let UsersController = class UsersController {
     getUserById(req) {
         return this.usersService.getUserById(req.user.id);
     }
+    getUserSubAccount(req) {
+        return this.usersService.getUserSubAccount(req.user.id);
+    }
 };
 exports.UsersController = UsersController;
 __decorate([
@@ -71,6 +74,15 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getUserById", null);
+__decorate([
+    (0, common_1.Get)('me/sub-account'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getUserSubAccount", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService])

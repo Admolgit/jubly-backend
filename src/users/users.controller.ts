@@ -44,4 +44,11 @@ export class UsersController {
   getUserById(@Req() req: Request & { user: { id: string } }) {
     return this.usersService.getUserById(req.user.id);
   }
+
+  @Get('me/sub-account')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getUserSubAccount(@Req() req: Request & { user: { id: string } }) {
+    return this.usersService.getUserSubAccount(req.user.id);
+  }
 }

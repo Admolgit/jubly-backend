@@ -107,6 +107,17 @@ let UsersService = class UsersService {
             throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
         }
     }
+    async getUserSubAccount(userId) {
+        try {
+            const subAccount = await this.prisma.subAccount.findFirst({
+                where: { userId },
+            });
+            return (0, response_1.successResponse)(subAccount, 'Sub account fetched successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
+        }
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
