@@ -1075,19 +1075,55 @@ export class BookingService {
         throw new Error('Vendor not found');
       }
 
-      // 2️⃣ Total unique clients
+      // =========================
+      // DATE RANGES
+      // =========================
+      const now = new Date();
+
+      const startOfCurrentMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      );
+
+      const startOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        1,
+      );
+
+      const endOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
+
+      // =========================
+      // CURRENT MONTH DATA
+      // =========================
+
+      // Total unique clients
       const totalClients = await this.prisma.booking.groupBy({
         by: ['clientEmail'],
         where: {
           vendorId: vendor.id,
+          createdAt: {
+            gte: startOfCurrentMonth,
+          },
         },
       });
 
-      // 3️⃣ Repeat clients (clients with more than 1 booking)
+      // Repeat clients
       const repeatClients = await this.prisma.booking.groupBy({
         by: ['clientEmail'],
         where: {
           vendorId: vendor.id,
+          createdAt: {
+            gte: startOfCurrentMonth,
+          },
         },
         _count: {
           clientEmail: true,
@@ -1101,17 +1137,20 @@ export class BookingService {
         },
       });
 
-      // 4️⃣ Repeat rate
+      // Repeat rate
       const repeatRate =
         totalClients.length === 0
           ? 0
           : Math.round((repeatClients.length / totalClients.length) * 100);
 
-      // 5️⃣ Average booking value
+      // Average booking value
       const bookings = await this.prisma.booking.findMany({
         where: {
           vendorId: vendor.id,
           status: 'CONFIRMED',
+          createdAt: {
+            gte: startOfCurrentMonth,
+          },
         },
         include: {
           services: true,
@@ -1126,12 +1165,112 @@ export class BookingService {
       const avgBookingValue =
         bookings.length === 0 ? 0 : Math.round(total / bookings.length);
 
+      // =========================
+      // LAST MONTH DATA
+      // =========================
+
+      const lastMonthTotalClients = await this.prisma.booking.groupBy({
+        by: ['clientEmail'],
+        where: {
+          vendorId: vendor.id,
+          createdAt: {
+            gte: startOfLastMonth,
+            lte: endOfLastMonth,
+          },
+        },
+      });
+
+      const lastMonthRepeatClients = await this.prisma.booking.groupBy({
+        by: ['clientEmail'],
+        where: {
+          vendorId: vendor.id,
+          createdAt: {
+            gte: startOfLastMonth,
+            lte: endOfLastMonth,
+          },
+        },
+        _count: {
+          clientEmail: true,
+        },
+        having: {
+          clientEmail: {
+            _count: {
+              gt: 1,
+            },
+          },
+        },
+      });
+
+      const lastMonthRepeatRate =
+        lastMonthTotalClients.length === 0
+          ? 0
+          : Math.round(
+              (lastMonthRepeatClients.length / lastMonthTotalClients.length) *
+                100,
+            );
+
+      const lastMonthBookings = await this.prisma.booking.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: 'CONFIRMED',
+          createdAt: {
+            gte: startOfLastMonth,
+            lte: endOfLastMonth,
+          },
+        },
+        include: {
+          services: true,
+        },
+      });
+
+      const lastMonthTotal = lastMonthBookings.reduce(
+        (sum, b) => sum + (b.services?.price || 0),
+        0,
+      );
+
+      const lastMonthAvgBookingValue =
+        lastMonthBookings.length === 0
+          ? 0
+          : Math.round(lastMonthTotal / lastMonthBookings.length);
+
+      // =========================
+      // GROWTH FUNCTION
+      // =========================
+      const calculateGrowth = (current: number, previous: number) => {
+        if (previous === 0) {
+          return current > 0 ? 100 : 0;
+        }
+
+        return Math.round(((current - previous) / previous) * 100);
+      };
+
       return successResponse(
         {
-          totalClients: totalClients.length,
-          repeatClients: repeatClients.length,
-          repeatRate,
-          avgBookingValue,
+          totalClients: {
+            value: totalClients.length,
+            growth: calculateGrowth(
+              totalClients.length,
+              lastMonthTotalClients.length,
+            ),
+          },
+
+          repeatClients: {
+            value: repeatClients.length,
+            growth: calculateGrowth(
+              repeatClients.length,
+              lastMonthRepeatClients.length,
+            ),
+          },
+
+          repeatRate: {
+            value: repeatRate,
+            growth: calculateGrowth(repeatRate, lastMonthRepeatRate),
+          },
+
+          avgBookingValue: {
+            value: avgBookingValue,
+            growth: calculateGrowth(avgBookingValue, lastMonthAvgBookingValue),
+          },
         },
         'Successfully fetched clients stats',
       );

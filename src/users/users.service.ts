@@ -42,7 +42,7 @@ export class UsersService {
       });
 
       return successResponse({ updatedUser }, 'Profile updated successfully.');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to initialize payment',
         error.message as string,
@@ -64,7 +64,7 @@ export class UsersService {
         { updatedPicture },
         'Profile picture updated successfully.',
       );
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to update profile pics',
         error.message as string,
@@ -83,7 +83,7 @@ export class UsersService {
       }
 
       return successResponse({ user }, 'User fetched successfully.');
-    } catch (error) {
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch user',
         error.message as string,
@@ -133,7 +133,22 @@ export class UsersService {
           limit,
         },
       );
-    } catch (error) {
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to fetch user',
+        error.message as string,
+      );
+    }
+  }
+
+  async getUserSubAccount(userId: string) {
+    try {
+      const subAccount = await this.prisma.subAccount.findFirst({
+        where: { userId },
+      });
+
+      return successResponse(subAccount, 'Sub account fetched successfully.');
+    } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch user',
         error.message as string,
