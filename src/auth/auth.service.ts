@@ -171,8 +171,6 @@ export class AuthService {
         where: { userId: user.id },
       });
 
-      console.log({ vendor });
-
       if (user.role === 'VENDOR' && !vendor) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
@@ -214,7 +212,6 @@ export class AuthService {
         vendor.isApproved === true &&
         vendor.onboardingCompleted === false
       ) {
-        console.log('HEREREEEEEEEEE');
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
           { expiresIn: '7d' },
@@ -384,7 +381,6 @@ export class AuthService {
         accessToken,
       };
     } catch (error: any) {
-      console.log(error);
       throw new InternalServerErrorException(
         'Refresh token expired or invalid',
         error.message,

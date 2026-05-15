@@ -24,7 +24,6 @@ let AvailabilityController = class AvailabilityController {
         this.availabilityService = availabilityService;
     }
     getVendorAvailableSlots(vendorId, serviceId, date) {
-        console.log({ vendorId });
         return this.availabilityService.getAvailableSlots(vendorId, serviceId, date);
     }
     getAvailability(req) {

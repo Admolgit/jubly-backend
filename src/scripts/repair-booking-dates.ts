@@ -101,9 +101,6 @@ async function main() {
     return;
   }
 
-  console.log(`${repairs.length} booking(s) require date repair.`);
-  console.table(repairs.slice(0, 10));
-
   if (!args.apply) {
     console.log(
       'Dry run only. Re-run with "npm run repair:booking-dates -- --apply" to persist changes.',
@@ -117,8 +114,6 @@ async function main() {
       data: { date: new Date(repair.expectedDate) },
     });
   }
-
-  console.log(`Updated ${repairs.length} booking(s).`);
 }
 
 main()

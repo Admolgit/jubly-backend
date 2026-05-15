@@ -26,7 +26,6 @@ let ServicesController = class ServicesController {
         return this.servicesService.getAllServices(req.user.id, page, limit, search);
     }
     updateServiceActive(req, serviceId, dto) {
-        console.log({ serviceId, active: dto.active });
         return this.servicesService.updateServiceActive(serviceId, req.user.id, dto.active);
     }
     getService(req, serviceId) {

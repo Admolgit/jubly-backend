@@ -204,7 +204,6 @@ let BookingService = class BookingService {
                     role: client_1.UserRole.CLIENT,
                 },
             });
-            console.log({ client });
             let savedClientId = client?.id ?? '';
             if (!client) {
                 const saved = await this.authService.registerClient({
