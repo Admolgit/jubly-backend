@@ -28,7 +28,6 @@ export class AvailabilityController {
     @Param('serviceId') serviceId: string,
     @Param('date') date: any,
   ) {
-    console.log({ vendorId });
     return this.availabilityService.getAvailableSlots(
       vendorId,
       serviceId,

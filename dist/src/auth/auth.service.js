@@ -157,7 +157,6 @@ let AuthService = class AuthService {
             const vendor = await this.prisma.vendor.findUnique({
                 where: { userId: user.id },
             });
-            console.log({ vendor });
             if (user.role === 'VENDOR' && !vendor) {
                 const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
                 const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
@@ -180,7 +179,6 @@ let AuthService = class AuthService {
             if (vendor &&
                 vendor.isApproved === true &&
                 vendor.onboardingCompleted === false) {
-                console.log('HEREREEEEEEEEE');
                 const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
                 const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
                 const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -285,7 +283,6 @@ let AuthService = class AuthService {
             };
         }
         catch (error) {
-            console.log(error);
             throw new common_1.InternalServerErrorException('Refresh token expired or invalid', error.message);
         }
     }

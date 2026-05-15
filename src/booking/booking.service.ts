@@ -250,7 +250,6 @@ export class BookingService {
           role: UserRole.CLIENT,
         },
       });
-      console.log({ client });
 
       let savedClientId: string = client?.id ?? '';
       if (!client) {

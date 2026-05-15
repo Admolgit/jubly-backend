@@ -40,7 +40,6 @@ export class ServicesController {
     @Param('serviceId') serviceId: string,
     @Body() dto: { active: string },
   ) {
-    console.log({ serviceId, active: dto.active });
     return this.servicesService.updateServiceActive(
       serviceId,
       req.user.id,
