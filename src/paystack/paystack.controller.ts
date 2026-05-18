@@ -4,7 +4,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
+  BadRequestException,
+  Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpException,
@@ -14,6 +17,7 @@ import {
   Headers,
   Param,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from 'prisma/prisma.service';
@@ -21,6 +25,9 @@ import { PaystackService } from './paystack.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { BookingService } from 'src/booking/booking.service';
+import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Roles, RolesGuard } from 'src/auth/role.guard';
+import { successResponse } from 'src/utils/response';
 
 @Controller('paystack')
 export class PaystackController {
@@ -55,6 +62,121 @@ export class PaystackController {
     );
   }
 
+  @Post('/refund')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'VENDOR')
+  async refundPayment(
+    @Req() req: { user: { id: string; role: string } },
+    @Body()
+    dto: {
+      providerRef?: string;
+      bookingId?: string;
+      amount?: number;
+      customerNote?: string;
+      merchantNote?: string;
+    },
+  ) {
+    if (!dto.providerRef && !dto.bookingId) {
+      throw new BadRequestException('providerRef or bookingId is required');
+    }
+
+    const transaction = await this.prisma.transaction.findFirst({
+      where: {
+        providerRef: dto.providerRef,
+        bookingId: dto.bookingId,
+      },
+      include: {
+        vendor: true,
+      },
+    });
+
+    if (!transaction) {
+      throw new BadRequestException('Transaction not found');
+    }
+
+    if (
+      req.user.role === 'VENDOR' &&
+      transaction.vendor.userId !== req.user.id
+    ) {
+      throw new ForbiddenException('Not allowed to refund this transaction');
+    }
+
+    if (transaction.status === 'COMPLETED') {
+      throw new BadRequestException(
+        'This payment has already been settled to the vendor',
+      );
+    }
+
+    if (transaction.status === 'REFUNDED') {
+      throw new BadRequestException('This payment has already been refunded');
+    }
+
+    if (transaction.status === 'REFUND_PENDING') {
+      throw new BadRequestException('A refund is already pending');
+    }
+
+    if (['failed', 'CANCELLED'].includes(transaction.status)) {
+      throw new BadRequestException('Only successful payments can be refunded');
+    }
+
+    const activeSettlement = await this.prisma.settlement.findFirst({
+      where: {
+        bookingId: transaction.bookingId || '',
+        status: {
+          in: ['PENDING', 'SUCCESS'],
+        },
+      },
+    });
+
+    if (activeSettlement) {
+      throw new BadRequestException(
+        'This payment has already been sent to vendor settlement',
+      );
+    }
+
+    if (dto.amount !== undefined && dto.amount > transaction.amount) {
+      throw new BadRequestException(
+        'Refund amount cannot be more than transaction amount',
+      );
+    }
+
+    if (dto.amount !== undefined && dto.amount <= 0) {
+      throw new BadRequestException('Refund amount must be greater than zero');
+    }
+
+    const refund = await this.paystackService.createRefund({
+      transaction: transaction.providerRef,
+      amount: dto.amount,
+      customerNote: dto.customerNote,
+      merchantNote: dto.merchantNote,
+    });
+
+    await this.prisma.transaction.update({
+      where: {
+        id: transaction.id,
+      },
+      data: {
+        status:
+          refund.status?.toLowerCase?.() === 'processed'
+            ? 'REFUNDED'
+            : 'REFUND_PENDING',
+      },
+    });
+
+    if (transaction.bookingId) {
+      await this.prisma.booking.update({
+        where: {
+          id: transaction.bookingId,
+        },
+        data: {
+          status: 'CANCELLED',
+        },
+      });
+    }
+
+    return successResponse(refund, 'Refund initiated successfully', 201);
+  }
+
   @Post('webhook')
   async paystackWebhook(@Req() req: any, @Headers() headers) {
     try {
@@ -84,11 +206,10 @@ export class PaystackController {
       const transactionExists = await this.prisma.transaction.findUnique({
         where: {
           providerRef: event.data.reference,
-          status: 'CONFIRMED',
         },
       });
 
-      if (transactionExists) {
+      if (transactionExists?.bookingId) {
         console.log(
           `Transaction with reference ${event.data.reference} already exists. Skipping processing.`,
         );
@@ -150,10 +271,11 @@ export class PaystackController {
         const dto = {
           amount: event.data.amount,
           senderDetailsId: senderDetails.id,
-          status: 'CONFIRMED',
+          status: 'PENDING',
           providerRef: event.data.reference,
           paidAt: event.data.paid_at,
           percentageFee: 0.05,
+          bookingId: book.id,
           vendorId,
           slug,
           title,
@@ -178,7 +300,7 @@ export class PaystackController {
         await this.mailService.sendVendorBookingMail({
           vendorEmail: vendorEmail,
           clientName: clientName,
-          clientEmail: vendorEmail,
+          clientEmail: email,
           serviceName: title,
           date: dayOfWeek,
           time: startTime,
