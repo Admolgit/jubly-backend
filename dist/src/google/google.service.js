@@ -42,7 +42,7 @@ let GoogleCalendarService = class GoogleCalendarService {
         return obj;
     }
     getAuthUrl() {
-        const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
+        const scopes = ['https://www.googleapis.com/auth/calendar'];
         return this.oauthClient.generateAuthUrl({
             access_type: 'offline',
             scope: scopes,
@@ -66,7 +66,7 @@ let GoogleCalendarService = class GoogleCalendarService {
                 linked: true,
             },
             create: {
-                provider: 'GOOGLE',
+                provider: 'google',
                 userId: userId,
                 accessToken: tokens.access_token,
                 refreshToken: tokens.refresh_token,
@@ -141,6 +141,21 @@ let GoogleCalendarService = class GoogleCalendarService {
             version: 'v3',
             auth: oauth2Client,
         });
+        const attendees = [
+            {
+                email: booking.attendeeEmail,
+                displayName: booking.attendeeName,
+            },
+            ...(booking.vendorEmail &&
+                booking.vendorEmail.toLowerCase() !== booking.attendeeEmail.toLowerCase()
+                ? [
+                    {
+                        email: booking.vendorEmail,
+                        displayName: 'Vendor',
+                    },
+                ]
+                : []),
+        ];
         return calendarApi.events.insert({
             calendarId: 'primary',
             sendUpdates: 'all',
@@ -155,12 +170,7 @@ let GoogleCalendarService = class GoogleCalendarService {
                     dateTime: booking.endTime.toISOString(),
                     timeZone: 'Africa/Lagos',
                 },
-                attendees: [
-                    {
-                        email: booking.attendeeEmail,
-                        displayName: booking.attendeeName,
-                    },
-                ],
+                attendees,
                 reminders: {
                     useDefault: false,
                     overrides: [
