@@ -72,7 +72,6 @@ export class BookingService {
     return { year, month, day };
   }
 
-  // Store the booking day as midnight in Africa/Lagos so date-only values do not drift.
   private toBookingDate(value?: string | Date, fallbackDate?: Date) {
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
       return new Date(`${value}T00:00:00.000+01:00`);
@@ -1554,26 +1553,39 @@ export class BookingService {
     }
   }
 
-  async getBookingsStatusFilter() {
-    const [all, pending, confirmed, completed, cancelled] = await Promise.all([
-      this.prisma.booking.count(),
+  async getBookingsStatusFilter(userId: string) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId },
+    });
 
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    const [all, pending, confirmed, completed, cancelled] = await Promise.all([
       this.prisma.booking.count({
         where: {
-          status: BookingStatus.PENDING,
+          vendorId: vendor.id,
         },
       }),
 
       this.prisma.booking.count({
-        where: { status: BookingStatus.CONFIRMED },
+        where: {
+          status: BookingStatus.PENDING,
+          vendorId: vendor.id,
+        },
       }),
 
       this.prisma.booking.count({
-        where: { status: BookingStatus.COMPLETED },
+        where: { status: BookingStatus.CONFIRMED, vendorId: vendor.id },
       }),
 
       this.prisma.booking.count({
-        where: { status: BookingStatus.CANCELLED },
+        where: { status: BookingStatus.COMPLETED, vendorId: vendor.id },
+      }),
+
+      this.prisma.booking.count({
+        where: { status: BookingStatus.CANCELLED, vendorId: vendor.id },
       }),
     ]);
 
@@ -1589,9 +1601,20 @@ export class BookingService {
     );
   }
 
-  async getBusinessInsights() {
+  async getBusinessInsights(userId: string) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
     // 1. GROUP BOOKINGS BY DAY
     const bookingsByDay = await this.prisma.booking.groupBy({
+      where: {
+        vendorId: vendor.id,
+      },
       by: ['date'],
       _count: {
         id: true,
@@ -1620,7 +1643,11 @@ export class BookingService {
       }
     });
 
-    const totalBookings = await this.prisma.booking.count();
+    const totalBookings = await this.prisma.booking.count({
+      where: {
+        vendorId: vendor.id,
+      },
+    });
 
     const bestDayPercentage = totalBookings
       ? Math.round((maxBookings / totalBookings) * 100)
@@ -1628,6 +1655,9 @@ export class BookingService {
 
     // 2. AVERAGE BOOKING AMOUNT
     const avg = await this.prisma.booking.findMany({
+      where: {
+        vendorId: vendor.id,
+      },
       include: {
         services: true,
       },
@@ -1641,6 +1671,9 @@ export class BookingService {
 
     // 3. REPEAT CLIENTS
     const repeatClientsData = await this.prisma.booking.groupBy({
+      where: {
+        vendorId: vendor.id,
+      },
       by: ['clientId'],
       _count: {
         clientId: true,

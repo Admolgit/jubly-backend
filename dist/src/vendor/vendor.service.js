@@ -8,6 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VendorService = void 0;
 const common_1 = require("@nestjs/common");
@@ -16,6 +19,8 @@ const response_1 = require("../utils/response");
 const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
 const generateSlug_1 = require("../utils/generateSlug");
 const paystack_service_1 = require("../paystack/paystack.service");
+const json2csv_1 = require("json2csv");
+const dayjs_1 = __importDefault(require("dayjs"));
 let VendorService = class VendorService {
     constructor(prisma, cloudinaryService, paystackService) {
         this.prisma = prisma;
@@ -519,6 +524,81 @@ let VendorService = class VendorService {
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetched vendors', error.message);
+        }
+    }
+    async exportBookingsToCSV(userId) {
+        try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.BadRequestException('Vendor profile not found.');
+            }
+            const bookings = await this.prisma.booking.findMany({
+                where: {
+                    vendorId: vendor.id,
+                },
+                include: {
+                    services: true,
+                },
+            });
+            const fields = [
+                {
+                    label: 'Client Name',
+                    value: 'clientName',
+                },
+                {
+                    label: 'Client Email',
+                    value: 'clientEmail',
+                },
+                {
+                    label: 'Service',
+                    value: 'serviceName',
+                },
+                {
+                    label: 'Price',
+                    value: 'price',
+                },
+                {
+                    label: 'Status',
+                    value: 'status',
+                },
+                {
+                    label: 'Date',
+                    value: 'date',
+                },
+                {
+                    label: 'Start Time',
+                    value: 'startTime',
+                },
+                {
+                    label: 'End Time',
+                    value: 'endTime',
+                },
+                {
+                    label: 'Created At',
+                    value: 'createdAt',
+                },
+            ];
+            const formattedBookings = bookings.map((booking) => ({
+                clientName: booking.clientName,
+                clientEmail: booking.clientEmail,
+                serviceName: booking.services?.name,
+                price: booking.services?.price,
+                status: booking.status,
+                date: (0, dayjs_1.default)(booking.date).format('DD/MM/YYYY'),
+                startTime: (0, dayjs_1.default)(booking.startTime).format('hh:mm A'),
+                endTime: (0, dayjs_1.default)(booking.endTime).format('hh:mm A'),
+                createdAt: (0, dayjs_1.default)(booking.createdAt).format('DD/MM/YYYY hh:mm A'),
+            }));
+            const parser = new json2csv_1.Parser({
+                fields,
+            });
+            return parser.parse(formattedBookings);
+        }
+        catch (error) {
+            console.log(error);
+            throw new common_1.InternalServerErrorException('Failed to export bookings to csv');
         }
     }
 };

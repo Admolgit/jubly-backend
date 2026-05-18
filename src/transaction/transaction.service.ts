@@ -1,12 +1,17 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable no-case-declarations */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { Parser } from 'json2csv';
+import dayjs from 'dayjs';
 import { PrismaService } from 'prisma/prisma.service';
 import { successResponse } from 'src/utils/response';
 // import {
@@ -503,5 +508,131 @@ export class TransactionService {
 
       failedGrowth: calculateGrowth(failed, previousFailed),
     };
+  }
+
+  async exportTransactionsToCSV(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: {
+          userId,
+        },
+      });
+
+      if (!vendor) {
+        throw new BadRequestException('Vendor profile not found.');
+      }
+
+      const subAccount = await this.prisma.subAccount.findFirst({
+        where: {
+          userId,
+        },
+        select: {
+          percentageFee: true,
+        },
+      });
+
+      if (!subAccount) {
+        throw new BadRequestException('Subaccount not found.');
+      }
+
+      const transactions = await this.prisma.transaction.findMany({
+        where: {
+          vendorId: vendor.id,
+        },
+        include: {
+          senderDetails: true,
+          booking: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const fields = [
+        {
+          label: 'Transaction ID',
+          value: 'transactionId',
+        },
+        {
+          label: 'Sender Name',
+          value: 'senderName',
+        },
+        {
+          label: 'Description',
+          value: 'description',
+        },
+        {
+          label: 'Amount',
+          value: 'amount',
+        },
+        {
+          label: 'Currency',
+          value: 'currency',
+        },
+        {
+          label: 'Fee (%)',
+          value: 'fee',
+        },
+        {
+          label: 'Net Amount',
+          value: 'netAmount',
+        },
+        {
+          label: 'Status',
+          value: 'status',
+        },
+        {
+          label: 'Provider Ref',
+          value: 'providerRef',
+        },
+        {
+          label: 'Paid At',
+          value: 'paidAt',
+        },
+        {
+          label: 'Created At',
+          value: 'createdAt',
+        },
+      ];
+
+      const formattedTransactions = transactions.map((transaction) => {
+        const feeAmount = transaction.amount * subAccount?.percentageFee;
+
+        const netAmount = transaction.amount - feeAmount;
+
+        return {
+          transactionId: transaction.id,
+
+          senderName: transaction.senderDetails?.senderName || 'N/A',
+
+          description: transaction.senderDetails?.senderDescription || 'N/A',
+
+          amount: `₦${transaction.amount.toLocaleString()}`,
+
+          currency: transaction.currency,
+
+          netAmount: `₦${netAmount.toLocaleString()}`,
+
+          status: transaction.status,
+
+          providerRef: transaction.providerRef,
+
+          paidAt: dayjs(transaction.paidAt).format('DD/MM/YYYY hh:mm A'),
+
+          createdAt: dayjs(transaction.createdAt).format('DD/MM/YYYY hh:mm A'),
+        };
+      });
+
+      const parser = new Parser({
+        fields,
+      });
+
+      return parser.parse(formattedTransactions);
+    } catch (error: any) {
+      console.log(error);
+      throw new InternalServerErrorException(
+        'Failed to export transactions to csv',
+      );
+    }
   }
 }

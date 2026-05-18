@@ -182,7 +182,7 @@ model SubAccount {
   accountName       String
   limit             Float?
   isActive          Boolean  @default(true)
-  percentageFee     Float?   @default(0.05)
+  percentageFee     Float    @default(0.05)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
@@ -231,4 +231,14 @@ model vendorCalendar {
   refreshToken String
   expiryDate   DateTime
   linked       Boolean
+}
+
+model Settlement {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId     String   @db.ObjectId
+  amount        Float
+  transferCode  String?
+  recipientCode String?
+  status        String
+  createdAt     DateTime @default(now())
 }

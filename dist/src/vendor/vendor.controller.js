@@ -100,6 +100,12 @@ let VendorController = class VendorController {
     searchVendors(query) {
         return this.vendorService.findVendors(query);
     }
+    async exportBookingsCSV(req, res) {
+        const csv = await this.vendorService.exportBookingsToCSV(req.user.id);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=bookings.csv');
+        return res.status(200).send(csv);
+    }
 };
 exports.VendorController = VendorController;
 __decorate([
@@ -266,6 +272,16 @@ __decorate([
     __metadata("design:paramtypes", [create_vendor_dto_1.QueryVendorsDto]),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "searchVendors", null);
+__decorate([
+    (0, common_1.Get)('export/csv'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], VendorController.prototype, "exportBookingsCSV", null);
 exports.VendorController = VendorController = __decorate([
     (0, common_1.Controller)('vendor'),
     __metadata("design:paramtypes", [vendor_service_1.VendorService])

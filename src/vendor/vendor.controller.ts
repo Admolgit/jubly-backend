@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -11,6 +13,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -211,5 +214,21 @@ export class VendorController {
   @Get('search-vendor')
   searchVendors(@Query() query: QueryVendorsDto) {
     return this.vendorService.findVendors(query);
+  }
+
+  @Get('export/csv')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async exportBookingsCSV(
+    @Req() req: { user: { id: string } },
+    @Res() res: any,
+  ) {
+    const csv = await this.vendorService.exportBookingsToCSV(req.user.id);
+
+    res.setHeader('Content-Type', 'text/csv');
+
+    res.setHeader('Content-Disposition', 'attachment; filename=bookings.csv');
+
+    return res.status(200).send(csv);
   }
 }

@@ -8,9 +8,14 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TransactionService = exports.DateFilter = void 0;
 const common_1 = require("@nestjs/common");
+const json2csv_1 = require("json2csv");
+const dayjs_1 = __importDefault(require("dayjs"));
 const prisma_service_1 = require("../../prisma/prisma.service");
 const response_1 = require("../utils/response");
 var DateFilter;
@@ -350,6 +355,111 @@ let TransactionService = class TransactionService {
             processingGrowth: calculateGrowth(processing, previousProcessing),
             failedGrowth: calculateGrowth(failed, previousFailed),
         };
+    }
+    async exportTransactionsToCSV(userId) {
+        try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: {
+                    userId,
+                },
+            });
+            if (!vendor) {
+                throw new common_1.BadRequestException('Vendor profile not found.');
+            }
+            const subAccount = await this.prisma.subAccount.findFirst({
+                where: {
+                    userId,
+                },
+                select: {
+                    percentageFee: true,
+                },
+            });
+            if (!subAccount) {
+                throw new common_1.BadRequestException('Subaccount not found.');
+            }
+            const transactions = await this.prisma.transaction.findMany({
+                where: {
+                    vendorId: vendor.id,
+                },
+                include: {
+                    senderDetails: true,
+                    booking: true,
+                },
+                orderBy: {
+                    createdAt: 'desc',
+                },
+            });
+            const fields = [
+                {
+                    label: 'Transaction ID',
+                    value: 'transactionId',
+                },
+                {
+                    label: 'Sender Name',
+                    value: 'senderName',
+                },
+                {
+                    label: 'Description',
+                    value: 'description',
+                },
+                {
+                    label: 'Amount',
+                    value: 'amount',
+                },
+                {
+                    label: 'Currency',
+                    value: 'currency',
+                },
+                {
+                    label: 'Fee (%)',
+                    value: 'fee',
+                },
+                {
+                    label: 'Net Amount',
+                    value: 'netAmount',
+                },
+                {
+                    label: 'Status',
+                    value: 'status',
+                },
+                {
+                    label: 'Provider Ref',
+                    value: 'providerRef',
+                },
+                {
+                    label: 'Paid At',
+                    value: 'paidAt',
+                },
+                {
+                    label: 'Created At',
+                    value: 'createdAt',
+                },
+            ];
+            const formattedTransactions = transactions.map((transaction) => {
+                const feeAmount = transaction.amount * subAccount?.percentageFee;
+                const netAmount = transaction.amount - feeAmount;
+                return {
+                    transactionId: transaction.id,
+                    senderName: transaction.senderDetails?.senderName || 'N/A',
+                    description: transaction.senderDetails?.senderDescription || 'N/A',
+                    amount: `₦${transaction.amount.toLocaleString()}`,
+                    currency: transaction.currency,
+                    netAmount: `₦${netAmount.toLocaleString()}`,
+                    status: transaction.status,
+                    providerRef: transaction.providerRef,
+                    paidAt: (0, dayjs_1.default)(transaction.paidAt).format('DD/MM/YYYY hh:mm A'),
+                    createdAt: (0, dayjs_1.default)(transaction.createdAt).format('DD/MM/YYYY hh:mm A'),
+                };
+            });
+            const parser = new json2csv_1.Parser({
+                fields,
+            });
+            return parser.parse(formattedTransactions);
+        }
+        catch (error) {
+            console.log(error);
+            throw new common_1.InternalServerErrorException('Failed to export transactions to csv');
+        }
     }
 };
 exports.TransactionService = TransactionService;

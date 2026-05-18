@@ -1183,22 +1183,33 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to cancel booking.', error.message);
         }
     }
-    async getBookingsStatusFilter() {
+    async getBookingsStatusFilter(userId) {
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
+        }
         const [all, pending, confirmed, completed, cancelled] = await Promise.all([
-            this.prisma.booking.count(),
             this.prisma.booking.count({
                 where: {
-                    status: client_1.BookingStatus.PENDING,
+                    vendorId: vendor.id,
                 },
             }),
             this.prisma.booking.count({
-                where: { status: client_1.BookingStatus.CONFIRMED },
+                where: {
+                    status: client_1.BookingStatus.PENDING,
+                    vendorId: vendor.id,
+                },
             }),
             this.prisma.booking.count({
-                where: { status: client_1.BookingStatus.COMPLETED },
+                where: { status: client_1.BookingStatus.CONFIRMED, vendorId: vendor.id },
             }),
             this.prisma.booking.count({
-                where: { status: client_1.BookingStatus.CANCELLED },
+                where: { status: client_1.BookingStatus.COMPLETED, vendorId: vendor.id },
+            }),
+            this.prisma.booking.count({
+                where: { status: client_1.BookingStatus.CANCELLED, vendorId: vendor.id },
             }),
         ]);
         return (0, response_1.successResponse)({
@@ -1209,8 +1220,17 @@ let BookingService = class BookingService {
             cancelled,
         }, 'Status fetched successfully');
     }
-    async getBusinessInsights() {
+    async getBusinessInsights(userId) {
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
+        }
         const bookingsByDay = await this.prisma.booking.groupBy({
+            where: {
+                vendorId: vendor.id,
+            },
             by: ['date'],
             _count: {
                 id: true,
@@ -1231,11 +1251,18 @@ let BookingService = class BookingService {
                 maxBookings = count;
             }
         });
-        const totalBookings = await this.prisma.booking.count();
+        const totalBookings = await this.prisma.booking.count({
+            where: {
+                vendorId: vendor.id,
+            },
+        });
         const bestDayPercentage = totalBookings
             ? Math.round((maxBookings / totalBookings) * 100)
             : 0;
         const avg = await this.prisma.booking.findMany({
+            where: {
+                vendorId: vendor.id,
+            },
             include: {
                 services: true,
             },
@@ -1245,6 +1272,9 @@ let BookingService = class BookingService {
         }, 0);
         const averageBooking = bookingAvg / totalBookings || 0;
         const repeatClientsData = await this.prisma.booking.groupBy({
+            where: {
+                vendorId: vendor.id,
+            },
             by: ['clientId'],
             _count: {
                 clientId: true,

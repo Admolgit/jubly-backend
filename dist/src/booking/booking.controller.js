@@ -74,11 +74,11 @@ let BookingController = class BookingController {
     markAsComplete(bookingId, req) {
         return this.bookingService.markAsCmpleted(bookingId, req.user.id);
     }
-    async getBookingsStatusFilter() {
-        return this.bookingService.getBookingsStatusFilter();
+    async getBookingsStatusFilter(req) {
+        return this.bookingService.getBookingsStatusFilter(req.user.id);
     }
-    getInsights() {
-        return this.bookingService.getBusinessInsights();
+    getInsights(req) {
+        return this.bookingService.getBusinessInsights(req.user.id);
     }
 };
 exports.BookingController = BookingController;
@@ -253,16 +253,18 @@ __decorate([
     (0, common_1.Get)('status/filter'),
     (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], BookingController.prototype, "getBookingsStatusFilter", null);
 __decorate([
     (0, common_1.Get)('insights'),
     (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getInsights", null);
 exports.BookingController = BookingController = __decorate([

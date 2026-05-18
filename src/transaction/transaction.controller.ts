@@ -1,4 +1,16 @@
-import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
@@ -49,5 +61,26 @@ export class TransactionController {
     @Query('view') view: 'day' | 'week' | 'month' | 'year',
   ) {
     return this.transactionService.getEarningsAnalytics(req.user.id, view);
+  }
+
+  @Get('export/csv')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async exportTransactionsCSV(
+    @Req() req: { user: { id: string } },
+    @Res() res: any,
+  ) {
+    const csv = await this.transactionService.exportTransactionsToCSV(
+      req.user.id,
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=transactions-${Date.now()}.csv`,
+    );
+
+    return res.status(200).send(csv);
   }
 }
