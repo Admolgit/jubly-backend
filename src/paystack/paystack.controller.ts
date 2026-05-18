@@ -226,17 +226,17 @@ export class PaystackController {
           email,
           userId,
           dayOfWeek,
-          durationMins,
+          // durationMins,
           startTime,
           endTime,
           clientName,
-          businessName,
-          vendorEmail,
-          city,
-          state,
-          country,
+          // businessName,
+          // vendorEmail,
+          // city,
+          // state,
+          // country,
           vendorUserId,
-          phone,
+          // phone,
         } = event.data.metadata;
 
         console.log('event.data.metadata', event.data.metadata);
@@ -285,29 +285,29 @@ export class PaystackController {
 
         await this.transactionsService.updateTransaction(userId, dto);
 
-        await this.mailService.sendClientBookingMail({
-          clientEmail: email,
-          serviceName: title,
-          date: dayOfWeek,
-          time: startTime,
-          endTime: endTime,
-          clientName: clientName,
-          durationMins: durationMins,
-          businessName: businessName,
-          address: `${city} ${state} ${country}`,
-        });
+        // await this.mailService.sendClientBookingMail({
+        //   clientEmail: email,
+        //   serviceName: title,
+        //   date: dayOfWeek,
+        //   time: startTime,
+        //   endTime: endTime,
+        //   clientName: clientName,
+        //   durationMins: durationMins,
+        //   businessName: businessName,
+        //   address: `${city} ${state} ${country}`,
+        // });
 
-        await this.mailService.sendVendorBookingMail({
-          vendorEmail: vendorEmail,
-          clientName: clientName,
-          clientEmail: email,
-          serviceName: title,
-          date: dayOfWeek,
-          time: startTime,
-          endTime: endTime,
-          durationMins: durationMins,
-          phone,
-        });
+        // await this.mailService.sendVendorBookingMail({
+        //   vendorEmail: vendorEmail,
+        //   clientName: clientName,
+        //   clientEmail: email,
+        //   serviceName: title,
+        //   date: dayOfWeek,
+        //   time: startTime,
+        //   endTime: endTime,
+        //   durationMins: durationMins,
+        //   phone,
+        // });
       }
 
       if (event.event === 'charge.failed') {
