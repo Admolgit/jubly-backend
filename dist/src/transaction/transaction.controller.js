@@ -34,6 +34,12 @@ let TransactionController = class TransactionController {
     getAnalytics(req, view) {
         return this.transactionService.getEarningsAnalytics(req.user.id, view);
     }
+    async exportTransactionsCSV(req, res) {
+        const csv = await this.transactionService.exportTransactionsToCSV(req.user.id);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=transactions-${Date.now()}.csv`);
+        return res.status(200).send(csv);
+    }
 };
 exports.TransactionController = TransactionController;
 __decorate([
@@ -73,6 +79,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], TransactionController.prototype, "getAnalytics", null);
+__decorate([
+    (0, common_1.Get)('export/csv'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], TransactionController.prototype, "exportTransactionsCSV", null);
 exports.TransactionController = TransactionController = __decorate([
     (0, common_1.Controller)('transactions'),
     __metadata("design:paramtypes", [transaction_service_1.TransactionService])

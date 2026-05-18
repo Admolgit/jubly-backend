@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -18,6 +19,8 @@ import { generateSlug } from 'src/utils/generateSlug';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { CreateSubaccountDto } from 'src/paystack';
 import { BulkUpdateItemDto, ServiceItemDto } from './dto/services.dto';
+import { Parser } from 'json2csv';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class VendorService {
@@ -718,6 +721,89 @@ export class VendorService {
       throw new InternalServerErrorException(
         'Failed to fetched vendors',
         error.message,
+      );
+    }
+  }
+
+  async exportBookingsToCSV(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new BadRequestException('Vendor profile not found.');
+      }
+
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          vendorId: vendor.id,
+        },
+        include: {
+          services: true,
+        },
+      });
+
+      const fields = [
+        {
+          label: 'Client Name',
+          value: 'clientName',
+        },
+        {
+          label: 'Client Email',
+          value: 'clientEmail',
+        },
+        {
+          label: 'Service',
+          value: 'serviceName',
+        },
+        {
+          label: 'Price',
+          value: 'price',
+        },
+        {
+          label: 'Status',
+          value: 'status',
+        },
+        {
+          label: 'Date',
+          value: 'date',
+        },
+        {
+          label: 'Start Time',
+          value: 'startTime',
+        },
+        {
+          label: 'End Time',
+          value: 'endTime',
+        },
+        {
+          label: 'Created At',
+          value: 'createdAt',
+        },
+      ];
+
+      const formattedBookings = bookings.map((booking) => ({
+        clientName: booking.clientName,
+        clientEmail: booking.clientEmail,
+        serviceName: booking.services?.name,
+        price: booking.services?.price,
+        status: booking.status,
+        date: dayjs(booking.date).format('DD/MM/YYYY'),
+        startTime: dayjs(booking.startTime).format('hh:mm A'),
+        endTime: dayjs(booking.endTime).format('hh:mm A'),
+        createdAt: dayjs(booking.createdAt).format('DD/MM/YYYY hh:mm A'),
+      }));
+
+      const parser = new Parser({
+        fields,
+      });
+
+      return parser.parse(formattedBookings);
+    } catch (error: any) {
+      console.log(error);
+      throw new InternalServerErrorException(
+        'Failed to export bookings to csv',
       );
     }
   }

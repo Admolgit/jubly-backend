@@ -22,6 +22,7 @@ const axios_1 = __importDefault(require("axios"));
 const date_fns_1 = require("date-fns");
 const client_1 = require("@prisma/client");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
+const paystack_service_1 = require("../paystack/paystack.service");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -30,11 +31,12 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
-    constructor(googleCalendarService, prisma, authService, nodemailerService) {
+    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService) {
         this.googleCalendarService = googleCalendarService;
         this.prisma = prisma;
         this.authService = authService;
         this.nodemailerService = nodemailerService;
+        this.paystackService = paystackService;
         this.bookingTimezone = 'Africa/Lagos';
     }
     parseDateInput(value, fieldName) {
@@ -155,7 +157,10 @@ let BookingService = class BookingService {
             const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
                 where: {
                     userId,
-                    provider: 'google',
+                    provider: {
+                        in: ['google', 'GOOGLE'],
+                    },
+                    linked: true,
                 },
             });
             const booking = await this.prisma.booking.create({
@@ -184,6 +189,7 @@ let BookingService = class BookingService {
                         endTime,
                         attendeeEmail: dto.clientEmail,
                         attendeeName: dto.clientName,
+                        vendorEmail: user.email,
                     });
                 }
                 catch (err) {
@@ -218,20 +224,27 @@ let BookingService = class BookingService {
                 where: { id: dto.serviceId },
             });
             if (!services) {
-                throw new common_1.BadRequestException('Service not found');
+                throw new common_1.NotFoundException('Service not found');
             }
             const vendorUser = await this.prisma.user.findFirst({
                 where: {
                     id: services.userId,
                 },
             });
+            const vendor = await this.prisma.vendor.findFirst({
+                where: { userId: services.userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            console.log({ vendor });
             const amount = services.price;
             const response = await axios_1.default.post(`${process.env.PAYSTACK_BASE_URL}/transaction/initialize`, {
                 email: dto.clientEmail,
                 amount: amount * 100,
                 metadata: {
                     slug: vendorUser?.slug,
-                    vendorId: services.vendorId,
+                    vendorId: vendor.id,
                     clientId: savedClientId,
                     serviceId: dto.serviceId,
                     title: services.name,
@@ -257,7 +270,7 @@ let BookingService = class BookingService {
             });
             await this.prisma.transaction.create({
                 data: {
-                    vendorId: services.vendorId ?? '',
+                    vendorId: vendor.id,
                     amount,
                     providerRef: response.data.data.reference,
                     status: 'PENDING',
@@ -733,6 +746,25 @@ let BookingService = class BookingService {
                         select: {
                             name: true,
                             price: true,
+                            durationMins: true,
+                        },
+                    },
+                    vendor: {
+                        select: {
+                            businessName: true,
+                            city: true,
+                            state: true,
+                            country: true,
+                            bankAccountNumber: true,
+                            bankCode: true,
+                        },
+                    },
+                    user: {
+                        select: {
+                            firstName: true,
+                            lastName: true,
+                            email: true,
+                            phone: true,
                         },
                     },
                 },
@@ -1058,6 +1090,9 @@ let BookingService = class BookingService {
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to cancel booking.', error.message);
         }
     }
@@ -1161,6 +1196,81 @@ let BookingService = class BookingService {
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
             }
+            if (user.role !== client_1.UserRole.CLIENT || booking.clientEmail !== user.email) {
+                throw new common_1.ForbiddenException('Only the client who made this booking can mark it as completed');
+            }
+            const existingSettlement = await this.prisma.settlement.findFirst({
+                where: {
+                    bookingId,
+                    status: {
+                        in: ['PENDING', 'SUCCESS'],
+                    },
+                },
+            });
+            const transaction = await this.prisma.transaction.findFirst({
+                where: {
+                    bookingId,
+                    status: 'PENDING',
+                },
+            });
+            if (!existingSettlement) {
+                if (!transaction) {
+                    throw new common_1.BadRequestException('No pending payment found for this booking');
+                }
+                if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
+                    throw new common_1.BadRequestException('Vendor has no settlement bank account');
+                }
+                const recipient = await this.paystackService.createTransferRecipient({
+                    name: booking.vendor.businessName,
+                    accountNumber: booking.vendor.bankAccountNumber,
+                    bankCode: booking.vendor.bankCode,
+                });
+                const settlement = await this.prisma.settlement.create({
+                    data: {
+                        bookingId,
+                        amount: transaction.amount,
+                        recipientCode: recipient.recipient_code,
+                        status: 'PENDING',
+                    },
+                });
+                let transfer;
+                try {
+                    transfer = await this.paystackService.initiateTransfer({
+                        amount: transaction.amount,
+                        recipientCode: recipient.recipient_code,
+                        reason: `Settlement for booking ${booking.id}`,
+                        reference: `booking-${booking.id}-${Date.now()}`,
+                    });
+                }
+                catch (error) {
+                    await this.prisma.settlement.update({
+                        where: {
+                            id: settlement.id,
+                        },
+                        data: {
+                            status: 'FAILED',
+                        },
+                    });
+                    throw error;
+                }
+                await this.prisma.settlement.update({
+                    where: {
+                        id: settlement.id,
+                    },
+                    data: {
+                        transferCode: transfer.transfer_code,
+                        status: transfer.status?.toUpperCase() || 'PENDING',
+                    },
+                });
+                await this.prisma.transaction.update({
+                    where: {
+                        id: transaction.id,
+                    },
+                    data: {
+                        status: 'COMPLETED',
+                    },
+                });
+            }
             const updatedBooking = await this.prisma.booking.update({
                 where: { id: bookingId },
                 data: {
@@ -1180,25 +1290,39 @@ let BookingService = class BookingService {
             return (0, response_1.successResponse)(updatedBooking, 'Booking mark as completed successfully');
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException('Failed to cancel booking.', error.message);
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to mark booking as completed.', error.message);
         }
     }
-    async getBookingsStatusFilter() {
+    async getBookingsStatusFilter(userId) {
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
+        }
         const [all, pending, confirmed, completed, cancelled] = await Promise.all([
-            this.prisma.booking.count(),
             this.prisma.booking.count({
                 where: {
-                    status: client_1.BookingStatus.PENDING,
+                    vendorId: vendor.id,
                 },
             }),
             this.prisma.booking.count({
-                where: { status: client_1.BookingStatus.CONFIRMED },
+                where: {
+                    status: client_1.BookingStatus.PENDING,
+                    vendorId: vendor.id,
+                },
             }),
             this.prisma.booking.count({
-                where: { status: client_1.BookingStatus.COMPLETED },
+                where: { status: client_1.BookingStatus.CONFIRMED, vendorId: vendor.id },
             }),
             this.prisma.booking.count({
-                where: { status: client_1.BookingStatus.CANCELLED },
+                where: { status: client_1.BookingStatus.COMPLETED, vendorId: vendor.id },
+            }),
+            this.prisma.booking.count({
+                where: { status: client_1.BookingStatus.CANCELLED, vendorId: vendor.id },
             }),
         ]);
         return (0, response_1.successResponse)({
@@ -1209,8 +1333,17 @@ let BookingService = class BookingService {
             cancelled,
         }, 'Status fetched successfully');
     }
-    async getBusinessInsights() {
+    async getBusinessInsights(userId) {
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
+        }
         const bookingsByDay = await this.prisma.booking.groupBy({
+            where: {
+                vendorId: vendor.id,
+            },
             by: ['date'],
             _count: {
                 id: true,
@@ -1231,11 +1364,18 @@ let BookingService = class BookingService {
                 maxBookings = count;
             }
         });
-        const totalBookings = await this.prisma.booking.count();
+        const totalBookings = await this.prisma.booking.count({
+            where: {
+                vendorId: vendor.id,
+            },
+        });
         const bestDayPercentage = totalBookings
             ? Math.round((maxBookings / totalBookings) * 100)
             : 0;
         const avg = await this.prisma.booking.findMany({
+            where: {
+                vendorId: vendor.id,
+            },
             include: {
                 services: true,
             },
@@ -1245,6 +1385,9 @@ let BookingService = class BookingService {
         }, 0);
         const averageBooking = bookingAvg / totalBookings || 0;
         const repeatClientsData = await this.prisma.booking.groupBy({
+            where: {
+                vendorId: vendor.id,
+            },
             by: ['clientId'],
             _count: {
                 clientId: true,
@@ -1274,5 +1417,6 @@ exports.BookingService = BookingService = __decorate([
     __metadata("design:paramtypes", [google_service_1.GoogleCalendarService,
         prisma_service_1.PrismaService,
         auth_service_1.AuthService,
-        nodemailer_service_1.NodemailerService])
+        nodemailer_service_1.NodemailerService,
+        paystack_service_1.PaystackService])
 ], BookingService);

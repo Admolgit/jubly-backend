@@ -4,6 +4,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -24,6 +25,7 @@ import {
 } from 'date-fns';
 import { BookingStatus, UserRole } from '@prisma/client';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
+import { PaystackService } from 'src/paystack/paystack.service';
 
 export enum DateFilter {
   DAY = 'day',
@@ -39,6 +41,7 @@ export class BookingService {
     private prisma: PrismaService,
     private authService: AuthService,
     private nodemailerService: NodemailerService,
+    private paystackService: PaystackService,
   ) {}
 
   private readonly bookingTimezone = 'Africa/Lagos';
@@ -72,7 +75,6 @@ export class BookingService {
     return { year, month, day };
   }
 
-  // Store the booking day as midnight in Africa/Lagos so date-only values do not drift.
   private toBookingDate(value?: string | Date, fallbackDate?: Date) {
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
       return new Date(`${value}T00:00:00.000+01:00`);
@@ -192,7 +194,10 @@ export class BookingService {
       const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
         where: {
           userId,
-          provider: 'google',
+          provider: {
+            in: ['google', 'GOOGLE'],
+          },
+          linked: true,
         },
       });
 
@@ -226,6 +231,7 @@ export class BookingService {
               endTime,
               attendeeEmail: dto.clientEmail,
               attendeeName: dto.clientName,
+              vendorEmail: user.email,
             },
           );
         } catch (err: any) {
@@ -268,7 +274,7 @@ export class BookingService {
       });
 
       if (!services) {
-        throw new BadRequestException('Service not found');
+        throw new NotFoundException('Service not found');
       }
 
       const vendorUser = await this.prisma.user.findFirst({
@@ -276,6 +282,16 @@ export class BookingService {
           id: services.userId,
         },
       });
+
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId: services.userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+
+      console.log({ vendor });
 
       const amount = services.price;
 
@@ -286,7 +302,7 @@ export class BookingService {
           amount: amount * 100,
           metadata: {
             slug: vendorUser?.slug,
-            vendorId: services.vendorId,
+            vendorId: vendor.id,
             clientId: savedClientId,
             serviceId: dto.serviceId,
             title: services.name,
@@ -315,7 +331,7 @@ export class BookingService {
 
       await this.prisma.transaction.create({
         data: {
-          vendorId: services.vendorId ?? '',
+          vendorId: vendor.id,
           amount,
           providerRef: (response.data as any).data.reference,
           status: 'PENDING',
@@ -942,6 +958,25 @@ export class BookingService {
             select: {
               name: true,
               price: true,
+              durationMins: true,
+            },
+          },
+          vendor: {
+            select: {
+              businessName: true,
+              city: true,
+              state: true,
+              country: true,
+              bankAccountNumber: true,
+              bankCode: true,
+            },
+          },
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
             },
           },
         },
@@ -1392,6 +1427,10 @@ export class BookingService {
 
       return successResponse(updatedBooking, 'Booking cancelled successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to cancel booking.',
         error.message as string,
@@ -1524,6 +1563,97 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
+      if (user.role !== UserRole.CLIENT || booking.clientEmail !== user.email) {
+        throw new ForbiddenException(
+          'Only the client who made this booking can mark it as completed',
+        );
+      }
+
+      const existingSettlement = await this.prisma.settlement.findFirst({
+        where: {
+          bookingId,
+          status: {
+            in: ['PENDING', 'SUCCESS'],
+          },
+        },
+      });
+
+      const transaction = await this.prisma.transaction.findFirst({
+        where: {
+          bookingId,
+          status: 'PENDING',
+        },
+      });
+
+      if (!existingSettlement) {
+        if (!transaction) {
+          throw new BadRequestException(
+            'No pending payment found for this booking',
+          );
+        }
+
+        if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
+          throw new BadRequestException(
+            'Vendor has no settlement bank account',
+          );
+        }
+
+        const recipient = await this.paystackService.createTransferRecipient({
+          name: booking.vendor.businessName,
+          accountNumber: booking.vendor.bankAccountNumber,
+          bankCode: booking.vendor.bankCode,
+        });
+
+        const settlement = await this.prisma.settlement.create({
+          data: {
+            bookingId,
+            amount: transaction.amount,
+            recipientCode: recipient.recipient_code,
+            status: 'PENDING',
+          },
+        });
+
+        let transfer: any;
+        try {
+          transfer = await this.paystackService.initiateTransfer({
+            amount: transaction.amount,
+            recipientCode: recipient.recipient_code,
+            reason: `Settlement for booking ${booking.id}`,
+            reference: `booking-${booking.id}-${Date.now()}`,
+          });
+        } catch (error) {
+          await this.prisma.settlement.update({
+            where: {
+              id: settlement.id,
+            },
+            data: {
+              status: 'FAILED',
+            },
+          });
+
+          throw error;
+        }
+
+        await this.prisma.settlement.update({
+          where: {
+            id: settlement.id,
+          },
+          data: {
+            transferCode: transfer.transfer_code,
+            status: transfer.status?.toUpperCase() || 'PENDING',
+          },
+        });
+
+        await this.prisma.transaction.update({
+          where: {
+            id: transaction.id,
+          },
+          data: {
+            status: 'COMPLETED',
+          },
+        });
+      }
+
       const updatedBooking = await this.prisma.booking.update({
         where: { id: bookingId },
         data: {
@@ -1547,33 +1677,50 @@ export class BookingService {
         'Booking mark as completed successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
-        'Failed to cancel booking.',
+        'Failed to mark booking as completed.',
         error.message as string,
       );
     }
   }
 
-  async getBookingsStatusFilter() {
-    const [all, pending, confirmed, completed, cancelled] = await Promise.all([
-      this.prisma.booking.count(),
+  async getBookingsStatusFilter(userId: string) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId },
+    });
 
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    const [all, pending, confirmed, completed, cancelled] = await Promise.all([
       this.prisma.booking.count({
         where: {
-          status: BookingStatus.PENDING,
+          vendorId: vendor.id,
         },
       }),
 
       this.prisma.booking.count({
-        where: { status: BookingStatus.CONFIRMED },
+        where: {
+          status: BookingStatus.PENDING,
+          vendorId: vendor.id,
+        },
       }),
 
       this.prisma.booking.count({
-        where: { status: BookingStatus.COMPLETED },
+        where: { status: BookingStatus.CONFIRMED, vendorId: vendor.id },
       }),
 
       this.prisma.booking.count({
-        where: { status: BookingStatus.CANCELLED },
+        where: { status: BookingStatus.COMPLETED, vendorId: vendor.id },
+      }),
+
+      this.prisma.booking.count({
+        where: { status: BookingStatus.CANCELLED, vendorId: vendor.id },
       }),
     ]);
 
@@ -1589,9 +1736,20 @@ export class BookingService {
     );
   }
 
-  async getBusinessInsights() {
+  async getBusinessInsights(userId: string) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
     // 1. GROUP BOOKINGS BY DAY
     const bookingsByDay = await this.prisma.booking.groupBy({
+      where: {
+        vendorId: vendor.id,
+      },
       by: ['date'],
       _count: {
         id: true,
@@ -1620,7 +1778,11 @@ export class BookingService {
       }
     });
 
-    const totalBookings = await this.prisma.booking.count();
+    const totalBookings = await this.prisma.booking.count({
+      where: {
+        vendorId: vendor.id,
+      },
+    });
 
     const bestDayPercentage = totalBookings
       ? Math.round((maxBookings / totalBookings) * 100)
@@ -1628,6 +1790,9 @@ export class BookingService {
 
     // 2. AVERAGE BOOKING AMOUNT
     const avg = await this.prisma.booking.findMany({
+      where: {
+        vendorId: vendor.id,
+      },
       include: {
         services: true,
       },
@@ -1641,6 +1806,9 @@ export class BookingService {
 
     // 3. REPEAT CLIENTS
     const repeatClientsData = await this.prisma.booking.groupBy({
+      where: {
+        vendorId: vendor.id,
+      },
       by: ['clientId'],
       _count: {
         clientId: true,

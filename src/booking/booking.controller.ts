@@ -206,14 +206,14 @@ export class BookingController {
   @Get('status/filter')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR', 'CLIENT')
-  async getBookingsStatusFilter() {
-    return this.bookingService.getBookingsStatusFilter();
+  async getBookingsStatusFilter(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getBookingsStatusFilter(req.user.id);
   }
 
   @Get('insights')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR', 'CLIENT')
-  getInsights() {
-    return this.bookingService.getBusinessInsights();
+  getInsights(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getBusinessInsights(req.user.id);
   }
 }
