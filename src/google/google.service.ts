@@ -53,7 +53,7 @@ export class GoogleCalendarService {
   }
 
   getAuthUrl() {
-    const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
+    const scopes = ['https://www.googleapis.com/auth/calendar'];
 
     return this.oauthClient.generateAuthUrl({
       access_type: 'offline',
@@ -81,7 +81,7 @@ export class GoogleCalendarService {
         linked: true,
       },
       create: {
-        provider: 'GOOGLE',
+        provider: 'google',
         userId: userId,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -163,6 +163,7 @@ export class GoogleCalendarService {
       endTime: Date;
       attendeeEmail: string;
       attendeeName: string;
+      vendorEmail?: string;
     },
   ) {
     const oauth2Client = new google.auth.OAuth2(
@@ -201,6 +202,22 @@ export class GoogleCalendarService {
       auth: oauth2Client,
     });
 
+    const attendees = [
+      {
+        email: booking.attendeeEmail,
+        displayName: booking.attendeeName,
+      },
+      ...(booking.vendorEmail &&
+      booking.vendorEmail.toLowerCase() !== booking.attendeeEmail.toLowerCase()
+        ? [
+            {
+              email: booking.vendorEmail,
+              displayName: 'Vendor',
+            },
+          ]
+        : []),
+    ];
+
     return calendarApi.events.insert({
       calendarId: 'primary',
 
@@ -221,12 +238,7 @@ export class GoogleCalendarService {
           timeZone: 'Africa/Lagos',
         },
 
-        attendees: [
-          {
-            email: booking.attendeeEmail,
-            displayName: booking.attendeeName,
-          },
-        ],
+        attendees,
 
         reminders: {
           useDefault: false,

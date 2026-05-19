@@ -15,6 +15,12 @@ class PaystackService {
         this.baseUrl = process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
         this.secretKey = process.env.PAYSTACK_SECRET_KEY;
     }
+    getAuthHeaders() {
+        return {
+            Authorization: `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json',
+        };
+    }
     async getBankList() {
         try {
             const config = {
@@ -126,6 +132,74 @@ class PaystackService {
         }
         catch (err) {
             return err;
+        }
+    }
+    async createTransferRecipient(payload) {
+        try {
+            const response = await axios_1.default.post(`${this.baseUrl}/transferrecipient`, {
+                type: 'nuban',
+                name: payload.name,
+                account_number: payload.accountNumber,
+                bank_code: payload.bankCode,
+                currency: 'NGN',
+            }, {
+                headers: this.getAuthHeaders(),
+            });
+            if (!response.data.status || !response.data.data?.recipient_code) {
+                throw new Error('Failed to create transfer recipient');
+            }
+            return response.data.data;
+        }
+        catch (error) {
+            throw new common_1.HttpException(error.response?.data?.message ||
+                error.message ||
+                'Failed to create transfer recipient', error.response?.status || common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    async initiateTransfer(payload) {
+        try {
+            const response = await axios_1.default.post(`${this.baseUrl}/transfer`, {
+                source: 'balance',
+                amount: Math.round(payload.amount * 100),
+                recipient: payload.recipientCode,
+                reason: payload.reason,
+                reference: payload.reference,
+            }, {
+                headers: this.getAuthHeaders(),
+            });
+            if (!response.data.status || !response.data.data?.transfer_code) {
+                throw new Error('Failed to initiate transfer');
+            }
+            return response.data.data;
+        }
+        catch (error) {
+            throw new common_1.HttpException(error.response?.data?.message ||
+                error.message ||
+                'Failed to initiate transfer', error.response?.status || common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    async createRefund(payload) {
+        try {
+            const response = await axios_1.default.post(`${this.baseUrl}/refund`, {
+                transaction: payload.transaction,
+                amount: payload.amount === undefined
+                    ? undefined
+                    : Math.round(payload.amount * 100),
+                currency: payload.currency || 'NGN',
+                customer_note: payload.customerNote,
+                merchant_note: payload.merchantNote,
+            }, {
+                headers: this.getAuthHeaders(),
+            });
+            if (!response.data.status || !response.data.data) {
+                throw new Error('Failed to create refund');
+            }
+            return response.data.data;
+        }
+        catch (error) {
+            throw new common_1.HttpException(error.response?.data?.message ||
+                error.message ||
+                'Failed to create refund', error.response?.status || common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }

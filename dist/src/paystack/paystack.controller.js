@@ -53,6 +53,9 @@ const paystack_service_1 = require("./paystack.service");
 const transaction_service_1 = require("../transaction/transaction.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const booking_service_1 = require("../booking/booking.service");
+const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const role_guard_1 = require("../auth/role.guard");
+const response_1 = require("../utils/response");
 let PaystackController = class PaystackController {
     constructor(paystackService, prisma, transactionsService, mailService, bookingService) {
         this.paystackService = paystackService;
@@ -70,6 +73,83 @@ let PaystackController = class PaystackController {
     handleCallback(req, res) {
         const reference = req.query.reference;
         return res.redirect(`${process.env.FRONTEND_BASE_URL}/verify-payment?reference=${reference}`);
+    }
+    async refundPayment(req, dto) {
+        if (!dto.providerRef && !dto.bookingId) {
+            throw new common_1.BadRequestException('providerRef or bookingId is required');
+        }
+        const transaction = await this.prisma.transaction.findFirst({
+            where: {
+                providerRef: dto.providerRef,
+                bookingId: dto.bookingId,
+            },
+            include: {
+                vendor: true,
+            },
+        });
+        if (!transaction) {
+            throw new common_1.BadRequestException('Transaction not found');
+        }
+        if (req.user.role === 'VENDOR' &&
+            transaction.vendor.userId !== req.user.id) {
+            throw new common_1.ForbiddenException('Not allowed to refund this transaction');
+        }
+        if (transaction.status === 'COMPLETED') {
+            throw new common_1.BadRequestException('This payment has already been settled to the vendor');
+        }
+        if (transaction.status === 'REFUNDED') {
+            throw new common_1.BadRequestException('This payment has already been refunded');
+        }
+        if (transaction.status === 'REFUND_PENDING') {
+            throw new common_1.BadRequestException('A refund is already pending');
+        }
+        if (['failed', 'CANCELLED'].includes(transaction.status)) {
+            throw new common_1.BadRequestException('Only successful payments can be refunded');
+        }
+        const activeSettlement = await this.prisma.settlement.findFirst({
+            where: {
+                bookingId: transaction.bookingId || '',
+                status: {
+                    in: ['PENDING', 'SUCCESS'],
+                },
+            },
+        });
+        if (activeSettlement) {
+            throw new common_1.BadRequestException('This payment has already been sent to vendor settlement');
+        }
+        if (dto.amount !== undefined && dto.amount > transaction.amount) {
+            throw new common_1.BadRequestException('Refund amount cannot be more than transaction amount');
+        }
+        if (dto.amount !== undefined && dto.amount <= 0) {
+            throw new common_1.BadRequestException('Refund amount must be greater than zero');
+        }
+        const refund = await this.paystackService.createRefund({
+            transaction: transaction.providerRef,
+            amount: dto.amount,
+            customerNote: dto.customerNote,
+            merchantNote: dto.merchantNote,
+        });
+        await this.prisma.transaction.update({
+            where: {
+                id: transaction.id,
+            },
+            data: {
+                status: refund.status?.toLowerCase?.() === 'processed'
+                    ? 'REFUNDED'
+                    : 'REFUND_PENDING',
+            },
+        });
+        if (transaction.bookingId) {
+            await this.prisma.booking.update({
+                where: {
+                    id: transaction.bookingId,
+                },
+                data: {
+                    status: 'CANCELLED',
+                },
+            });
+        }
+        return (0, response_1.successResponse)(refund, 'Refund initiated successfully', 201);
     }
     async paystackWebhook(req, headers) {
         try {
@@ -91,15 +171,14 @@ let PaystackController = class PaystackController {
             const transactionExists = await this.prisma.transaction.findUnique({
                 where: {
                     providerRef: event.data.reference,
-                    status: 'CONFIRMED',
                 },
             });
-            if (transactionExists) {
+            if (transactionExists?.bookingId) {
                 console.log(`Transaction with reference ${event.data.reference} already exists. Skipping processing.`);
                 return { status: true };
             }
             if (event.event === 'charge.success') {
-                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, durationMins, startTime, endTime, clientName, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
                 console.log('event.data.metadata', event.data.metadata);
                 const book = await this.bookingService.createBooking(vendorUserId, {
                     userId: vendorUserId,
@@ -127,38 +206,48 @@ let PaystackController = class PaystackController {
                 const dto = {
                     amount: event.data.amount,
                     senderDetailsId: senderDetails.id,
-                    status: 'CONFIRMED',
+                    status: 'PENDING',
                     providerRef: event.data.reference,
                     paidAt: event.data.paid_at,
                     percentageFee: 0.05,
-                    vendorId: vendorId,
+                    bookingId: book.id,
+                    vendorId,
                     slug,
                     title,
                     paymentMethod: paymentChannel,
                     description: 'Payment via Paystack',
                 };
                 await this.transactionsService.updateTransaction(userId, dto);
-                await this.mailService.sendClientBookingMail({
-                    clientEmail: email,
-                    serviceName: title,
-                    date: dayOfWeek,
-                    time: startTime,
-                    endTime: endTime,
-                    clientName: clientName,
-                    durationMins: durationMins,
-                    businessName: businessName,
-                    address: `${city} ${state} ${country}`,
-                });
-                await this.mailService.sendVendorBookingMail({
-                    vendorEmail: vendorEmail,
-                    clientName: clientName,
-                    clientEmail: vendorEmail,
-                    serviceName: title,
-                    date: dayOfWeek,
-                    time: startTime,
-                    endTime: endTime,
-                    durationMins: durationMins,
-                    phone,
+                setImmediate(() => {
+                    void (async () => {
+                        try {
+                            await this.mailService.sendClientBookingMail({
+                                clientEmail: email,
+                                serviceName: title,
+                                date: dayOfWeek,
+                                time: startTime,
+                                endTime: endTime,
+                                clientName: clientName,
+                                durationMins: durationMins,
+                                businessName: businessName,
+                                address: `${city} ${state} ${country}`,
+                            });
+                            await this.mailService.sendVendorBookingMail({
+                                vendorEmail: vendorEmail,
+                                clientName: clientName,
+                                clientEmail: email,
+                                serviceName: title,
+                                date: dayOfWeek,
+                                time: startTime,
+                                endTime: endTime,
+                                durationMins: durationMins,
+                                phone,
+                            });
+                        }
+                        catch (err) {
+                            console.error(err);
+                        }
+                    })();
                 });
             }
             if (event.event === 'charge.failed') {
@@ -223,6 +312,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], PaystackController.prototype, "handleCallback", null);
+__decorate([
+    (0, common_1.Post)('/refund'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN', 'VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], PaystackController.prototype, "refundPayment", null);
 __decorate([
     (0, common_1.Post)('webhook'),
     __param(0, (0, common_1.Req)()),
