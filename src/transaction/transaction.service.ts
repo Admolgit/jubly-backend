@@ -94,9 +94,9 @@ export class TransactionService {
       let where: any = {};
       if (vendorId) {
         where.vendorId = vendorId;
-        where.status = {
-          in: ['CONFIRMED', 'COMPLETED'],
-        };
+        // where.status = {
+        //   in: ['CONFIRMED', 'COMPLETED'],
+        // };
       }
 
       if (search) {
