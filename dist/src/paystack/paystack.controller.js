@@ -178,7 +178,7 @@ let PaystackController = class PaystackController {
                 return { status: true };
             }
             if (event.event === 'charge.success') {
-                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, vendorUserId, } = event.data.metadata;
+                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
                 console.log('event.data.metadata', event.data.metadata);
                 const book = await this.bookingService.createBooking(vendorUserId, {
                     userId: vendorUserId,
@@ -218,6 +218,37 @@ let PaystackController = class PaystackController {
                     description: 'Payment via Paystack',
                 };
                 await this.transactionsService.updateTransaction(userId, dto);
+                setImmediate(() => {
+                    void (async () => {
+                        try {
+                            await this.mailService.sendClientBookingMail({
+                                clientEmail: email,
+                                serviceName: title,
+                                date: dayOfWeek,
+                                time: startTime,
+                                endTime: endTime,
+                                clientName: clientName,
+                                durationMins: durationMins,
+                                businessName: businessName,
+                                address: `${city} ${state} ${country}`,
+                            });
+                            await this.mailService.sendVendorBookingMail({
+                                vendorEmail: vendorEmail,
+                                clientName: clientName,
+                                clientEmail: email,
+                                serviceName: title,
+                                date: dayOfWeek,
+                                time: startTime,
+                                endTime: endTime,
+                                durationMins: durationMins,
+                                phone,
+                            });
+                        }
+                        catch (err) {
+                            console.error(err);
+                        }
+                    })();
+                });
             }
             if (event.event === 'charge.failed') {
                 const { slug, vendorId, bookingId, title, name, userId } = event.data.metadata;
