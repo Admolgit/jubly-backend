@@ -78,9 +78,6 @@ let TransactionService = class TransactionService {
             let where = {};
             if (vendorId) {
                 where.vendorId = vendorId;
-                where.status = {
-                    in: ['CONFIRMED', 'COMPLETED'],
-                };
             }
             if (search) {
                 where.OR = [
