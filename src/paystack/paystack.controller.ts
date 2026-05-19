@@ -154,7 +154,7 @@ export class PaystackController {
           providerRef: event.data.reference,
           paidAt: event.data.paid_at,
           percentageFee: 0.05,
-          vendorId,
+          vendorId: vendorId,
           slug,
           title,
           paymentMethod: paymentChannel,

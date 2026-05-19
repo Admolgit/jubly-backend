@@ -50,6 +50,9 @@ let TransactionService = class TransactionService {
     }
     async updateTransaction(userId, dto) {
         try {
+            if (!dto.vendorId) {
+                throw new common_1.BadRequestException('Vendor ID is required');
+            }
             const convertedAmount = dto.amount / 100;
             await this.prisma.transaction.update({
                 where: {
