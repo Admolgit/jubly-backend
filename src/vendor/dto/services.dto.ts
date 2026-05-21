@@ -27,6 +27,10 @@ export class ServiceItemDto {
   @IsOptional()
   @IsNumber()
   durationMins?: number | null;
+
+  @IsOptional()
+  @IsString()
+  vendorId?: string;
 }
 
 export class CreateServicesDto {

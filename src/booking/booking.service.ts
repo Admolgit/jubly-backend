@@ -208,6 +208,7 @@ export class BookingService {
           date: bookingDate,
           clientEmail: dto.clientEmail,
           clientName: dto.clientName,
+          clientId: dto.clientId,
           startTime,
           endTime,
           status: 'CONFIRMED',
@@ -425,7 +426,9 @@ export class BookingService {
       const earnings = await this.prisma.transaction.aggregate({
         where: {
           vendorId,
-          status: 'CONFIRMED',
+          status: {
+            in: ['COMPLETED', 'CONFIRMED'],
+          },
         },
         _sum: {
           amount: true,
@@ -435,7 +438,9 @@ export class BookingService {
       const currentMonthEarnings = await this.prisma.transaction.aggregate({
         where: {
           vendorId,
-          status: 'CONFIRMED',
+          status: {
+            in: ['COMPLETED', 'CONFIRMED'],
+          },
           createdAt: {
             gte: startOfMonth,
           },
@@ -448,7 +453,9 @@ export class BookingService {
       const lastMonthEarnings = await this.prisma.transaction.aggregate({
         where: {
           vendorId,
-          status: 'CONFIRMED',
+          status: {
+            in: ['COMPLETED', 'CONFIRMED'],
+          },
           createdAt: {
             gte: startOfLastMonth,
             lte: endOfLastMonth,
@@ -535,7 +542,9 @@ export class BookingService {
       const bookings = await this.prisma.booking.findMany({
         where: {
           vendorId: vendor.id,
-          status: 'CONFIRMED',
+          status: {
+            in: ['CONFIRMED', 'PENDING'],
+          },
           startTime: {
             gte: now,
             lte: next24Hours,
@@ -1100,7 +1109,6 @@ export class BookingService {
 
   async getClientsStats(userId: string) {
     try {
-      // 1️⃣ Get vendor
       const vendor = await this.prisma.vendor.findFirst({
         where: { userId },
       });
@@ -1109,9 +1117,6 @@ export class BookingService {
         throw new Error('Vendor not found');
       }
 
-      // =========================
-      // DATE RANGES
-      // =========================
       const now = new Date();
 
       const startOfCurrentMonth = new Date(
@@ -1135,11 +1140,6 @@ export class BookingService {
         59,
       );
 
-      // =========================
-      // CURRENT MONTH DATA
-      // =========================
-
-      // Total unique clients
       const totalClients = await this.prisma.booking.groupBy({
         by: ['clientEmail'],
         where: {
@@ -1150,7 +1150,6 @@ export class BookingService {
         },
       });
 
-      // Repeat clients
       const repeatClients = await this.prisma.booking.groupBy({
         by: ['clientEmail'],
         where: {
@@ -1171,13 +1170,11 @@ export class BookingService {
         },
       });
 
-      // Repeat rate
       const repeatRate =
         totalClients.length === 0
           ? 0
           : Math.round((repeatClients.length / totalClients.length) * 100);
 
-      // Average booking value
       const bookings = await this.prisma.booking.findMany({
         where: {
           vendorId: vendor.id,
@@ -1198,10 +1195,6 @@ export class BookingService {
 
       const avgBookingValue =
         bookings.length === 0 ? 0 : Math.round(total / bookings.length);
-
-      // =========================
-      // LAST MONTH DATA
-      // =========================
 
       const lastMonthTotalClients = await this.prisma.booking.groupBy({
         by: ['clientEmail'],
@@ -1267,9 +1260,6 @@ export class BookingService {
           ? 0
           : Math.round(lastMonthTotal / lastMonthBookings.length);
 
-      // =========================
-      // GROWTH FUNCTION
-      // =========================
       const calculateGrowth = (current: number, previous: number) => {
         if (previous === 0) {
           return current > 0 ? 100 : 0;
@@ -1745,7 +1735,6 @@ export class BookingService {
       throw new NotFoundException('Vendor not found');
     }
 
-    // 1. GROUP BOOKINGS BY DAY
     const bookingsByDay = await this.prisma.booking.groupBy({
       where: {
         vendorId: vendor.id,
@@ -1756,7 +1745,6 @@ export class BookingService {
       },
     });
 
-    // Convert dates → day names (Mon, Tue...)
     const dayMap: Record<string, number> = {};
 
     bookingsByDay.forEach((b) => {
@@ -1767,7 +1755,6 @@ export class BookingService {
       dayMap[day] = (dayMap[day] || 0) + b._count.id;
     });
 
-    // Find best day
     let bestDay = '';
     let maxBookings = 0;
 
@@ -1788,7 +1775,6 @@ export class BookingService {
       ? Math.round((maxBookings / totalBookings) * 100)
       : 0;
 
-    // 2. AVERAGE BOOKING AMOUNT
     const avg = await this.prisma.booking.findMany({
       where: {
         vendorId: vendor.id,
@@ -1804,17 +1790,16 @@ export class BookingService {
 
     const averageBooking = bookingAvg / totalBookings || 0;
 
-    // 3. REPEAT CLIENTS
     const repeatClientsData = await this.prisma.booking.groupBy({
       where: {
         vendorId: vendor.id,
       },
-      by: ['clientId'],
+      by: ['clientEmail'],
       _count: {
-        clientId: true,
+        clientEmail: true,
       },
       having: {
-        clientId: {
+        clientEmail: {
           _count: {
             gt: 1,
           },
@@ -1834,6 +1819,70 @@ export class BookingService {
         repeatClients,
       },
       'Business insight fetched',
+    );
+  }
+
+  async getClientBookingStats(clientEmail: string, vendorId: string) {
+    const clientBookings = await this.prisma.booking.findMany({
+      where: {
+        clientEmail,
+        vendorId,
+      },
+      include: {
+        services: {
+          select: {
+            name: true,
+            price: true,
+          },
+        },
+      },
+    });
+
+    const amountSpent = clientBookings.reduce((sum, b) => {
+      return sum + (b.services.price || 0);
+    }, 0);
+
+    const totalBookings = await this.prisma.booking.count({
+      where: {
+        clientEmail,
+        vendorId,
+      },
+    });
+
+    const confirmedBookings = await this.prisma.booking.count({
+      where: {
+        clientEmail,
+        vendorId,
+        status: 'CONFIRMED',
+      },
+    });
+
+    const completedBookings = await this.prisma.booking.count({
+      where: {
+        clientEmail,
+        vendorId,
+        status: 'COMPLETED',
+      },
+    });
+
+    const pendingBookings = await this.prisma.booking.count({
+      where: {
+        vendorId,
+        clientEmail,
+        status: 'PENDING',
+      },
+    });
+
+    return successResponse(
+      {
+        totalBookings,
+        confirmedBookings,
+        completedBookings,
+        pendingBookings,
+        amountSpent,
+        bookings: clientBookings,
+      },
+      'Client booking stats fetched successfully',
     );
   }
 }

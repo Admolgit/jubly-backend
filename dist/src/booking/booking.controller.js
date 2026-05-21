@@ -48,7 +48,7 @@ let BookingController = class BookingController {
     getAdminBookingStats() {
         return this.bookingService.getAdminBookingStats();
     }
-    async getAdminBookings(page = '1', limit = '10', search, dateFilter, date, status, startDate, endDate) {
+    getAdminBookings(page = '1', limit = '10', search, dateFilter, date, status, startDate, endDate) {
         return this.bookingService.getAdminBookings(page, limit, search, dateFilter, date, status, startDate, endDate);
     }
     async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
@@ -79,6 +79,9 @@ let BookingController = class BookingController {
     }
     getInsights(req) {
         return this.bookingService.getBusinessInsights(req.user.id);
+    }
+    getClientBookingStats(clientEmail, vendorId) {
+        return this.bookingService.getClientBookingStats(clientEmail, vendorId);
     }
 };
 exports.BookingController = BookingController;
@@ -167,7 +170,7 @@ __decorate([
     __param(7, (0, common_1.Query)('endDate')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object, String, String, String, String, String, String]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getAdminBookings", null);
 __decorate([
     (0, common_1.Get)(''),
@@ -212,7 +215,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('clients/booking-stats'),
     (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
-    (0, role_guard_1.Roles)('CLIENT'),
+    (0, role_guard_1.Roles)('CLIENT', 'VENDOR'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -267,6 +270,16 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getInsights", null);
+__decorate([
+    (0, common_1.Get)('client/:vendorId/:clientEmail/booking-stats'),
+    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Param)('clientEmail')),
+    __param(1, (0, common_1.Param)('vendorId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getClientBookingStats", null);
 exports.BookingController = BookingController = __decorate([
     (0, common_1.Controller)('booking'),
     __metadata("design:paramtypes", [booking_service_1.BookingService])

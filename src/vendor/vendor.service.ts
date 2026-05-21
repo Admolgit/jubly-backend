@@ -118,6 +118,7 @@ export class VendorService {
             description: s.description ?? '',
             price: s.price ?? 0,
             durationMins: s.durationMins ?? null,
+            vendorId: s.vendorId,
           },
           create: {
             userId,
@@ -125,7 +126,7 @@ export class VendorService {
             description: s.description ?? '',
             price: s.price ?? 0,
             durationMins: s.durationMins ?? null,
-            vendorId: null,
+            vendorId: s.vendorId,
           },
         }),
       ),

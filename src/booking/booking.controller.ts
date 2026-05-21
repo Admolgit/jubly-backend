@@ -86,7 +86,7 @@ export class BookingController {
   @Get('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async getAdminBookings(
+  getAdminBookings(
     @Query('page') page = '1',
     @Query('limit') limit = '10',
     @Query('search') search?: string,
@@ -166,7 +166,7 @@ export class BookingController {
 
   @Get('clients/booking-stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('CLIENT')
+  @Roles('CLIENT', 'VENDOR')
   getBookingStats(@Req() req: { user: { id: string } }) {
     const userId = req.user.id;
     return this.bookingService.getClientBookingsStats(userId);
@@ -215,5 +215,15 @@ export class BookingController {
   @Roles('VENDOR', 'CLIENT')
   getInsights(@Req() req: { user: { id: string } }) {
     return this.bookingService.getBusinessInsights(req.user.id);
+  }
+
+  @Get('client/:vendorId/:clientEmail/booking-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getClientBookingStats(
+    @Param('clientEmail') clientEmail: string,
+    @Param('vendorId') vendorId: string,
+  ) {
+    return this.bookingService.getClientBookingStats(clientEmail, vendorId);
   }
 }
