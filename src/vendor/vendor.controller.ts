@@ -231,4 +231,9 @@ export class VendorController {
 
     return res.status(200).send(csv);
   }
+
+  @Get('all-vendors')
+  getAllVendorsHome() {
+    return this.vendorService.getAllVendors();
+  }
 }

@@ -68,7 +68,7 @@ let UsersService = class UsersService {
             if (!user) {
                 throw new common_1.NotFoundException('User not found');
             }
-            return (0, response_1.successResponse)({ user }, 'User fetched successfully.');
+            return (0, response_1.successResponse)(user, 'User fetched successfully.');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
@@ -116,6 +116,19 @@ let UsersService = class UsersService {
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
+        }
+    }
+    async createEnquiry(dto) {
+        try {
+            const enquiry = await this.prisma.enquiry.create({
+                data: {
+                    ...dto,
+                },
+            });
+            return (0, response_1.successResponse)(enquiry, 'Enquiry submitted successfully.', 201);
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to create enquiry.', error.message);
         }
     }
 };

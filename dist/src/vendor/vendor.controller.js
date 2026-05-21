@@ -106,6 +106,9 @@ let VendorController = class VendorController {
         res.setHeader('Content-Disposition', 'attachment; filename=bookings.csv');
         return res.status(200).send(csv);
     }
+    getAllVendorsHome() {
+        return this.vendorService.getAllVendors();
+    }
 };
 exports.VendorController = VendorController;
 __decorate([
@@ -282,6 +285,12 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], VendorController.prototype, "exportBookingsCSV", null);
+__decorate([
+    (0, common_1.Get)('all-vendors'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "getAllVendorsHome", null);
 exports.VendorController = VendorController = __decorate([
     (0, common_1.Controller)('vendor'),
     __metadata("design:paramtypes", [vendor_service_1.VendorService])

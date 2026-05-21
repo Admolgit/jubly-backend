@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Post,
   Req,
   UseGuards,
   UseInterceptors,
@@ -38,11 +40,9 @@ export class UsersController {
   ) {
     return this.usersService.updateProfilePicture(req.user.id, file);
   }
-  @Get('me')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('VENDOR')
-  getUserById(@Req() req: Request & { user: { id: string } }) {
-    return this.usersService.getUserById(req.user.id);
+  @Get('user/:userId')
+  getUserById(@Param('userId') userId: string) {
+    return this.usersService.getUserById(userId);
   }
 
   @Get('me/sub-account')
@@ -50,5 +50,18 @@ export class UsersController {
   @Roles('VENDOR')
   getUserSubAccount(@Req() req: Request & { user: { id: string } }) {
     return this.usersService.getUserSubAccount(req.user.id);
+  }
+
+  @Post('enquiry')
+  createEnquiry(
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      phone: string;
+      message: string;
+    },
+  ) {
+    return this.usersService.createEnquiry(body);
   }
 }

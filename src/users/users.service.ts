@@ -82,7 +82,7 @@ export class UsersService {
         throw new NotFoundException('User not found');
       }
 
-      return successResponse({ user }, 'User fetched successfully.');
+      return successResponse(user, 'User fetched successfully.');
     } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch user',
@@ -151,6 +151,28 @@ export class UsersService {
     } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch user',
+        error.message as string,
+      );
+    }
+  }
+
+  async createEnquiry(dto: {
+    name: string;
+    email: string;
+    phone: string;
+    message: string;
+  }) {
+    try {
+      const enquiry = await this.prisma.enquiry.create({
+        data: {
+          ...dto,
+        },
+      });
+
+      return successResponse(enquiry, 'Enquiry submitted successfully.', 201);
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to create enquiry.',
         error.message as string,
       );
     }
