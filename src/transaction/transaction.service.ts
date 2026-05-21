@@ -98,7 +98,7 @@ export class TransactionService {
       if (vendorId) {
         where.vendorId = vendorId;
         // where.status = {
-        //   in: ['CONFIRMED', 'COMPLETED'],
+        //   in: ['CONFIRMED', 'COMPLETED', 'PENDING'],
         // };
       }
 
@@ -213,7 +213,11 @@ export class TransactionService {
       }
 
       const total = await this.prisma.transaction.aggregate({
-        where,
+        where: {
+          ...where,
+          status: { in: ['CONFIRMED', 'COMPLETED', 'PENDING'] },
+          vendorId,
+        },
         _sum: {
           amount: true,
         },
@@ -250,9 +254,6 @@ export class TransactionService {
       let startDate: Date;
       let endDate: Date;
 
-      // =========================
-      // 📅 DATE RANGE
-      // =========================
       switch (view) {
         case 'day':
           startDate = new Date(now);
@@ -263,8 +264,8 @@ export class TransactionService {
           break;
 
         case 'week':
-          const day = now.getDay(); // 0 (Sun) - 6 (Sat)
-          const diff = now.getDate() - day + (day === 0 ? -6 : 1); // start Monday
+          const day = now.getDay();
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1);
           startDate = new Date(now);
           startDate.setDate(diff);
           startDate.setHours(0, 0, 0, 0);
@@ -287,13 +288,10 @@ export class TransactionService {
           break;
       }
 
-      // =========================
-      // 📦 FETCH DATA
-      // =========================
       const transactions = await this.prisma.transaction.findMany({
         where: {
           vendorId: vendor.id,
-          status: { in: ['CONFIRMED', 'COMPLETED'] },
+          status: { in: ['CONFIRMED', 'COMPLETED', 'PENDING'] },
           createdAt: {
             gte: startDate,
             lte: endDate,
@@ -309,7 +307,6 @@ export class TransactionService {
 
       switch (view) {
         case 'day':
-          // Just total for the day
           const totalAmount = transactions.reduce(
             (sum, t) => sum + (t.amount || 0),
             0,
@@ -327,8 +324,8 @@ export class TransactionService {
           const weekData = days.map((d) => ({ label: d, amount: 0 }));
 
           transactions.forEach((t) => {
-            const jsDay = new Date(t.createdAt).getDay(); // 0–6
-            const index = jsDay === 0 ? 6 : jsDay - 1; // Mon–Sun
+            const jsDay = new Date(t.createdAt).getDay();
+            const index = jsDay === 0 ? 6 : jsDay - 1;
             weekData[index].amount += t.amount || 0;
           });
 
@@ -372,7 +369,7 @@ export class TransactionService {
           const yearData = months.map((m) => ({ label: m, amount: 0 }));
 
           transactions.forEach((t) => {
-            const m = new Date(t.createdAt).getMonth(); // 0–11
+            const m = new Date(t.createdAt).getMonth();
             yearData[m].amount += t.amount || 0;
           });
 
@@ -422,7 +419,7 @@ export class TransactionService {
       where: {
         vendorId: vendor.id,
         status: {
-          in: ['CONFIRMED', 'COMPLETED'],
+          in: ['CONFIRMED', 'COMPLETED', 'PENDING'],
         },
         createdAt: {
           gte: currentMonthStart,
@@ -434,7 +431,7 @@ export class TransactionService {
       where: {
         vendorId: vendor.id,
         status: {
-          in: ['CONFIRMED', 'COMPLETED'],
+          in: ['CONFIRMED', 'COMPLETED', 'PENDING'],
         },
         createdAt: {
           gte: previousMonthStart,
@@ -474,11 +471,11 @@ export class TransactionService {
     const previousCompleted = calculateAmount(previousCompletedTransactions);
 
     const processingTransactions = currentTransactions.filter(
-      (item) => item.status === 'pending',
+      (item) => item.status === 'PENDING',
     );
 
     const previousProcessingTransactions = previousTransactions.filter(
-      (item) => item.status === 'pending',
+      (item) => item.status === 'PENDING',
     );
 
     const processing = calculateAmount(processingTransactions);

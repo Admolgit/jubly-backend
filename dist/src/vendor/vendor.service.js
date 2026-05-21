@@ -80,6 +80,7 @@ let VendorService = class VendorService {
                 description: s.description ?? '',
                 price: s.price ?? 0,
                 durationMins: s.durationMins ?? null,
+                vendorId: s.vendorId,
             },
             create: {
                 userId,
@@ -87,7 +88,7 @@ let VendorService = class VendorService {
                 description: s.description ?? '',
                 price: s.price ?? 0,
                 durationMins: s.durationMins ?? null,
-                vendorId: null,
+                vendorId: s.vendorId,
             },
         })));
         return (0, response_1.successResponse)({ created }, 'Services successfully created', 201);

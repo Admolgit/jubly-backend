@@ -170,6 +170,7 @@ let BookingService = class BookingService {
                     date: bookingDate,
                     clientEmail: dto.clientEmail,
                     clientName: dto.clientName,
+                    clientId: dto.clientId,
                     startTime,
                     endTime,
                     status: 'CONFIRMED',
@@ -336,7 +337,9 @@ let BookingService = class BookingService {
             const earnings = await this.prisma.transaction.aggregate({
                 where: {
                     vendorId,
-                    status: 'CONFIRMED',
+                    status: {
+                        in: ['COMPLETED', 'CONFIRMED'],
+                    },
                 },
                 _sum: {
                     amount: true,
@@ -345,7 +348,9 @@ let BookingService = class BookingService {
             const currentMonthEarnings = await this.prisma.transaction.aggregate({
                 where: {
                     vendorId,
-                    status: 'CONFIRMED',
+                    status: {
+                        in: ['COMPLETED', 'CONFIRMED'],
+                    },
                     createdAt: {
                         gte: startOfMonth,
                     },
@@ -357,7 +362,9 @@ let BookingService = class BookingService {
             const lastMonthEarnings = await this.prisma.transaction.aggregate({
                 where: {
                     vendorId,
-                    status: 'CONFIRMED',
+                    status: {
+                        in: ['COMPLETED', 'CONFIRMED'],
+                    },
                     createdAt: {
                         gte: startOfLastMonth,
                         lte: endOfLastMonth,
@@ -420,7 +427,9 @@ let BookingService = class BookingService {
             const bookings = await this.prisma.booking.findMany({
                 where: {
                     vendorId: vendor.id,
-                    status: 'CONFIRMED',
+                    status: {
+                        in: ['CONFIRMED', 'PENDING'],
+                    },
                     startTime: {
                         gte: now,
                         lte: next24Hours,
@@ -1388,12 +1397,12 @@ let BookingService = class BookingService {
             where: {
                 vendorId: vendor.id,
             },
-            by: ['clientId'],
+            by: ['clientEmail'],
             _count: {
-                clientId: true,
+                clientEmail: true,
             },
             having: {
-                clientId: {
+                clientEmail: {
                     _count: {
                         gt: 1,
                     },
@@ -1409,6 +1418,60 @@ let BookingService = class BookingService {
             averageBooking,
             repeatClients,
         }, 'Business insight fetched');
+    }
+    async getClientBookingStats(clientEmail, vendorId) {
+        const clientBookings = await this.prisma.booking.findMany({
+            where: {
+                clientEmail,
+                vendorId,
+            },
+            include: {
+                services: {
+                    select: {
+                        name: true,
+                        price: true,
+                    },
+                },
+            },
+        });
+        const amountSpent = clientBookings.reduce((sum, b) => {
+            return sum + (b.services.price || 0);
+        }, 0);
+        const totalBookings = await this.prisma.booking.count({
+            where: {
+                clientEmail,
+                vendorId,
+            },
+        });
+        const confirmedBookings = await this.prisma.booking.count({
+            where: {
+                clientEmail,
+                vendorId,
+                status: 'CONFIRMED',
+            },
+        });
+        const completedBookings = await this.prisma.booking.count({
+            where: {
+                clientEmail,
+                vendorId,
+                status: 'COMPLETED',
+            },
+        });
+        const pendingBookings = await this.prisma.booking.count({
+            where: {
+                vendorId,
+                clientEmail,
+                status: 'PENDING',
+            },
+        });
+        return (0, response_1.successResponse)({
+            totalBookings,
+            confirmedBookings,
+            completedBookings,
+            pendingBookings,
+            amountSpent,
+            bookings: clientBookings,
+        }, 'Client booking stats fetched successfully');
     }
 };
 exports.BookingService = BookingService;
