@@ -18,6 +18,7 @@ const jwt_authGuard_1 = require("../auth/jwt.authGuard");
 const users_service_1 = require("./users.service");
 const role_guard_1 = require("../auth/role.guard");
 const platform_express_1 = require("@nestjs/platform-express");
+const notification_dto_1 = require("./dto/notification.dto");
 let UsersController = class UsersController {
     constructor(usersService) {
         this.usersService = usersService;
@@ -37,8 +38,22 @@ let UsersController = class UsersController {
     getUserSubAccount(req) {
         return this.usersService.getUserSubAccount(req.user.id);
     }
+    getUserByEmail(email) {
+        return this.usersService.getUserEmail(email);
+    }
     createEnquiry(body) {
         return this.usersService.createEnquiry(body);
+    }
+    updateNotifications(req, dto) {
+        const userId = req.user.id;
+        return this.usersService.createNotification(userId, dto);
+    }
+    getNotification(req) {
+        const userId = req.user.id;
+        return this.usersService.getNotificationPreference(userId);
+    }
+    getNotication(req) {
+        return this.usersService.getNotificationPreference(req.user.id);
     }
 };
 exports.UsersController = UsersController;
@@ -85,12 +100,49 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getUserSubAccount", null);
 __decorate([
+    (0, common_1.Get)('email/:email'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Param)('email')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getUserByEmail", null);
+__decorate([
     (0, common_1.Post)('enquiry'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "createEnquiry", null);
+__decorate([
+    (0, common_1.Patch)('notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, notification_dto_1.UpdateNotificationDto]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "updateNotifications", null);
+__decorate([
+    (0, common_1.Patch)('notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getNotification", null);
+__decorate([
+    (0, common_1.Get)('notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getNotication", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService])

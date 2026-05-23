@@ -848,11 +848,16 @@ let BookingService = class BookingService {
                         select: {
                             name: true,
                             price: true,
+                            durationMins: true,
+                            active: true,
                         },
                     },
                     vendor: {
                         select: {
                             businessName: true,
+                            city: true,
+                            country: true,
+                            state: true,
                         },
                     },
                 },
@@ -1131,9 +1136,6 @@ let BookingService = class BookingService {
             });
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
-            }
-            if (booking.clientEmail !== user.email && booking.vendorId !== userId) {
-                throw new common_1.ForbiddenException('Not allowed to reschedule this booking');
             }
             if (start < new Date()) {
                 throw new common_1.BadRequestException('Cannot reschedule to a past time');
