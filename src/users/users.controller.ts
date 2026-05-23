@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -13,6 +14,7 @@ import { UsersService } from './users.service';
 import type { Request } from 'express';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { UpdateNotificationDto } from './dto/notification.dto';
 
 @Controller('users')
 export class UsersController {
@@ -52,6 +54,13 @@ export class UsersController {
     return this.usersService.getUserSubAccount(req.user.id);
   }
 
+  @Get('email/:email')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getUserByEmail(@Param('email') email: string) {
+    return this.usersService.getUserEmail(email);
+  }
+
   @Post('enquiry')
   createEnquiry(
     @Body()
@@ -63,5 +72,33 @@ export class UsersController {
     },
   ) {
     return this.usersService.createEnquiry(body);
+  }
+
+  @Patch('notification')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  updateNotifications(
+    @Req() req: { user: { id: string } },
+    @Body() dto: UpdateNotificationDto,
+  ) {
+    const userId = req.user.id;
+
+    return this.usersService.createNotification(userId, dto);
+  }
+
+  @Patch('notification')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getNotification(@Req() req: { user: { id: string } }) {
+    const userId = req.user.id;
+
+    return this.usersService.getNotificationPreference(userId);
+  }
+
+  @Get('notification')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getNotication(@Req() req: { user: { id: string } }) {
+    return this.usersService.getNotificationPreference(req.user.id);
   }
 }

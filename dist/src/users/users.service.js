@@ -131,6 +131,56 @@ let UsersService = class UsersService {
             throw new common_1.InternalServerErrorException('Failed to create enquiry.', error.message);
         }
     }
+    async getUserEmail(email) {
+        try {
+            const user = await this.prisma.user.findFirst({
+                where: {
+                    email: email,
+                },
+            });
+            return (0, response_1.successResponse)(user, 'User fetched successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to create enquiry.', error.message);
+        }
+    }
+    async createNotification(userId, dto) {
+        try {
+            const result = await this.prisma.notificationSettings.upsert({
+                where: { userId: userId },
+                update: {
+                    emailNotifications: dto.emailNotifications,
+                    pushNotifications: dto.pushNotifications,
+                    smsNotifications: dto.smsNotifications,
+                    bookingDigest: dto.bookingDigest,
+                },
+                create: {
+                    userId,
+                    emailNotifications: dto.emailNotifications,
+                    pushNotifications: dto.pushNotifications,
+                    smsNotifications: dto.smsNotifications,
+                    bookingDigest: dto.bookingDigest,
+                },
+            });
+            return (0, response_1.successResponse)(result, 'Notification setting successfully created.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to update notification.', error);
+        }
+    }
+    async getNotificationPreference(userId) {
+        try {
+            const result = await this.prisma.notificationSettings.findUnique({
+                where: {
+                    userId,
+                },
+            });
+            return (0, response_1.successResponse)(result, 'Notification fetched successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to update notification.', error);
+        }
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
