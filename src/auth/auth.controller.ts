@@ -18,6 +18,8 @@ import { AuthService } from './auth.service';
 import * as authDto from './dto/auth.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { VendorService } from 'src/vendor/vendor.service';
+// import { JwtAuthGuard } from './jwt.authGuard';
+// import { Roles, RolesGuard } from './role.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -103,6 +105,9 @@ export class AuthController {
   @Patch('change-password')
   changePassword(@Body() dto: authDto.PasswordDTO) {
     const { userId, currentPassword, newPassword, confirmPassword } = dto;
+    console.log({
+      dto,
+    });
     return this.authService.changePassword(
       userId,
       currentPassword,

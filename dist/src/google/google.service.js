@@ -42,7 +42,10 @@ let GoogleCalendarService = class GoogleCalendarService {
         return obj;
     }
     getAuthUrl() {
-        const scopes = ['https://www.googleapis.com/auth/calendar'];
+        const scopes = [
+            'https://www.googleapis.com/auth/calendar.events',
+            'https://www.googleapis.com/auth/calendar.readonly',
+        ];
         return this.oauthClient.generateAuthUrl({
             access_type: 'offline',
             scope: scopes,
@@ -119,7 +122,7 @@ let GoogleCalendarService = class GoogleCalendarService {
             throw new Error('Vendor already has an event at this time');
         }
     }
-    async createCalendarEvent(calendarIntegration, booking) {
+    async calendarEnv(calendarIntegration) {
         const oauth2Client = new googleapis_1.google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_CALLBACK_URL);
         oauth2Client.setCredentials({
             access_token: calendarIntegration.accessToken,
@@ -141,6 +144,9 @@ let GoogleCalendarService = class GoogleCalendarService {
             version: 'v3',
             auth: oauth2Client,
         });
+        return calendarApi;
+    }
+    async createCalendarEvent(calendarIntegration, booking) {
         const attendees = [
             {
                 email: booking.attendeeEmail,
@@ -156,7 +162,8 @@ let GoogleCalendarService = class GoogleCalendarService {
                 ]
                 : []),
         ];
-        return calendarApi.events.insert({
+        const calendarApi = this.calendarEnv(calendarIntegration);
+        const data = (await calendarApi).events.insert({
             calendarId: 'primary',
             sendUpdates: 'all',
             requestBody: {
@@ -186,6 +193,14 @@ let GoogleCalendarService = class GoogleCalendarService {
                 },
             },
         });
+        const googleCalendarId = (await data).data.id;
+        await this.prisma.booking.update({
+            where: { id: booking.bookingId },
+            data: {
+                googleEventId: googleCalendarId,
+            },
+        });
+        return data;
     }
     async getUserCalendarLinked(userId) {
         try {

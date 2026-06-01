@@ -181,6 +181,103 @@ let UsersService = class UsersService {
             throw new common_1.InternalServerErrorException('Failed to update notification.', error);
         }
     }
+    async createAndSend(userId, payload) {
+        const settings = await this.prisma.notificationSettings.findFirst({
+            where: {
+                userId,
+            },
+        });
+        if (!settings) {
+            throw new common_1.NotFoundException('Settings not found for this user');
+        }
+        if (settings.emailNotifications) {
+            const notification = await this.prisma.notification.create({
+                data: {
+                    userId,
+                    type: client_1.NotificationType.INFO,
+                    isRead: false,
+                    category: client_1.NotificationCategory.PAYMENT,
+                    message: payload.message,
+                    title: payload.title,
+                },
+            });
+            return (0, response_1.successResponse)(notification, 'Notifications created', 201);
+        }
+        else {
+            throw new common_1.BadRequestException('Email notification is false, please set to true');
+        }
+    }
+    async getAllUserNotifications(userId, query) {
+        try {
+            let { page, limit } = query;
+            page = Number(page) || 1;
+            limit = Number(limit) || 10;
+            const skip = (Number(page) - 1) * limit;
+            const [result, allResults, unreadCount, total] = await this.prisma.$transaction([
+                this.prisma.notification.findMany({
+                    where: {
+                        userId,
+                        isRead: false,
+                    },
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    skip,
+                    take: Number(limit),
+                }),
+                this.prisma.notification.findMany({
+                    where: {
+                        userId,
+                    },
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    skip,
+                    take: Number(limit),
+                }),
+                this.prisma.notification.count({
+                    where: {
+                        userId,
+                        isRead: false,
+                    },
+                }),
+                this.prisma.notification.count({
+                    where: {
+                        userId,
+                    },
+                }),
+            ]);
+            return (0, response_1.successResponse)({
+                result,
+                allResults,
+                count: unreadCount,
+                total,
+            }, 'Notifications fetched.', 200, {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            });
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to update notification.', error);
+        }
+    }
+    async getUnread(userId) {
+        return this.prisma.notification.findMany({
+            where: { userId, isRead: false },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
+    async markAsRead(userId, notificationId) {
+        return this.prisma.notification.updateMany({
+            where: {
+                id: notificationId,
+                userId,
+            },
+            data: { isRead: true },
+        });
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([

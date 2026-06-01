@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
   Body,
   Controller,
@@ -5,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
   UseInterceptors,
@@ -86,19 +88,40 @@ export class UsersController {
     return this.usersService.createNotification(userId, dto);
   }
 
-  @Patch('notification')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('VENDOR', 'CLIENT')
-  getNotification(@Req() req: { user: { id: string } }) {
-    const userId = req.user.id;
+  // @Patch('notification')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles('VENDOR', 'CLIENT')
+  // getNotification(@Req() req: { user: { id: string } }) {
+  //   const userId = req.user.id;
 
-    return this.usersService.getNotificationPreference(userId);
-  }
+  //   return this.usersService.getNotificationPreference(userId);
+  // }
 
   @Get('notification')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR', 'CLIENT')
   getNotication(@Req() req: { user: { id: string } }) {
     return this.usersService.getNotificationPreference(req.user.id);
+  }
+
+  @Get('user-notification')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getNotications(
+    @Req() req: { user: { id: string } },
+    @Query() query: { page: number; limit: number },
+  ) {
+    return this.usersService.getAllUserNotifications(req.user.id, query);
+  }
+
+  @Post('create-notification')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  createAndSendNotification(
+    @Body() dto: any,
+    @Req() req: { user: { id: string } },
+  ) {
+    const userId = req.user.id;
+    return this.usersService.createAndSend(userId, dto);
   }
 }
