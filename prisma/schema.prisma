@@ -32,6 +32,20 @@ enum BookingStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum NotificationCategory {
+  PAYMENT
+  SECURITY
+  SYSTEM
+  REPORT
+}
+
 model User {
   id               String       @id @default(auto()) @map("_id") @db.ObjectId
   email            String       @unique
@@ -139,11 +153,12 @@ model VendorBookingSettings {
 }
 
 model Booking {
-  id         String  @id @default(auto()) @map("_id") @db.ObjectId
-  vendorId   String
-  clientId   String?
-  serviceId  String
-  clientName String?
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId      String
+  clientId      String?
+  googleEventId String?
+  serviceId     String
+  clientName    String?
 
   date        DateTime // booking day
   startTime   DateTime // "10:00"
@@ -262,4 +277,18 @@ model NotificationSettings {
   bookingDigest      String   @default("EVERY_MORNING")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+model Notification {
+  id        String               @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String               @db.ObjectId
+  title     String
+  message   String
+  type      NotificationType     @default(INFO)
+  category  NotificationCategory
+  isRead    Boolean              @default(false)
+  readAt    DateTime?
+  data      Json?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
 }

@@ -422,6 +422,12 @@ export class AuthService {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
       });
+      console.log({ user });
+      console.log({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
 
       if (!user) {
         throw new UnauthorizedException('User not found');

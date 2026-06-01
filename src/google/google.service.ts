@@ -53,7 +53,10 @@ export class GoogleCalendarService {
   }
 
   getAuthUrl() {
-    const scopes = ['https://www.googleapis.com/auth/calendar'];
+    const scopes = [
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/calendar.readonly',
+    ];
 
     return this.oauthClient.generateAuthUrl({
       access_type: 'offline',
@@ -154,31 +157,17 @@ export class GoogleCalendarService {
     }
   }
 
-  async createCalendarEvent(
-    calendarIntegration: any,
-    booking: {
-      title: string;
-      description?: string;
-      startTime: Date;
-      endTime: Date;
-      attendeeEmail: string;
-      attendeeName: string;
-      vendorEmail?: string;
-    },
-  ) {
+  async calendarEnv(calendarIntegration) {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_CALLBACK_URL,
     );
 
-    // ✅ SET FULL CREDENTIALS
     oauth2Client.setCredentials({
       access_token: calendarIntegration.accessToken,
       refresh_token: calendarIntegration.refreshToken,
     });
-
-    // ✅ Handle expired token
     if (
       calendarIntegration.expiryDate &&
       new Date() > calendarIntegration.expiryDate
@@ -186,8 +175,6 @@ export class GoogleCalendarService {
       const { credentials } = await oauth2Client.refreshAccessToken();
 
       oauth2Client.setCredentials(credentials);
-
-      // ✅ update DB
       await this.prisma.vendorCalendar.update({
         where: { id: calendarIntegration.id },
         data: {
@@ -202,6 +189,22 @@ export class GoogleCalendarService {
       auth: oauth2Client,
     });
 
+    return calendarApi;
+  }
+
+  async createCalendarEvent(
+    calendarIntegration: any,
+    booking: {
+      title: string;
+      description?: string;
+      startTime: Date;
+      endTime: Date;
+      attendeeEmail: string;
+      attendeeName: string;
+      vendorEmail?: string;
+      bookingId?: string;
+    },
+  ) {
     const attendees = [
       {
         email: booking.attendeeEmail,
@@ -218,7 +221,9 @@ export class GoogleCalendarService {
         : []),
     ];
 
-    return calendarApi.events.insert({
+    const calendarApi = this.calendarEnv(calendarIntegration);
+
+    const data = (await calendarApi).events.insert({
       calendarId: 'primary',
 
       sendUpdates: 'all',
@@ -255,6 +260,17 @@ export class GoogleCalendarService {
         },
       },
     });
+
+    const googleCalendarId = (await data).data.id;
+
+    await this.prisma.booking.update({
+      where: { id: booking.bookingId },
+      data: {
+        googleEventId: googleCalendarId,
+      },
+    });
+
+    return data;
   }
 
   async getUserCalendarLinked(userId: string) {

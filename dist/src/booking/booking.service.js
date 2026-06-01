@@ -122,6 +122,17 @@ let BookingService = class BookingService {
         }
         return range;
     }
+    async getVendorCalendar(userId) {
+        return await this.prisma.vendorCalendar.findFirst({
+            where: {
+                userId,
+                provider: {
+                    in: ['google', 'GOOGLE'],
+                },
+                linked: true,
+            },
+        });
+    }
     async createBooking(userId, dto) {
         try {
             const startTime = this.parseDateInput(dto.startTime, 'startTime');
@@ -154,15 +165,7 @@ let BookingService = class BookingService {
             if (!vendor) {
                 throw new common_1.NotFoundException('Vendor not found');
             }
-            const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
-                where: {
-                    userId,
-                    provider: {
-                        in: ['google', 'GOOGLE'],
-                    },
-                    linked: true,
-                },
-            });
+            const calendarIntegration = await this.getVendorCalendar(userId);
             const booking = await this.prisma.booking.create({
                 data: {
                     vendorId: vendor.id,
@@ -1163,6 +1166,23 @@ let BookingService = class BookingService {
                     startTime: start,
                     endTime: end,
                     date: bookingDate,
+                },
+            });
+            const calendarIntegration = this.getVendorCalendar(userId);
+            const calendarApi = await this.googleCalendarService.calendarEnv(calendarIntegration);
+            await calendarApi.events.update({
+                calendarId: 'primary',
+                eventId: booking.googleEventId,
+                sendUpdates: 'all',
+                requestBody: {
+                    start: {
+                        dateTime: new Date(startTime).toISOString(),
+                        timeZone: 'Africa/Lagos',
+                    },
+                    end: {
+                        dateTime: new Date(endTime).toISOString(),
+                        timeZone: 'Africa/Lagos',
+                    },
                 },
             });
             await this.nodemailerService.bookingStatusChangeMail({

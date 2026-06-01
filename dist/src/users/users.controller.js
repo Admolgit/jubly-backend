@@ -48,12 +48,15 @@ let UsersController = class UsersController {
         const userId = req.user.id;
         return this.usersService.createNotification(userId, dto);
     }
-    getNotification(req) {
-        const userId = req.user.id;
-        return this.usersService.getNotificationPreference(userId);
-    }
     getNotication(req) {
         return this.usersService.getNotificationPreference(req.user.id);
+    }
+    getNotications(req, query) {
+        return this.usersService.getAllUserNotifications(req.user.id, query);
+    }
+    createAndSendNotification(dto, req) {
+        const userId = req.user.id;
+        return this.usersService.createAndSend(userId, dto);
     }
 };
 exports.UsersController = UsersController;
@@ -126,15 +129,6 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "updateNotifications", null);
 __decorate([
-    (0, common_1.Patch)('notification'),
-    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
-    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
-    __param(0, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
-], UsersController.prototype, "getNotification", null);
-__decorate([
     (0, common_1.Get)('notification'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
@@ -143,6 +137,26 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getNotication", null);
+__decorate([
+    (0, common_1.Get)('user-notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getNotications", null);
+__decorate([
+    (0, common_1.Post)('create-notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "createAndSendNotification", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService])
