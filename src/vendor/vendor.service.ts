@@ -646,6 +646,7 @@ export class VendorService {
       const services = await this.prisma.service.findMany({
         where: {
           userId: vendor?.userId,
+          active: true,
         },
       });
 

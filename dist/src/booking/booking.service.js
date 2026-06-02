@@ -241,7 +241,6 @@ let BookingService = class BookingService {
             if (!vendor) {
                 throw new common_1.NotFoundException('Vendor not found');
             }
-            console.log({ vendor });
             const amount = services.price;
             const response = await axios_1.default.post(`${process.env.PAYSTACK_BASE_URL}/transaction/initialize`, {
                 email: dto.clientEmail,
