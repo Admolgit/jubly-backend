@@ -295,7 +295,7 @@ export class BookingService {
       if (!vendor) {
         throw new NotFoundException('Vendor not found');
       }
-      
+
       const amount = services.price;
 
       const response = await axios.post(
