@@ -465,6 +465,7 @@ let VendorService = class VendorService {
             const services = await this.prisma.service.findMany({
                 where: {
                     userId: vendor?.userId,
+                    active: true,
                 },
             });
             const vendorAvailability = await this.prisma.vendorAvailability.findMany({
