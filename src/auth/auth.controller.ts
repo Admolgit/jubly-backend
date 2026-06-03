@@ -105,9 +105,6 @@ export class AuthController {
   @Patch('change-password')
   changePassword(@Body() dto: authDto.PasswordDTO) {
     const { userId, currentPassword, newPassword, confirmPassword } = dto;
-    console.log({
-      dto,
-    });
     return this.authService.changePassword(
       userId,
       currentPassword,
