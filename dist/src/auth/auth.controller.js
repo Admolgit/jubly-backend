@@ -96,9 +96,6 @@ let AuthController = class AuthController {
     }
     changePassword(dto) {
         const { userId, currentPassword, newPassword, confirmPassword } = dto;
-        console.log({
-            dto,
-        });
         return this.authService.changePassword(userId, currentPassword, newPassword, confirmPassword);
     }
     refreshToken(refreshToken) {
