@@ -128,8 +128,18 @@ export class TransactionService {
               createdAt: true,
               updatedAt: true,
               clientEmail: true,
+              clientName: true,
               status: true,
               startTime: true,
+              services: {
+                select: {
+                  name: true,
+                  active: true,
+                  createdAt: true,
+                  description: true,
+                  durationMins: true,
+                },
+              },
             },
           },
         },

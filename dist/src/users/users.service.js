@@ -92,9 +92,12 @@ let UsersService = class UsersService {
                 skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
                 take: limit ? Number(limit) : undefined,
                 include: {
-                    bookings: true,
+                    _count: {
+                        select: {
+                            bookings: true,
+                        },
+                    },
                 },
-                orderBy: { createdAt: 'desc' },
             });
             const total = await this.prisma.user.count({ where });
             return (0, response_1.successResponse)({ clients }, 'Successfully fetched clients.', 200, {
