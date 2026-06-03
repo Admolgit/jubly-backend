@@ -80,7 +80,13 @@ let AvailabilityService = class AvailabilityService {
                 return [];
             const start = new Date(`${dateObj.toDateString()} ${availability.startTime}`);
             const end = new Date(`${dateObj.toDateString()} ${availability.endTime}`);
-            const duration = services[0].durationMins;
+            let duration = services[0].durationMins || 60;
+            const bufferTime = await this.prisma.vendorBookingSettings.findFirst({
+                where: { vendorId: vendor.id },
+            });
+            const bufferMins = bufferTime?.bufferTime || 0;
+            end.setMinutes(end.getMinutes() + bufferMins);
+            duration += bufferMins;
             const slots = this.generateSlots(start, end, duration);
             const bookings = vendor.bookings;
             const now = new Date();

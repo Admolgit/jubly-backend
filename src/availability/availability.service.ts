@@ -62,7 +62,6 @@ export class AvailabilityService {
   isPastDay(date: Date) {
     const today = new Date();
 
-    // normalize both to midnight
     const d1 = new Date(date);
     d1.setHours(0, 0, 0, 0);
 
@@ -103,9 +102,17 @@ export class AvailabilityService {
       );
       const end = new Date(`${dateObj.toDateString()} ${availability.endTime}`);
 
-      const duration = services[0].durationMins;
+      let duration = services[0].durationMins || 60;
 
-      const slots = this.generateSlots(start, end, duration as number);
+      const bufferTime = await this.prisma.vendorBookingSettings.findFirst({
+        where: { vendorId: vendor.id },
+      });
+
+      const bufferMins = bufferTime?.bufferTime || 0;
+      end.setMinutes(end.getMinutes() + bufferMins);
+      duration += bufferMins;
+
+      const slots = this.generateSlots(start, end, duration);
 
       const bookings = vendor.bookings;
 
@@ -121,12 +128,9 @@ export class AvailabilityService {
       }
 
       const availableSlots = slots.filter((slot) => {
-        // ONLY filter past slots if it's today
         if (isToday && slot.startTime <= now) {
           return false;
         }
-
-        // Remove booked slots
         return !bookings.some(
           (b) =>
             slot.startTime < new Date(b.endTime) &&
@@ -156,7 +160,6 @@ export class AvailabilityService {
         orderBy: { dayOfWeek: 'asc' },
       });
 
-      // Group by dayOfWeek for easy frontend consumption
       const grouped: Record<number, { startTime: string; endTime: string }[]> =
         {};
 
@@ -243,7 +246,6 @@ export class AvailabilityService {
     }
   }
 
-  // Delete availability for a specific day
   async deleteAvailability(userId: string, dayOfWeek: number) {
     try {
       const vendor = await this.prisma.vendor.findUnique({ where: { userId } });
