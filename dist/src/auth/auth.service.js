@@ -57,11 +57,13 @@ const helpers_1 = __importDefault(require("../utils/helpers"));
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const generateTempPassword_1 = require("../utils/generateTempPassword");
 const client_1 = require("@prisma/client");
+const activityLog_service_1 = require("../activity/activityLog.service");
 let AuthService = class AuthService {
-    constructor(prisma, jwtService, nodemailService) {
+    constructor(prisma, jwtService, nodemailService, activityService) {
         this.prisma = prisma;
         this.jwtService = jwtService;
         this.nodemailService = nodemailService;
+        this.activityService = activityService;
     }
     async register(dto) {
         try {
@@ -322,6 +324,19 @@ let AuthService = class AuthService {
                 where: { id: userId },
                 data: { password: hash },
             });
+            const vendor = await this.prisma.vendor.findFirst({
+                where: { userId },
+            });
+            await this.activityService.createLog({
+                userId,
+                vendorId: vendor ? vendor.id : undefined,
+                action: 'PASSWORD_CHANGED',
+                description: 'Vendor password was updated.',
+                actor: vendor
+                    ? vendor.businessName
+                    : `${user.firstName} ${user.lastName}`,
+                actorType: 'VENDOR',
+            });
             return (0, response_1.successResponse)(null, 'Password changed successfully');
         }
         catch (error) {
@@ -396,5 +411,6 @@ exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         jwt_1.JwtService,
-        nodemailer_service_1.NodemailerService])
+        nodemailer_service_1.NodemailerService,
+        activityLog_service_1.ActivityService])
 ], AuthService);

@@ -21,6 +21,7 @@ import { CreateSubaccountDto } from 'src/paystack';
 import { BulkUpdateItemDto, ServiceItemDto } from './dto/services.dto';
 import { Parser } from 'json2csv';
 import dayjs from 'dayjs';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Injectable()
 export class VendorService {
@@ -28,6 +29,7 @@ export class VendorService {
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
     private paystackService: PaystackService,
+    private activityService: ActivityService,
   ) {}
 
   async completeOnboarding(userId: string, dto, files) {
@@ -331,6 +333,15 @@ export class VendorService {
           },
           kycStatus: 'PENDING',
         },
+      });
+
+      await this.activityService.createLog({
+        vendorId: vendor.id,
+        userId: vendor.userId,
+        action: 'VENDOR_CREATED',
+        description: 'Vendor account was successfully created.',
+        actor: 'System',
+        actorType: 'VENDOR',
       });
 
       return successResponse(

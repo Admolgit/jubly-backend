@@ -16,12 +16,14 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { successResponse } from 'src/utils/response';
 import { UpdateNotificationDto } from './dto/notification.dto';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
+    private activityService: ActivityService,
   ) {}
 
   async getMe(userId: string) {
@@ -56,9 +58,58 @@ export class UsersService {
     }
   }
 
+  async updateUserProfile(userId: string, dto: any) {
+    try {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!existingUser) {
+        throw new NotFoundException('User not found');
+      }
+
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          firstName: dto.firstName || existingUser.firstName,
+          lastName: dto.lastName || existingUser.lastName,
+          phone: dto.phone || existingUser.phone,
+          email: dto.email || existingUser.email,
+        },
+      });
+
+      await this.activityService.createLog({
+        vendorId: vendor ? vendor.id : undefined,
+        userId: userId,
+        action: 'PROFILE_UPDATED',
+        description: 'Business information was updated.',
+        actor: vendor
+          ? vendor.businessName
+          : `${existingUser.firstName} ${existingUser.lastName}`,
+        actorType: existingUser?.role === UserRole.VENDOR ? 'VENDOR' : 'CLIENT',
+      });
+
+      return successResponse(updatedUser, 'Profile updated successfully.');
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        'Failed to initialize payment',
+        error.message as string,
+      );
+    }
+  }
+
   async updateProfilePicture(userId: string, file: Express.Multer.File) {
     try {
+      if (!file) {
+        throw new BadRequestException('Profile image is required');
+      }
+
       const imageUrl = await this.cloudinaryService.uploadImage(file);
+      console.log({ file, imageUrl });
       const updatedPicture = await this.prisma.vendor.update({
         where: { userId },
         data: {

@@ -28,11 +28,13 @@ export class UsersController {
   getMe(@Req() req: Request & { user: { id: string } }) {
     return this.usersService.getMe(req.user.id);
   }
+
   @Get(':clientVendorId')
   getClientsByVendor(@Param('clientVendorId') clientVendorId: string) {
     return this.usersService.getClientsByVendor(clientVendorId);
   }
-  @Get('me')
+
+  @Patch('profile-image')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @UseInterceptors(
@@ -42,7 +44,18 @@ export class UsersController {
     @Req() req: Request & { user: { id: string } },
     file: Express.Multer.File,
   ) {
+    console.log('FILE', file);
     return this.usersService.updateProfilePicture(req.user.id, file);
+  }
+
+  @Patch('user/update')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  updateProfile(
+    @Req() req: Request & { user: { id: string } },
+    @Body() dto: any,
+  ) {
+    return this.usersService.updateProfile(req.user.id, dto);
   }
   @Get('user/:userId')
   getUserById(@Param('userId') userId: string) {

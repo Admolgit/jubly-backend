@@ -26,6 +26,7 @@ import {
 import { BookingStatus, UserRole } from '@prisma/client';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { PaystackService } from 'src/paystack/paystack.service';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 export enum DateFilter {
   DAY = 'day',
@@ -42,6 +43,7 @@ export class BookingService {
     private authService: AuthService,
     private nodemailerService: NodemailerService,
     private paystackService: PaystackService,
+    private activityService: ActivityService,
   ) {}
 
   private readonly bookingTimezone = 'Africa/Lagos';
@@ -243,6 +245,15 @@ export class BookingService {
           console.error('Google Calendar failed:', err.message);
         }
       }
+
+      await this.activityService.createLog({
+        vendorId: booking.vendorId,
+        userId: dto.userId,
+        action: 'BOOKING_CREATED',
+        description: `Booking #${booking.id} was created.`,
+        actor: dto.clientName,
+        actorType: 'CLIENT',
+      });
 
       return booking;
     } catch (error: any) {
@@ -1376,6 +1387,10 @@ export class BookingService {
         throw new NotFoundException('User not found');
       }
 
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
+
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
@@ -1421,6 +1436,15 @@ export class BookingService {
           },
         });
       }
+
+      await this.activityService.createLog({
+        vendorId: booking.vendorId,
+        userId,
+        action: 'BOOKING_CANCELLED',
+        description: `Booking #${booking.id} was cancelled.`,
+        actor: vendor ? vendor?.businessName : (booking?.clientName as string),
+        actorType: 'CLIENT',
+      });
 
       return successResponse(updatedBooking, 'Booking cancelled successfully');
     } catch (error: any) {
@@ -1569,6 +1593,10 @@ export class BookingService {
         throw new NotFoundException('User not found');
       }
 
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
+
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
@@ -1677,6 +1705,15 @@ export class BookingService {
         data: {
           status: 'COMPLETED',
         },
+      });
+
+      await this.activityService.createLog({
+        vendorId: vendor ? vendor.id : booking.vendorId,
+        userId,
+        action: 'SETTLEMENT_PAID',
+        description: `Settlement of ₦${transaction?.amount?.toLocaleString()} processed.`,
+        actor: 'System',
+        actorType: 'SYSTEM',
       });
 
       await this.nodemailerService.bookingStatusChangeMail({

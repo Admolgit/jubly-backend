@@ -47,26 +47,27 @@ enum NotificationCategory {
 }
 
 model User {
-  id               String       @id @default(auto()) @map("_id") @db.ObjectId
-  email            String       @unique
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  email            String        @unique
   password         String?
   firstName        String?
   lastName         String?
   phone            String?
-  role             UserRole     @default(VENDOR)
+  role             UserRole      @default(VENDOR)
   codeExpiresAt    DateTime?
   verificationCode String?
   refreshTokenHash String?
   isOnline         Boolean?
-  lastLogin        DateTime     @default(now())
-  provider         AuthProvider @default(EMAIL)
-  isVerified       Boolean      @default(false)
+  lastLogin        DateTime      @default(now())
+  provider         AuthProvider  @default(EMAIL)
+  isVerified       Boolean       @default(false)
   slug             String?
   clientVendorId   String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
   vendor           Vendor?
   bookings         Booking[]
+  ActivityLog      ActivityLog[]
 }
 
 model Vendor {
@@ -103,6 +104,7 @@ model Vendor {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   VendorBookingSettings VendorBookingSettings?
+  ActivityLog           ActivityLog[]
 }
 
 model Service {
@@ -291,4 +293,35 @@ model Notification {
   data      Json?
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
+}
+
+model ActivityLog {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId   String? @db.ObjectId
+  vendorId String? @db.ObjectId
+
+  action      String
+  description String
+
+  actor     String
+  actorType ActivityActorType
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  vendor Vendor? @relation(fields: [vendorId], references: [id])
+
+  @@index([userId])
+  @@index([vendorId])
+  @@index([createdAt])
+}
+
+enum ActivityActorType {
+  SYSTEM
+  CLIENT
+  VENDOR
+  ADMIN
 }

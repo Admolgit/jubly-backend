@@ -9,6 +9,7 @@ import { BookingService } from 'src/booking/booking.service';
 import { GoogleCalendarService } from 'src/google/google.service';
 import { AuthService } from 'src/auth/auth.service';
 import { ConfigService } from '@nestjs/config';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Module({
   providers: [
@@ -20,6 +21,7 @@ import { ConfigService } from '@nestjs/config';
     GoogleCalendarService,
     AuthService,
     ConfigService,
+    ActivityService,
   ],
   exports: [PaystackService],
   controllers: [PaystackController],

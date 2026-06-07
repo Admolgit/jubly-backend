@@ -21,11 +21,13 @@ const generateSlug_1 = require("../utils/generateSlug");
 const paystack_service_1 = require("../paystack/paystack.service");
 const json2csv_1 = require("json2csv");
 const dayjs_1 = __importDefault(require("dayjs"));
+const activityLog_service_1 = require("../activity/activityLog.service");
 let VendorService = class VendorService {
-    constructor(prisma, cloudinaryService, paystackService) {
+    constructor(prisma, cloudinaryService, paystackService, activityService) {
         this.prisma = prisma;
         this.cloudinaryService = cloudinaryService;
         this.paystackService = paystackService;
+        this.activityService = activityService;
     }
     async completeOnboarding(userId, dto, files) {
         try {
@@ -231,6 +233,14 @@ let VendorService = class VendorService {
                     },
                     kycStatus: 'PENDING',
                 },
+            });
+            await this.activityService.createLog({
+                vendorId: vendor.id,
+                userId: vendor.userId,
+                action: 'VENDOR_CREATED',
+                description: 'Vendor account was successfully created.',
+                actor: 'System',
+                actorType: 'VENDOR',
             });
             return (0, response_1.successResponse)({ uploadedPortfolios }, 'Uploaded portfolio successfully');
         }
@@ -609,5 +619,6 @@ exports.VendorService = VendorService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         cloudinary_service_1.CloudinaryService,
-        paystack_service_1.PaystackService])
+        paystack_service_1.PaystackService,
+        activityLog_service_1.ActivityService])
 ], VendorService);

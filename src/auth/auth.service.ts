@@ -20,6 +20,7 @@ import Helper from 'src/utils/helpers';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { generateTempPassword } from 'src/utils/generateTempPassword';
 import { UserRole } from '@prisma/client';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +28,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private nodemailService: NodemailerService,
+    private activityService: ActivityService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -441,6 +443,21 @@ export class AuthService {
       await this.prisma.user.update({
         where: { id: userId },
         data: { password: hash },
+      });
+
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
+
+      await this.activityService.createLog({
+        userId,
+        vendorId: vendor ? vendor.id : undefined,
+        action: 'PASSWORD_CHANGED',
+        description: 'Vendor password was updated.',
+        actor: vendor
+          ? vendor.businessName
+          : `${user.firstName} ${user.lastName}`,
+        actorType: 'VENDOR',
       });
       return successResponse(null, 'Password changed successfully');
     } catch (error: any) {
