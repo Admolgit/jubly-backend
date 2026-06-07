@@ -30,7 +30,11 @@ let UsersController = class UsersController {
         return this.usersService.getClientsByVendor(clientVendorId);
     }
     updateProfileImage(req, file) {
+        console.log('FILE', file);
         return this.usersService.updateProfilePicture(req.user.id, file);
+    }
+    updateProfile(req, dto) {
+        return this.usersService.updateProfile(req.user.id, dto);
     }
     getUserById(userId) {
         return this.usersService.getUserById(userId);
@@ -77,7 +81,7 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getClientsByVendor", null);
 __decorate([
-    (0, common_1.Get)('me'),
+    (0, common_1.Patch)('profile-image'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)([{ name: 'profileImage', maxCount: 1 }])),
@@ -86,6 +90,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "updateProfileImage", null);
+__decorate([
+    (0, common_1.Patch)('user/update'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "updateProfile", null);
 __decorate([
     (0, common_1.Get)('user/:userId'),
     __param(0, (0, common_1.Param)('userId')),

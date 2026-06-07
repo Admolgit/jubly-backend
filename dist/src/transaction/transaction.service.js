@@ -18,6 +18,7 @@ const json2csv_1 = require("json2csv");
 const dayjs_1 = __importDefault(require("dayjs"));
 const prisma_service_1 = require("../../prisma/prisma.service");
 const response_1 = require("../utils/response");
+const activityLog_service_1 = require("../activity/activityLog.service");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -26,8 +27,9 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let TransactionService = class TransactionService {
-    constructor(prisma) {
+    constructor(prisma, activityService) {
         this.prisma = prisma;
+        this.activityService = activityService;
     }
     async create(userId, dto) {
         try {
@@ -70,6 +72,14 @@ let TransactionService = class TransactionService {
                     percentageFee: dto.percentageFee,
                     providerRef: dto.providerRef,
                 },
+            });
+            await this.activityService.createLog({
+                vendorId: dto.vendorId,
+                userId: userId ?? dto.userId,
+                action: 'PAYMENT_RECEIVED',
+                description: `Payment of ₦${convertedAmount.toLocaleString()} received.`,
+                actor: 'System',
+                actorType: 'SYSTEM',
             });
         }
         catch (error) {
@@ -479,5 +489,6 @@ let TransactionService = class TransactionService {
 exports.TransactionService = TransactionService;
 exports.TransactionService = TransactionService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        activityLog_service_1.ActivityService])
 ], TransactionService);

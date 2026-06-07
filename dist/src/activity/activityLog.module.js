@@ -6,20 +6,20 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TransactionModule = void 0;
+exports.ActivityLogModule = void 0;
 const common_1 = require("@nestjs/common");
-const transaction_controller_1 = require("./transaction.controller");
-const transaction_service_1 = require("./transaction.service");
+const activityLog_controller_1 = require("./activityLog.controller");
+const activityLog_service_1 = require("./activityLog.service");
 const prisma_service_1 = require("../../prisma/prisma.service");
-const activityLog_service_1 = require("../activity/activityLog.service");
-let TransactionModule = class TransactionModule {
+const vendor_module_1 = require("../vendor/vendor.module");
+let ActivityLogModule = class ActivityLogModule {
 };
-exports.TransactionModule = TransactionModule;
-exports.TransactionModule = TransactionModule = __decorate([
+exports.ActivityLogModule = ActivityLogModule;
+exports.ActivityLogModule = ActivityLogModule = __decorate([
     (0, common_1.Module)({
-        controllers: [transaction_controller_1.TransactionController],
-        providers: [transaction_service_1.TransactionService, prisma_service_1.PrismaService, activityLog_service_1.ActivityService],
-        exports: [transaction_service_1.TransactionService],
         imports: [],
+        controllers: [activityLog_controller_1.ActivityLogController],
+        providers: [activityLog_service_1.ActivityService, prisma_service_1.PrismaService, vendor_module_1.VendorModule],
+        exports: [activityLog_service_1.ActivityService],
     })
-], TransactionModule);
+], ActivityLogModule);

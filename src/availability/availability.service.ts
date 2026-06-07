@@ -109,7 +109,6 @@ export class AvailabilityService {
       });
 
       const bufferMins = bufferTime?.bufferTime || 0;
-      end.setMinutes(end.getMinutes() + bufferMins);
       duration += bufferMins;
 
       const slots = this.generateSlots(start, end, duration);
@@ -121,10 +120,7 @@ export class AvailabilityService {
       const isToday = this.isSameDay(dateObj, now);
 
       if (this.isPastDay(dateObj)) {
-        return successResponse(
-          { availableSlots: [] },
-          'No slots for past dates',
-        );
+        throw new BadRequestException('No slots for past dates');
       }
 
       const availableSlots = slots.filter((slot) => {
@@ -138,11 +134,16 @@ export class AvailabilityService {
         );
       });
 
+      if (availableSlots.length === 0) {
+        throw new NotFoundException('No available slots for this date');
+      }
+
       return successResponse(
         { availableSlots },
         'Available slot fetched successfully.',
       );
     } catch (error: any) {
+      console.error({ error });
       throw new InternalServerErrorException(
         'Failed to fetch vendor availabile slot',
         error?.message,

@@ -16,6 +16,7 @@ const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const paystack_service_1 = require("../paystack/paystack.service");
+const activityLog_service_1 = require("../activity/activityLog.service");
 let BookingModule = class BookingModule {
 };
 exports.BookingModule = BookingModule;
@@ -32,6 +33,7 @@ exports.BookingModule = BookingModule = __decorate([
             auth_service_1.AuthService,
             nodemailer_service_1.NodemailerService,
             paystack_service_1.PaystackService,
+            activityLog_service_1.ActivityService,
         ],
     })
 ], BookingModule);

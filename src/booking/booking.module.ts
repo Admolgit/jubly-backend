@@ -7,6 +7,7 @@ import { GoogleCalendarService } from 'src/google/google.service';
 import { AuthService } from 'src/auth/auth.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { PaystackService } from 'src/paystack/paystack.service';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Module({
   controllers: [BookingController],
@@ -20,6 +21,7 @@ import { PaystackService } from 'src/paystack/paystack.service';
     AuthService,
     NodemailerService,
     PaystackService,
+    ActivityService,
   ],
 })
 export class BookingModule {}

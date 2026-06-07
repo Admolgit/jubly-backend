@@ -9,6 +9,7 @@ import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
 import { GoogleLoginStrategy } from 'src/middlewares/google-login-strategy.middleware';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Module({
   controllers: [AuthController],
@@ -28,6 +29,7 @@ import { GoogleLoginStrategy } from 'src/middlewares/google-login-strategy.middl
     CloudinaryService,
     PaystackService,
     GoogleLoginStrategy,
+    ActivityService,
   ],
   exports: [JwtModule, PassportModule, NodemailerModule],
 })

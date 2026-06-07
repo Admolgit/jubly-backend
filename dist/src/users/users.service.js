@@ -15,10 +15,12 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
 const response_1 = require("../utils/response");
+const activityLog_service_1 = require("../activity/activityLog.service");
 let UsersService = class UsersService {
-    constructor(prisma, cloudinaryService) {
+    constructor(prisma, cloudinaryService, activityService) {
         this.prisma = prisma;
         this.cloudinaryService = cloudinaryService;
+        this.activityService = activityService;
     }
     async getMe(userId) {
         const user = await this.prisma.user.findUnique({
@@ -45,9 +47,49 @@ let UsersService = class UsersService {
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
         }
     }
+    async updateUserProfile(userId, dto) {
+        try {
+            const existingUser = await this.prisma.user.findUnique({
+                where: { id: userId },
+            });
+            if (!existingUser) {
+                throw new common_1.NotFoundException('User not found');
+            }
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            const updatedUser = await this.prisma.user.update({
+                where: { id: userId },
+                data: {
+                    firstName: dto.firstName || existingUser.firstName,
+                    lastName: dto.lastName || existingUser.lastName,
+                    phone: dto.phone || existingUser.phone,
+                    email: dto.email || existingUser.email,
+                },
+            });
+            await this.activityService.createLog({
+                vendorId: vendor ? vendor.id : undefined,
+                userId: userId,
+                action: 'PROFILE_UPDATED',
+                description: 'Business information was updated.',
+                actor: vendor
+                    ? vendor.businessName
+                    : `${existingUser.firstName} ${existingUser.lastName}`,
+                actorType: existingUser?.role === client_1.UserRole.VENDOR ? 'VENDOR' : 'CLIENT',
+            });
+            return (0, response_1.successResponse)(updatedUser, 'Profile updated successfully.');
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
+        }
+    }
     async updateProfilePicture(userId, file) {
         try {
+            if (!file) {
+                throw new common_1.BadRequestException('Profile image is required');
+            }
             const imageUrl = await this.cloudinaryService.uploadImage(file);
+            console.log({ file, imageUrl });
             const updatedPicture = await this.prisma.vendor.update({
                 where: { userId },
                 data: {
@@ -286,5 +328,6 @@ exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        cloudinary_service_1.CloudinaryService])
+        cloudinary_service_1.CloudinaryService,
+        activityLog_service_1.ActivityService])
 ], UsersService);

@@ -12,6 +12,7 @@ const users_controller_1 = require("./users.controller");
 const users_service_1 = require("./users.service");
 const prisma_module_1 = require("../../prisma/prisma.module");
 const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
+const activityLog_service_1 = require("../activity/activityLog.service");
 let UsersModule = class UsersModule {
 };
 exports.UsersModule = UsersModule;
@@ -19,6 +20,6 @@ exports.UsersModule = UsersModule = __decorate([
     (0, common_1.Module)({
         imports: [prisma_module_1.PrismaModule],
         controllers: [users_controller_1.UsersController],
-        providers: [users_service_1.UsersService, cloudinary_service_1.CloudinaryService],
+        providers: [users_service_1.UsersService, cloudinary_service_1.CloudinaryService, activityLog_service_1.ActivityService],
     })
 ], UsersModule);
