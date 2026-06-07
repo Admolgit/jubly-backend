@@ -85,14 +85,13 @@ let AvailabilityService = class AvailabilityService {
                 where: { vendorId: vendor.id },
             });
             const bufferMins = bufferTime?.bufferTime || 0;
-            end.setMinutes(end.getMinutes() + bufferMins);
             duration += bufferMins;
             const slots = this.generateSlots(start, end, duration);
             const bookings = vendor.bookings;
             const now = new Date();
             const isToday = this.isSameDay(dateObj, now);
             if (this.isPastDay(dateObj)) {
-                return (0, response_1.successResponse)({ availableSlots: [] }, 'No slots for past dates');
+                throw new common_1.BadRequestException('No slots for past dates');
             }
             const availableSlots = slots.filter((slot) => {
                 if (isToday && slot.startTime <= now) {
@@ -101,9 +100,13 @@ let AvailabilityService = class AvailabilityService {
                 return !bookings.some((b) => slot.startTime < new Date(b.endTime) &&
                     slot.endTime > new Date(b.startTime));
             });
+            if (availableSlots.length === 0) {
+                throw new common_1.NotFoundException('No available slots for this date');
+            }
             return (0, response_1.successResponse)({ availableSlots }, 'Available slot fetched successfully.');
         }
         catch (error) {
+            console.error({ error });
             throw new common_1.InternalServerErrorException('Failed to fetch vendor availabile slot', error?.message);
         }
     }

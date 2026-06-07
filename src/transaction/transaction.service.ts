@@ -14,14 +14,7 @@ import { Parser } from 'json2csv';
 import dayjs from 'dayjs';
 import { PrismaService } from 'prisma/prisma.service';
 import { successResponse } from 'src/utils/response';
-// import {
-//   startOfWeek,
-//   endOfWeek,
-//   startOfMonth,
-//   endOfMonth,
-//   startOfYear,
-//   endOfYear,
-// } from 'date-fns';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 export enum DateFilter {
   DAY = 'day',
@@ -32,7 +25,10 @@ export enum DateFilter {
 
 @Injectable()
 export class TransactionService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private activityService: ActivityService,
+  ) {}
 
   async create(userId: string, dto: any) {
     try {
@@ -78,6 +74,15 @@ export class TransactionService {
           percentageFee: dto.percentageFee,
           providerRef: dto.providerRef,
         },
+      });
+
+      await this.activityService.createLog({
+        vendorId: dto.vendorId,
+        userId: userId ?? dto.userId,
+        action: 'PAYMENT_RECEIVED',
+        description: `Payment of ₦${convertedAmount.toLocaleString()} received.`,
+        actor: 'System',
+        actorType: 'SYSTEM',
       });
     } catch (error: any) {
       throw new InternalServerErrorException(

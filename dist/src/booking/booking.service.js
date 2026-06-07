@@ -23,6 +23,7 @@ const date_fns_1 = require("date-fns");
 const client_1 = require("@prisma/client");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const paystack_service_1 = require("../paystack/paystack.service");
+const activityLog_service_1 = require("../activity/activityLog.service");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -31,12 +32,13 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
-    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService) {
+    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService) {
         this.googleCalendarService = googleCalendarService;
         this.prisma = prisma;
         this.authService = authService;
         this.nodemailerService = nodemailerService;
         this.paystackService = paystackService;
+        this.activityService = activityService;
         this.bookingTimezone = 'Africa/Lagos';
     }
     parseDateInput(value, fieldName) {
@@ -200,6 +202,14 @@ let BookingService = class BookingService {
                     console.error('Google Calendar failed:', err.message);
                 }
             }
+            await this.activityService.createLog({
+                vendorId: booking.vendorId,
+                userId: dto.userId,
+                action: 'BOOKING_CREATED',
+                description: `Booking #${booking.id} was created.`,
+                actor: dto.clientName,
+                actorType: 'CLIENT',
+            });
             return booking;
         }
         catch (error) {
@@ -1062,6 +1072,9 @@ let BookingService = class BookingService {
             if (!user) {
                 throw new common_1.NotFoundException('User not found');
             }
+            const vendor = await this.prisma.vendor.findFirst({
+                where: { userId },
+            });
             const booking = await this.prisma.booking.findUnique({
                 where: { id: bookingId },
                 include: {
@@ -1103,6 +1116,14 @@ let BookingService = class BookingService {
                     },
                 });
             }
+            await this.activityService.createLog({
+                vendorId: booking.vendorId,
+                userId,
+                action: 'BOOKING_CANCELLED',
+                description: `Booking #${booking.id} was cancelled.`,
+                actor: vendor ? vendor?.businessName : booking?.clientName,
+                actorType: 'CLIENT',
+            });
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }
         catch (error) {
@@ -1216,6 +1237,9 @@ let BookingService = class BookingService {
             if (!user) {
                 throw new common_1.NotFoundException('User not found');
             }
+            const vendor = await this.prisma.vendor.findFirst({
+                where: { userId },
+            });
             const booking = await this.prisma.booking.findUnique({
                 where: { id: bookingId },
                 include: {
@@ -1306,6 +1330,14 @@ let BookingService = class BookingService {
                 data: {
                     status: 'COMPLETED',
                 },
+            });
+            await this.activityService.createLog({
+                vendorId: vendor ? vendor.id : booking.vendorId,
+                userId,
+                action: 'SETTLEMENT_PAID',
+                description: `Settlement of ₦${transaction?.amount?.toLocaleString()} processed.`,
+                actor: 'System',
+                actorType: 'SYSTEM',
             });
             await this.nodemailerService.bookingStatusChangeMail({
                 subject: 'Your Booking Has Been Mark As Completed',
@@ -1502,5 +1534,6 @@ exports.BookingService = BookingService = __decorate([
         prisma_service_1.PrismaService,
         auth_service_1.AuthService,
         nodemailer_service_1.NodemailerService,
-        paystack_service_1.PaystackService])
+        paystack_service_1.PaystackService,
+        activityLog_service_1.ActivityService])
 ], BookingService);

@@ -17,6 +17,7 @@ const booking_service_1 = require("../booking/booking.service");
 const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
 const config_1 = require("@nestjs/config");
+const activityLog_service_1 = require("../activity/activityLog.service");
 let PaystackModule = class PaystackModule {
 };
 exports.PaystackModule = PaystackModule;
@@ -31,6 +32,7 @@ exports.PaystackModule = PaystackModule = __decorate([
             google_service_1.GoogleCalendarService,
             auth_service_1.AuthService,
             config_1.ConfigService,
+            activityLog_service_1.ActivityService,
         ],
         exports: [paystack_service_1.PaystackService],
         controllers: [paystack_controller_1.PaystackController],

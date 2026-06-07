@@ -13,13 +13,21 @@ const vendor_service_1 = require("./vendor.service");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
 const paystack_service_1 = require("../paystack/paystack.service");
+const activityLog_service_1 = require("../activity/activityLog.service");
 let VendorModule = class VendorModule {
 };
 exports.VendorModule = VendorModule;
 exports.VendorModule = VendorModule = __decorate([
     (0, common_1.Module)({
         controllers: [vendor_controller_1.VendorController],
-        providers: [vendor_service_1.VendorService, prisma_service_1.PrismaService, cloudinary_service_1.CloudinaryService, paystack_service_1.PaystackService],
+        providers: [
+            vendor_service_1.VendorService,
+            prisma_service_1.PrismaService,
+            cloudinary_service_1.CloudinaryService,
+            paystack_service_1.PaystackService,
+            activityLog_service_1.ActivityService,
+            activityLog_service_1.ActivityService,
+        ],
         imports: [],
     })
 ], VendorModule);
