@@ -306,6 +306,7 @@ model ActivityLog {
 
   actor     String
   actorType ActivityActorType
+  color     String?
 
   metadata Json?
 

@@ -15,6 +15,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ActivityLogController = void 0;
 const common_1 = require("@nestjs/common");
 const activityLog_service_1 = require("./activityLog.service");
+const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const role_guard_1 = require("../auth/role.guard");
 let ActivityLogController = class ActivityLogController {
     constructor(activityService) {
         this.activityService = activityService;
@@ -27,6 +29,8 @@ let ActivityLogController = class ActivityLogController {
 exports.ActivityLogController = ActivityLogController;
 __decorate([
     (0, common_1.Get)(),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

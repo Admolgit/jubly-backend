@@ -241,6 +241,7 @@ let VendorService = class VendorService {
                 description: 'Vendor account was successfully created.',
                 actor: 'System',
                 actorType: 'VENDOR',
+                color: 'pink',
             });
             return (0, response_1.successResponse)({ uploadedPortfolios }, 'Uploaded portfolio successfully');
         }

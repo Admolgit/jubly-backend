@@ -342,6 +342,7 @@ export class VendorService {
         description: 'Vendor account was successfully created.',
         actor: 'System',
         actorType: 'VENDOR',
+        color: 'pink',
       });
 
       return successResponse(

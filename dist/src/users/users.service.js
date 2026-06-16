@@ -76,6 +76,7 @@ let UsersService = class UsersService {
                     ? vendor.businessName
                     : `${existingUser.firstName} ${existingUser.lastName}`,
                 actorType: existingUser?.role === client_1.UserRole.VENDOR ? 'VENDOR' : 'CLIENT',
+                color: 'indigo',
             });
             return (0, response_1.successResponse)(updatedUser, 'Profile updated successfully.');
         }

@@ -17,6 +17,7 @@ export class ActivityService {
     actor: string;
     actorType: 'SYSTEM' | 'CLIENT' | 'VENDOR' | 'ADMIN';
     metadata?: any;
+    color?: string;
   }) {
     const activity = await this.prisma.activityLog.create({
       data: {
@@ -27,6 +28,7 @@ export class ActivityService {
         actor: data.actor,
         actorType: data.actorType,
         metadata: data.metadata,
+        color: data.color,
       },
     });
 

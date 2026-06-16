@@ -336,6 +336,7 @@ let AuthService = class AuthService {
                     ? vendor.businessName
                     : `${user.firstName} ${user.lastName}`,
                 actorType: 'VENDOR',
+                color: 'orange',
             });
             return (0, response_1.successResponse)(null, 'Password changed successfully');
         }

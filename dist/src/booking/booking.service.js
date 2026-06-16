@@ -209,6 +209,7 @@ let BookingService = class BookingService {
                 description: `Booking #${booking.id} was created.`,
                 actor: dto.clientName,
                 actorType: 'CLIENT',
+                color: 'blue',
             });
             return booking;
         }
@@ -1123,6 +1124,7 @@ let BookingService = class BookingService {
                 description: `Booking #${booking.id} was cancelled.`,
                 actor: vendor ? vendor?.businessName : booking?.clientName,
                 actorType: 'CLIENT',
+                color: 'red',
             });
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }
@@ -1338,6 +1340,7 @@ let BookingService = class BookingService {
                 description: `Settlement of ₦${transaction?.amount?.toLocaleString()} processed.`,
                 actor: 'System',
                 actorType: 'SYSTEM',
+                color: 'purple',
             });
             await this.nodemailerService.bookingStatusChangeMail({
                 subject: 'Your Booking Has Been Mark As Completed',

@@ -253,6 +253,7 @@ export class BookingService {
         description: `Booking #${booking.id} was created.`,
         actor: dto.clientName,
         actorType: 'CLIENT',
+        color: 'blue',
       });
 
       return booking;
@@ -1444,6 +1445,7 @@ export class BookingService {
         description: `Booking #${booking.id} was cancelled.`,
         actor: vendor ? vendor?.businessName : (booking?.clientName as string),
         actorType: 'CLIENT',
+        color: 'red',
       });
 
       return successResponse(updatedBooking, 'Booking cancelled successfully');
@@ -1714,6 +1716,7 @@ export class BookingService {
         description: `Settlement of ₦${transaction?.amount?.toLocaleString()} processed.`,
         actor: 'System',
         actorType: 'SYSTEM',
+        color: 'purple',
       });
 
       await this.nodemailerService.bookingStatusChangeMail({

@@ -27,6 +27,7 @@ const google_module_1 = require("./google/google.module");
 const booking_module_1 = require("./booking/booking.module");
 const users_module_1 = require("./users/users.module");
 const services_module_1 = require("./services/services.module");
+const activityLog_module_1 = require("./activity/activityLog.module");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer
@@ -55,6 +56,7 @@ exports.AppModule = AppModule = __decorate([
             booking_module_1.BookingModule,
             users_module_1.UsersModule,
             services_module_1.ServicesModule,
+            activityLog_module_1.ActivityLogModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

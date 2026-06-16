@@ -91,6 +91,7 @@ export class UsersService {
           ? vendor.businessName
           : `${existingUser.firstName} ${existingUser.lastName}`,
         actorType: existingUser?.role === UserRole.VENDOR ? 'VENDOR' : 'CLIENT',
+        color: 'indigo',
       });
 
       return successResponse(updatedUser, 'Profile updated successfully.');

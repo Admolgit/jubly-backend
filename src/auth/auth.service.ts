@@ -458,6 +458,7 @@ export class AuthService {
           ? vendor.businessName
           : `${user.firstName} ${user.lastName}`,
         actorType: 'VENDOR',
+        color: 'orange',
       });
       return successResponse(null, 'Password changed successfully');
     } catch (error: any) {
