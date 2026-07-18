@@ -311,7 +311,7 @@ export class AuthService {
             lastName: lastname,
             provider: 'GOOGLE',
             isVerified: true,
-            role: 'CLIENT',
+            role: 'VENDOR',
             password: password || null,
           },
         });
@@ -319,7 +319,7 @@ export class AuthService {
 
       const token = await this.generateJwt(user);
       const refreshToken = await this.jwtService.signAsync(
-        { id: user.id, role: user.role },
+        { sub: user.id, role: user.role },
         { expiresIn: '14d' },
       );
 
@@ -351,7 +351,7 @@ export class AuthService {
 
   async generateJwt(user: any): Promise<string> {
     return await this.jwtService.signAsync(
-      { id: user.id, role: user.role },
+      { sub: user.id, role: user.role },
       { expiresIn: '7d' },
     );
   }

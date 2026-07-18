@@ -51,7 +51,7 @@ export class GoogleController {
     return { url: authUrl };
   }
 
-  @Get('callback')
+  @Get('/calendar/callback')
   async googleRedirect(
     @Query('code') code: string,
     @Query('state') state: string,

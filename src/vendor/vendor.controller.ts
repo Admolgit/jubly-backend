@@ -60,6 +60,8 @@ export class VendorController {
   ) {
     const userId = req.user.id;
 
+    console.log({ req, userId });
+
     if (!userId) {
       throw new BadRequestException('User not authenticated');
     }
@@ -95,6 +97,7 @@ export class VendorController {
     @Body() dto: CreateVendorDto,
   ) {
     const userId = req.user.id;
+    console.log('Creating profile for userId:', userId, 'with dto:', dto);
     return this.vendorService.createProfile(userId, dto);
   }
 

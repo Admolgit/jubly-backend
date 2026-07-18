@@ -102,7 +102,7 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], GoogleController.prototype, "connectGoogleCalendar", null);
 __decorate([
-    (0, common_1.Get)('callback'),
+    (0, common_1.Get)('/calendar/callback'),
     __param(0, (0, common_1.Query)('code')),
     __param(1, (0, common_1.Query)('state')),
     __param(2, (0, common_1.Res)()),

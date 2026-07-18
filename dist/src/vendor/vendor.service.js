@@ -43,10 +43,13 @@ let VendorService = class VendorService {
         }
     }
     async createProfile(userId, dto, tx) {
+        console.log({ userId, dto });
         const prisma = tx ?? this.prisma;
-        const exists = await prisma.vendor.findUnique({ where: { userId } });
-        if (exists)
-            throw new common_1.BadRequestException('Vendor profile already exists');
+        if (userId) {
+            const exists = await prisma.vendor.findUnique({ where: { userId } });
+            if (exists)
+                throw new common_1.BadRequestException('Vendor profile already exists');
+        }
         const slug = (0, generateSlug_1.generateSlug)(dto.businessName);
         const vendor = await prisma.vendor.create({
             data: {
@@ -334,7 +337,11 @@ let VendorService = class VendorService {
     }
     async getAllVendors() {
         try {
-            const vendors = await this.prisma.vendor.findMany();
+            const vendors = await this.prisma.vendor.findMany({
+                include: {
+                    services: true,
+                },
+            });
             if (!vendors || vendors.length === 0) {
                 throw new common_1.NotFoundException('No vendors found');
             }
@@ -357,10 +364,7 @@ let VendorService = class VendorService {
             await db.service.updateMany({
                 where: {
                     userId: vendor.userId,
-                    OR: [
-                        { vendorId: null },
-                        { vendorId: { not: vendorId } },
-                    ],
+                    OR: [{ vendorId: null }, { vendorId: { not: vendorId } }],
                 },
                 data: {
                     vendorId: vendorId,
