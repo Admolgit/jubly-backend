@@ -17,7 +17,6 @@ const common_1 = require("@nestjs/common");
 const booking_service_1 = require("./booking.service");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
 const role_guard_1 = require("../auth/role.guard");
-const common_2 = require("@nestjs/common");
 let BookingController = class BookingController {
     constructor(bookingService) {
         this.bookingService = bookingService;
@@ -87,7 +86,7 @@ let BookingController = class BookingController {
 exports.BookingController = BookingController;
 __decorate([
     (0, common_1.Post)(''),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
@@ -104,7 +103,7 @@ __decorate([
 ], BookingController.prototype, "paymentInitialize", null);
 __decorate([
     (0, common_1.Get)('dashboard-stats/:vendorId'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('vendorId')),
@@ -114,7 +113,7 @@ __decorate([
 ], BookingController.prototype, "getDashboardStats", null);
 __decorate([
     (0, common_1.Get)('upcoming'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -123,7 +122,7 @@ __decorate([
 ], BookingController.prototype, "getTopUpcoming", null);
 __decorate([
     (0, common_1.Get)('upcoming-bookings'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -132,7 +131,7 @@ __decorate([
 ], BookingController.prototype, "getUpcomingBookings", null);
 __decorate([
     (0, common_1.Get)('client/upcoming-bookings'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('CLIENT'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -141,7 +140,7 @@ __decorate([
 ], BookingController.prototype, "getClientUpcomingBookings", null);
 __decorate([
     (0, common_1.Get)('services-count'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -150,7 +149,7 @@ __decorate([
 ], BookingController.prototype, "getServicesByCount", null);
 __decorate([
     (0, common_1.Get)('admin/stats'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('ADMIN'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -158,7 +157,7 @@ __decorate([
 ], BookingController.prototype, "getAdminBookingStats", null);
 __decorate([
     (0, common_1.Get)('admin'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('ADMIN'),
     __param(0, (0, common_1.Query)('page')),
     __param(1, (0, common_1.Query)('limit')),
@@ -174,7 +173,7 @@ __decorate([
 ], BookingController.prototype, "getAdminBookings", null);
 __decorate([
     (0, common_1.Get)(''),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)('page')),
@@ -189,7 +188,7 @@ __decorate([
 ], BookingController.prototype, "getBookings", null);
 __decorate([
     (0, common_1.Get)('clients'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('CLIENT'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)('page')),
@@ -205,7 +204,7 @@ __decorate([
 ], BookingController.prototype, "getClientsBookings", null);
 __decorate([
     (0, common_1.Get)('clients/stats'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -214,7 +213,7 @@ __decorate([
 ], BookingController.prototype, "getStats", null);
 __decorate([
     (0, common_1.Get)('clients/booking-stats'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('CLIENT', 'VENDOR'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -223,7 +222,7 @@ __decorate([
 ], BookingController.prototype, "getBookingStats", null);
 __decorate([
     (0, common_1.Patch)('reschedule/:bookingId'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
@@ -234,7 +233,7 @@ __decorate([
 ], BookingController.prototype, "rescheduleBooking", null);
 __decorate([
     (0, common_1.Patch)(':bookingId/cancel'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Param)('bookingId')),
     __param(1, (0, common_1.Req)()),
@@ -244,7 +243,7 @@ __decorate([
 ], BookingController.prototype, "cancleBooking", null);
 __decorate([
     (0, common_1.Patch)(':bookingId/mark-as-completed'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Param)('bookingId')),
     __param(1, (0, common_1.Req)()),
@@ -254,7 +253,7 @@ __decorate([
 ], BookingController.prototype, "markAsComplete", null);
 __decorate([
     (0, common_1.Get)('status/filter'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -263,7 +262,7 @@ __decorate([
 ], BookingController.prototype, "getBookingsStatusFilter", null);
 __decorate([
     (0, common_1.Get)('insights'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -272,7 +271,7 @@ __decorate([
 ], BookingController.prototype, "getInsights", null);
 __decorate([
     (0, common_1.Get)('client/:vendorId/:clientEmail/booking-stats'),
-    (0, common_2.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Param)('clientEmail')),
     __param(1, (0, common_1.Param)('vendorId')),

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -38,18 +39,18 @@ export enum DateFilter {
 @Injectable()
 export class BookingService {
   constructor(
-    private googleCalendarService: GoogleCalendarService,
-    private prisma: PrismaService,
-    private authService: AuthService,
-    private nodemailerService: NodemailerService,
-    private paystackService: PaystackService,
-    private activityService: ActivityService,
+    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
+    private readonly nodemailerService: NodemailerService,
+    private readonly paystackService: PaystackService,
+    private readonly activityService: ActivityService,
   ) {}
 
   private readonly bookingTimezone = 'Africa/Lagos';
 
   private parseDateInput(value: string | Date, fieldName: string) {
-    const parsed = value instanceof Date ? new Date(value) : new Date(value);
+    const parsed = new Date(value);
 
     if (Number.isNaN(parsed.getTime())) {
       throw new BadRequestException(`${fieldName} is invalid`);
@@ -167,6 +168,7 @@ export class BookingService {
 
   async createBooking(userId: string, dto: IBooking) {
     try {
+      console.log({ userId, dto });
       const startTime = this.parseDateInput(dto.startTime, 'startTime');
       const endTime = this.parseDateInput(dto.endTime, 'endTime');
       const bookingDate = this.toBookingDate(dto.date, startTime);
@@ -191,6 +193,8 @@ export class BookingService {
         },
       });
 
+      console.log({ service });
+
       if (!service) {
         throw new NotFoundException('Service not found');
       }
@@ -200,6 +204,8 @@ export class BookingService {
           userId,
         },
       });
+
+      console.log({ vendor });
 
       if (!vendor) {
         throw new NotFoundException('Vendor not found');
@@ -220,6 +226,8 @@ export class BookingService {
           status: 'CONFIRMED',
         },
       });
+
+      console.log({ booking });
 
       if (calendarIntegration) {
         try {
@@ -920,18 +928,20 @@ export class BookingService {
       const limitNum = parseInt(limit);
       const baseDate = date ? new Date(date) : new Date();
 
-      const user = await this.prisma.vendor.findUnique({
+      const vendor = await this.prisma.vendor.findUnique({
         where: { userId },
       });
 
-      if (!user) {
+      console.log({ vendor });
+
+      if (!vendor) {
         throw new NotFoundException('User not found');
       }
 
       const where: any = {};
 
       if (userId) {
-        where.vendorId = user.id;
+        where.vendorId = vendor.id;
       }
 
       if (status) {
@@ -1005,6 +1015,8 @@ export class BookingService {
         },
       });
 
+      console.log({ bookings });
+
       const total = await this.prisma.booking.count({ where });
 
       return successResponse(bookings, 'Successfully fetched bookings', 200, {
@@ -1031,8 +1043,8 @@ export class BookingService {
     email?: string,
   ) {
     try {
-      const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
       const baseDate = date ? new Date(date) : new Date();
 
       const user = await this.prisma.user.findUnique({
@@ -1118,10 +1130,10 @@ export class BookingService {
         page: pageNum,
         lastPage: Math.ceil(total / limitNum),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw new InternalServerErrorException(
         'Failed to fetch bookings.',
-        error.message,
+        (error as Error).message,
       );
     }
   }
@@ -1880,7 +1892,7 @@ export class BookingService {
     return successResponse(
       {
         bestDay: {
-          day: bestDay || 'N/A',
+          day: bestDay,
           percentage: bestDayPercentage,
         },
         averageBooking,
