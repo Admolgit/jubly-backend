@@ -42,7 +42,7 @@ let BookingService = class BookingService {
         this.bookingTimezone = 'Africa/Lagos';
     }
     parseDateInput(value, fieldName) {
-        const parsed = value instanceof Date ? new Date(value) : new Date(value);
+        const parsed = new Date(value);
         if (Number.isNaN(parsed.getTime())) {
             throw new common_1.BadRequestException(`${fieldName} is invalid`);
         }
@@ -137,6 +137,7 @@ let BookingService = class BookingService {
     }
     async createBooking(userId, dto) {
         try {
+            console.log({ userId, dto });
             const startTime = this.parseDateInput(dto.startTime, 'startTime');
             const endTime = this.parseDateInput(dto.endTime, 'endTime');
             const bookingDate = this.toBookingDate(dto.date, startTime);
@@ -156,6 +157,7 @@ let BookingService = class BookingService {
                     id: dto.serviceId,
                 },
             });
+            console.log({ service });
             if (!service) {
                 throw new common_1.NotFoundException('Service not found');
             }
@@ -164,6 +166,7 @@ let BookingService = class BookingService {
                     userId,
                 },
             });
+            console.log({ vendor });
             if (!vendor) {
                 throw new common_1.NotFoundException('Vendor not found');
             }
@@ -181,6 +184,7 @@ let BookingService = class BookingService {
                     status: 'CONFIRMED',
                 },
             });
+            console.log({ booking });
             if (calendarIntegration) {
                 try {
                     await this.googleCalendarService.verifyBooking({
@@ -209,6 +213,7 @@ let BookingService = class BookingService {
                 description: `Booking #${booking.id} was created.`,
                 actor: dto.clientName,
                 actorType: 'CLIENT',
+                color: 'blue',
             });
             return booking;
         }
@@ -713,15 +718,16 @@ let BookingService = class BookingService {
             const pageNum = parseInt(page);
             const limitNum = parseInt(limit);
             const baseDate = date ? new Date(date) : new Date();
-            const user = await this.prisma.vendor.findUnique({
+            const vendor = await this.prisma.vendor.findUnique({
                 where: { userId },
             });
-            if (!user) {
+            console.log({ vendor });
+            if (!vendor) {
                 throw new common_1.NotFoundException('User not found');
             }
             const where = {};
             if (userId) {
-                where.vendorId = user.id;
+                where.vendorId = vendor.id;
             }
             if (status) {
                 where.status = status;
@@ -790,6 +796,7 @@ let BookingService = class BookingService {
                     },
                 },
             });
+            console.log({ bookings });
             const total = await this.prisma.booking.count({ where });
             return (0, response_1.successResponse)(bookings, 'Successfully fetched bookings', 200, {
                 total,
@@ -803,8 +810,8 @@ let BookingService = class BookingService {
     }
     async getClientsBookings(userId, page, limit, search, dateFilter, date, status, email) {
         try {
-            const pageNum = parseInt(page);
-            const limitNum = parseInt(limit);
+            const pageNum = Number(page);
+            const limitNum = Number(limit);
             const baseDate = date ? new Date(date) : new Date();
             const user = await this.prisma.user.findUnique({
                 where: { email: email },
@@ -1123,6 +1130,7 @@ let BookingService = class BookingService {
                 description: `Booking #${booking.id} was cancelled.`,
                 actor: vendor ? vendor?.businessName : booking?.clientName,
                 actorType: 'CLIENT',
+                color: 'red',
             });
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }
@@ -1338,6 +1346,7 @@ let BookingService = class BookingService {
                 description: `Settlement of ₦${transaction?.amount?.toLocaleString()} processed.`,
                 actor: 'System',
                 actorType: 'SYSTEM',
+                color: 'purple',
             });
             await this.nodemailerService.bookingStatusChangeMail({
                 subject: 'Your Booking Has Been Mark As Completed',
@@ -1465,7 +1474,7 @@ let BookingService = class BookingService {
         const repeatClients = repeatClientsData.length;
         return (0, response_1.successResponse)({
             bestDay: {
-                day: bestDay || 'N/A',
+                day: bestDay,
                 percentage: bestDayPercentage,
             },
             averageBooking,

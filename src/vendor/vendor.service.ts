@@ -62,10 +62,14 @@ export class VendorService {
     dto: CreateVendorDto,
     tx?: Prisma.TransactionClient,
   ) {
+    console.log({ userId, dto });
     const prisma = tx ?? this.prisma;
 
-    const exists = await prisma.vendor.findUnique({ where: { userId } });
-    if (exists) throw new BadRequestException('Vendor profile already exists');
+    if (userId) {
+      const exists = await prisma.vendor.findUnique({ where: { userId } });
+      if (exists)
+        throw new BadRequestException('Vendor profile already exists');
+    }
 
     const slug = generateSlug(dto.businessName);
 
@@ -342,6 +346,7 @@ export class VendorService {
         description: 'Vendor account was successfully created.',
         actor: 'System',
         actorType: 'VENDOR',
+        color: 'pink',
       });
 
       return successResponse(
@@ -480,7 +485,11 @@ export class VendorService {
 
   async getAllVendors() {
     try {
-      const vendors = await this.prisma.vendor.findMany();
+      const vendors = await this.prisma.vendor.findMany({
+        include: {
+          services: true,
+        },
+      });
       if (!vendors || vendors.length === 0) {
         throw new NotFoundException('No vendors found');
       }
@@ -510,10 +519,7 @@ export class VendorService {
       await db.service.updateMany({
         where: {
           userId: vendor.userId,
-          OR: [
-            { vendorId: null },
-            { vendorId: { not: vendorId } }, // 👈 ensures consistency
-          ],
+          OR: [{ vendorId: null }, { vendorId: { not: vendorId } }],
         },
         data: {
           vendorId: vendorId,

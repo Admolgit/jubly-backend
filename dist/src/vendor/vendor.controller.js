@@ -28,6 +28,7 @@ let VendorController = class VendorController {
     }
     async completeOnboarding(req, body, files) {
         const userId = req.user.id;
+        console.log({ req, userId });
         if (!userId) {
             throw new common_1.BadRequestException('User not authenticated');
         }
@@ -51,6 +52,7 @@ let VendorController = class VendorController {
     }
     createProfile(req, dto) {
         const userId = req.user.id;
+        console.log('Creating profile for userId:', userId, 'with dto:', dto);
         return this.vendorService.createProfile(userId, dto);
     }
     createServices(req, body) {

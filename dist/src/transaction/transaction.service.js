@@ -80,6 +80,7 @@ let TransactionService = class TransactionService {
                 description: `Payment of ₦${convertedAmount.toLocaleString()} received.`,
                 actor: 'System',
                 actorType: 'SYSTEM',
+                color: 'yellow',
             });
         }
         catch (error) {

@@ -27,6 +27,7 @@ let ActivityService = class ActivityService {
                 actor: data.actor,
                 actorType: data.actorType,
                 metadata: data.metadata,
+                color: data.color,
             },
         });
         return (0, response_1.successResponse)(activity, 'Activity log created successfully', 201);

@@ -240,13 +240,13 @@ let AuthService = class AuthService {
                         lastName: lastname,
                         provider: 'GOOGLE',
                         isVerified: true,
-                        role: 'CLIENT',
+                        role: 'VENDOR',
                         password: password || null,
                     },
                 });
             }
             const token = await this.generateJwt(user);
-            const refreshToken = await this.jwtService.signAsync({ id: user.id, role: user.role }, { expiresIn: '14d' });
+            const refreshToken = await this.jwtService.signAsync({ sub: user.id, role: user.role }, { expiresIn: '14d' });
             const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
             await this.prisma.user.update({
                 where: { id: user.id },
@@ -264,7 +264,7 @@ let AuthService = class AuthService {
         }
     }
     async generateJwt(user) {
-        return await this.jwtService.signAsync({ id: user.id, role: user.role }, { expiresIn: '7d' });
+        return await this.jwtService.signAsync({ sub: user.id, role: user.role }, { expiresIn: '7d' });
     }
     async refreshToken(refreshToken) {
         try {
@@ -336,6 +336,7 @@ let AuthService = class AuthService {
                     ? vendor.businessName
                     : `${user.firstName} ${user.lastName}`,
                 actorType: 'VENDOR',
+                color: 'orange',
             });
             return (0, response_1.successResponse)(null, 'Password changed successfully');
         }
