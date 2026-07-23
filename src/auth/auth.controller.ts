@@ -24,8 +24,8 @@ import { VendorService } from 'src/vendor/vendor.service';
 @Controller('auth')
 export class AuthController {
   constructor(
-    private authService: AuthService,
-    private vendorServices: VendorService,
+    private readonly authService: AuthService,
+    private readonly vendorServices: VendorService,
   ) {}
 
   @Post('register')
