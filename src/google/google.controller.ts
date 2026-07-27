@@ -31,7 +31,7 @@ export class GoogleController {
     @Query('userId') userId: string,
     @Query('direction') direction: string,
   ) {
-    if (!userId) throw new BadRequestException('UserId required');
+    if (userId === undefined) throw new BadRequestException('UserId required');
 
     const stateObj = { userId, direction };
     const state = encodeURIComponent(
@@ -76,11 +76,13 @@ export class GoogleController {
 
     const appJwt: any = this.authService.generateJwt(parsedState.userId);
 
-    let frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(
-      result.userId as string,
-    )}&accessToken=${encodeURIComponent(result.accessToken as string)}&access_token=${encodeURIComponent(appJwt)}`;
-    if (parsedState.direction === 'onboarding') {
-      frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/vendor-availability?calendarLinked=true&userId=${encodeURIComponent(
+    let frontendRedirectUrl: string;
+    if (parsedState.direction === 'onboarding-calendar') {
+      frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(
+        result.userId as string,
+      )}&accessToken=${encodeURIComponent(result.accessToken as string)}&access_token=${encodeURIComponent(appJwt)}`;
+    } else {
+      frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(
         result.userId as string,
       )}&accessToken=${encodeURIComponent(result.accessToken as string)}&access_token=${encodeURIComponent(appJwt)}`;
     }

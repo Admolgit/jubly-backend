@@ -26,7 +26,7 @@ let GoogleController = class GoogleController {
         this.prisma = prisma;
     }
     connectGoogleCalendar(userId, direction) {
-        if (!userId)
+        if (userId === undefined)
             throw new common_1.BadRequestException('UserId required');
         const stateObj = { userId, direction };
         const state = encodeURIComponent(Buffer.from(JSON.stringify(stateObj)).toString('base64'));
@@ -54,9 +54,12 @@ let GoogleController = class GoogleController {
         }
         const result = await this.googleService.saveTokens(parsedState.userId, code);
         const appJwt = this.authService.generateJwt(parsedState.userId);
-        let frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
-        if (parsedState.direction === 'onboarding') {
-            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/vendor-availability?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
+        let frontendRedirectUrl;
+        if (parsedState.direction === 'onboarding-calendar') {
+            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
+        }
+        else {
+            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
         }
         await this.prisma.vendor.update({
             where: {

@@ -43,60 +43,75 @@ let VendorService = class VendorService {
         }
     }
     async createProfile(userId, dto, tx) {
-        console.log({ userId, dto });
-        const prisma = tx ?? this.prisma;
-        if (userId) {
-            const exists = await prisma.vendor.findUnique({ where: { userId } });
-            if (exists)
-                throw new common_1.BadRequestException('Vendor profile already exists');
+        try {
+            console.log({ userId, dto });
+            const prisma = tx ?? this.prisma;
+            if (userId) {
+                const exists = await prisma.vendor.findUnique({ where: { userId } });
+                if (exists)
+                    throw new common_1.BadRequestException('Vendor profile already exists');
+            }
+            const slug = (0, generateSlug_1.generateSlug)(dto.businessName);
+            const vendor = await prisma.vendor.create({
+                data: {
+                    userId,
+                    ...dto,
+                    kycStatus: 'NOT_SUBMITTED',
+                },
+            });
+            await prisma.user.update({
+                where: { id: userId },
+                data: { slug },
+            });
+            return (0, response_1.successResponse)({ vendor }, 'Vendor created successfully', 201);
         }
-        const slug = (0, generateSlug_1.generateSlug)(dto.businessName);
-        const vendor = await prisma.vendor.create({
-            data: {
-                userId,
-                ...dto,
-                kycStatus: 'NOT_SUBMITTED',
-            },
-        });
-        await prisma.user.update({
-            where: { id: userId },
-            data: { slug },
-        });
-        return (0, response_1.successResponse)({ vendor }, 'Vendor created successfully', 201);
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed', error.message);
+        }
     }
     async createServices(userId, services, tx) {
-        if (tx) {
-            return this._createServicesLogic(tx, userId, services);
+        try {
+            if (tx) {
+                return this._createServicesLogic(tx, userId, services);
+            }
+            return this.prisma.$transaction((db) => this._createServicesLogic(db, userId, services));
         }
-        return this.prisma.$transaction((db) => this._createServicesLogic(db, userId, services));
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed', error.message);
+        }
     }
     async _createServicesLogic(db, userId, services) {
-        const user = await db.user.findUnique({ where: { id: userId } });
-        if (!user)
-            throw new common_1.NotFoundException('User not found');
-        const created = await Promise.all(services.map((s) => db.service.upsert({
-            where: {
-                userId_name: {
+        try {
+            const user = await db.user.findUnique({ where: { id: userId } });
+            if (!user)
+                throw new common_1.NotFoundException('User not found');
+            const created = await Promise.all(services.map((s) => db.service.upsert({
+                where: {
+                    userId_name: {
+                        userId,
+                        name: s.name ?? '',
+                    },
+                },
+                update: {
+                    description: s.description ?? '',
+                    price: s.price ?? 0,
+                    durationMins: s.durationMins ?? null,
+                    vendorId: s.vendorId,
+                },
+                create: {
                     userId,
                     name: s.name ?? '',
+                    description: s.description ?? '',
+                    price: s.price ?? 0,
+                    durationMins: s.durationMins ?? null,
+                    vendorId: s.vendorId,
                 },
-            },
-            update: {
-                description: s.description ?? '',
-                price: s.price ?? 0,
-                durationMins: s.durationMins ?? null,
-                vendorId: s.vendorId,
-            },
-            create: {
-                userId,
-                name: s.name ?? '',
-                description: s.description ?? '',
-                price: s.price ?? 0,
-                durationMins: s.durationMins ?? null,
-                vendorId: s.vendorId,
-            },
-        })));
-        return (0, response_1.successResponse)({ created }, 'Services successfully created', 201);
+            })));
+            return (0, response_1.successResponse)({ created }, 'Services successfully created', 201);
+        }
+        catch (error) {
+            throw new common_1.InternalServerErrorException('Failed', error.message);
+        }
     }
     async createPaystackSubaccount(userId, dto) {
         try {

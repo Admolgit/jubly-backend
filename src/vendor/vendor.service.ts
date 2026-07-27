@@ -62,31 +62,35 @@ export class VendorService {
     dto: CreateVendorDto,
     tx?: Prisma.TransactionClient,
   ) {
-    console.log({ userId, dto });
-    const prisma = tx ?? this.prisma;
+    try {
+      console.log({ userId, dto });
+      const prisma = tx ?? this.prisma;
 
-    if (userId) {
-      const exists = await prisma.vendor.findUnique({ where: { userId } });
-      if (exists)
-        throw new BadRequestException('Vendor profile already exists');
+      if (userId) {
+        const exists = await prisma.vendor.findUnique({ where: { userId } });
+        if (exists)
+          throw new BadRequestException('Vendor profile already exists');
+      }
+
+      const slug = generateSlug(dto.businessName);
+
+      const vendor = await prisma.vendor.create({
+        data: {
+          userId,
+          ...dto,
+          kycStatus: 'NOT_SUBMITTED',
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { slug },
+      });
+
+      return successResponse({ vendor }, 'Vendor created successfully', 201);
+    } catch (error: any) {
+      throw new InternalServerErrorException('Failed', error.message);
     }
-
-    const slug = generateSlug(dto.businessName);
-
-    const vendor = await prisma.vendor.create({
-      data: {
-        userId,
-        ...dto,
-        kycStatus: 'NOT_SUBMITTED',
-      },
-    });
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { slug },
-    });
-
-    return successResponse({ vendor }, 'Vendor created successfully', 201);
   }
 
   async createServices(
@@ -94,13 +98,17 @@ export class VendorService {
     services: ServiceItemDto[],
     tx?: Prisma.TransactionClient,
   ) {
-    if (tx) {
-      return this._createServicesLogic(tx, userId, services);
-    }
+    try {
+      if (tx) {
+        return this._createServicesLogic(tx, userId, services);
+      }
 
-    return this.prisma.$transaction((db) =>
-      this._createServicesLogic(db, userId, services),
-    );
+      return this.prisma.$transaction((db) =>
+        this._createServicesLogic(db, userId, services),
+      );
+    } catch (error: any) {
+      throw new InternalServerErrorException('Failed', error.message);
+    }
   }
 
   private async _createServicesLogic(
@@ -108,37 +116,41 @@ export class VendorService {
     userId: string,
     services: ServiceItemDto[],
   ) {
-    const user = await db.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
+    try {
+      const user = await db.user.findUnique({ where: { id: userId } });
+      if (!user) throw new NotFoundException('User not found');
 
-    const created = await Promise.all(
-      services.map((s) =>
-        db.service.upsert({
-          where: {
-            userId_name: {
+      const created = await Promise.all(
+        services.map((s) =>
+          db.service.upsert({
+            where: {
+              userId_name: {
+                userId,
+                name: s.name ?? '',
+              },
+            },
+            update: {
+              description: s.description ?? '',
+              price: s.price ?? 0,
+              durationMins: s.durationMins ?? null,
+              vendorId: s.vendorId,
+            },
+            create: {
               userId,
               name: s.name ?? '',
+              description: s.description ?? '',
+              price: s.price ?? 0,
+              durationMins: s.durationMins ?? null,
+              vendorId: s.vendorId,
             },
-          },
-          update: {
-            description: s.description ?? '',
-            price: s.price ?? 0,
-            durationMins: s.durationMins ?? null,
-            vendorId: s.vendorId,
-          },
-          create: {
-            userId,
-            name: s.name ?? '',
-            description: s.description ?? '',
-            price: s.price ?? 0,
-            durationMins: s.durationMins ?? null,
-            vendorId: s.vendorId,
-          },
-        }),
-      ),
-    );
+          }),
+        ),
+      );
 
-    return successResponse({ created }, 'Services successfully created', 201);
+      return successResponse({ created }, 'Services successfully created', 201);
+    } catch (error: any) {
+      throw new InternalServerErrorException('Failed', error.message);
+    }
   }
 
   async createPaystackSubaccount(userId: string, dto: CreateSubaccountDto) {
