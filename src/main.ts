@@ -13,7 +13,6 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from 'dotenv';
 import compression from 'compression';
-import bodyParser from 'body-parser';
 import { keepServerAliveDeployment } from './server/redis.keepAlive';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { join } from 'path';
@@ -23,18 +22,10 @@ import { Request, Response, NextFunction } from 'express';
 config();
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   app.set('trust proxy', 1);
-
-  // Body parser with raw body for webhook verification
-  app.use(
-    bodyParser.json({
-      verify: (req: any, _res, buf) => {
-        req.rawBody = buf;
-      },
-    }),
-  );
-  app.use(bodyParser.urlencoded({ extended: true }));
 
   // Validation
   app.useGlobalPipes(

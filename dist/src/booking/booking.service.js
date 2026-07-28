@@ -178,6 +178,7 @@ let BookingService = class BookingService {
                     date: bookingDate,
                     clientEmail: dto.clientEmail,
                     clientName: dto.clientName,
+                    clientAddress: dto.clientAddress,
                     clientId: dto.clientId,
                     startTime,
                     endTime,
@@ -267,6 +268,7 @@ let BookingService = class BookingService {
                     serviceId: dto.serviceId,
                     title: services.name,
                     clientName: dto.clientName,
+                    clientAddress: dto.clientAddress,
                     email: dto.clientEmail,
                     vendorEmail: vendorUser?.email,
                     businessName: dto.businessName,
@@ -279,6 +281,7 @@ let BookingService = class BookingService {
                     state: dto.state,
                     country: dto.country,
                     vendorUserId: vendorUser?.id,
+                    userId: vendorUser?.id,
                 },
             }, {
                 headers: {

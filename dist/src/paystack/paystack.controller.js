@@ -154,16 +154,28 @@ let PaystackController = class PaystackController {
     async paystackWebhook(req, headers) {
         try {
             const secret = process.env.PAYSTACK_SECRET_KEY;
+            const rawBody = req.rawBody;
+            const paystackSignature = headers['x-paystack-signature'];
+            if (!rawBody || !paystackSignature) {
+                throw new common_1.HttpException('Missing Paystack webhook signature or raw body', common_1.HttpStatus.UNAUTHORIZED);
+            }
             const computedSignature = crypto
                 .createHmac('sha512', secret)
-                .update(req.rawBody)
+                .update(rawBody)
                 .digest('hex');
-            const paystackSignature = headers['x-paystack-signature'];
-            if (computedSignature !== paystackSignature) {
+            const signaturesMatch = paystackSignature.length === computedSignature.length &&
+                crypto.timingSafeEqual(Buffer.from(computedSignature, 'utf8'), Buffer.from(paystackSignature, 'utf8'));
+            if (!signaturesMatch) {
                 throw new common_1.HttpException('Invalid signature', common_1.HttpStatus.UNAUTHORIZED);
             }
             const event = req.body;
-            const paymentChannel = event.data.channel || event.data.authorization.channel || 'unknown';
+            if (!event?.data?.reference) {
+                throw new common_1.BadRequestException('Invalid Paystack webhook payload');
+            }
+            if (event.event !== 'charge.success') {
+                return { status: true };
+            }
+            const paymentChannel = event.data.channel || event.data.authorization?.channel || 'unknown';
             const auth = event.data.authorization;
             const bank = auth?.bank || null;
             const accountName = auth?.account_name || null;
@@ -173,12 +185,24 @@ let PaystackController = class PaystackController {
                     providerRef: event.data.reference,
                 },
             });
-            if (transactionExists?.bookingId) {
-                console.log(`Transaction with reference ${event.data.reference} already exists. Skipping processing.`);
+            if (!transactionExists) {
+                throw new common_1.BadRequestException('Transaction was not initialized');
+            }
+            if (transactionExists.bookingId) {
                 return { status: true };
             }
-            if (event.event === 'charge.success') {
-                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+            {
+                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+                if (!vendorId ||
+                    !vendorUserId ||
+                    !serviceId ||
+                    !clientId ||
+                    !email ||
+                    !dayOfWeek ||
+                    !startTime ||
+                    !endTime) {
+                    throw new common_1.BadRequestException('Incomplete booking metadata');
+                }
                 console.log('event.data.metadata', event.data.metadata);
                 const book = await this.bookingService.createBooking(vendorUserId, {
                     userId: vendorUserId,
@@ -186,12 +210,17 @@ let PaystackController = class PaystackController {
                     serviceId,
                     date: dayOfWeek,
                     clientName,
+                    clientAddress,
                     clientEmail: email,
                     startTime: new Date(startTime),
                     endTime: new Date(endTime),
                     status: 'CONFIRMED',
                 });
                 console.log({ book });
+                await this.prisma.transaction.update({
+                    where: { providerRef: event.data.reference },
+                    data: { bookingId: book.id },
+                });
                 const senderDetails = await this.prisma.senderDetails.create({
                     data: {
                         vendorId: vendorId,
@@ -250,33 +279,6 @@ let PaystackController = class PaystackController {
                     })();
                 });
             }
-            if (event.event === 'charge.failed') {
-                const { slug, vendorId, bookingId, title, name, userId } = event.data.metadata;
-                const senderDetails = await this.prisma.senderDetails.create({
-                    data: {
-                        vendorId: vendorId,
-                        senderName: accountName,
-                        senderAccountNumber: accountNumber,
-                        senderBankName: bank,
-                        senderDescription: 'Payment via Paystack',
-                    },
-                });
-                const dto = {
-                    amount: event.data.amount,
-                    senderDetailsId: senderDetails.id,
-                    status: 'failed',
-                    name,
-                    providerRef: event.data.reference,
-                    paidAt: event.data.paid_at,
-                    percentageFee: 0.05,
-                    title,
-                    slug,
-                    bookingId,
-                    vendorId,
-                    paymentMethod: paymentChannel,
-                };
-                await this.transactionsService.create(userId, dto);
-            }
             return { status: true };
         }
         catch (error) {
@@ -324,6 +326,7 @@ __decorate([
 ], PaystackController.prototype, "refundPayment", null);
 __decorate([
     (0, common_1.Post)('webhook'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Headers)()),
     __metadata("design:type", Function),
