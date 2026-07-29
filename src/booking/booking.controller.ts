@@ -177,7 +177,7 @@ export class BookingController {
   @Roles('VENDOR', 'CLIENT')
   rescheduleBooking(
     @Req() req: { user: { id: string } },
-    @Body() dto: { date: string; startTime: string; endTime: string },
+    @Body() dto: { date: string; startTime: string; endTime?: string },
     @Param('bookingId') bookingId: string,
   ) {
     return this.bookingService.rescheduleBooking(bookingId, dto, req.user.id);

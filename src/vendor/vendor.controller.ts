@@ -32,7 +32,7 @@ import {
 } from '@nestjs/platform-express';
 import { cloudinaryMulterOptions } from 'src/middlewares/cloudinary.middleware';
 import { CreateSubaccountDto } from 'src/paystack';
-import { BulkUpdateItemDto, CreateServicesDto } from './dto/services.dto';
+import { BulkUpdateItemDto } from './dto/services.dto';
 
 @Controller('vendor')
 export class VendorController {
@@ -59,8 +59,6 @@ export class VendorController {
     },
   ) {
     const userId = req.user.id;
-
-    console.log({ req, userId });
 
     if (!userId) {
       throw new BadRequestException('User not authenticated');
@@ -97,15 +95,18 @@ export class VendorController {
     @Body() dto: CreateVendorDto,
   ) {
     const userId = req.user.id;
-    console.log('Creating profile for userId:', userId, 'with dto:', dto);
     return this.vendorService.createProfile(userId, dto);
   }
 
   @Post('onboarding/services')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
-  createServices(@Req() req, @Body() body: CreateServicesDto) {
-    return this.vendorService.createServices(req.user.id, body.services);
+  createServices(@Req() req, @Body() body: any) {
+    return this.vendorService.createServices(
+      req.user.id,
+      body.vendorId,
+      body.services,
+    );
   }
 
   @Patch('onboarding/update-services')

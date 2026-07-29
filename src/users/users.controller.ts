@@ -44,7 +44,6 @@ export class UsersController {
     @Req() req: Request & { user: { id: string } },
     file: Express.Multer.File,
   ) {
-    console.log('FILE', file);
     return this.usersService.updateProfilePicture(req.user.id, file);
   }
 

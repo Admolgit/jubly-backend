@@ -21,14 +21,12 @@ const create_vendor_dto_1 = require("./dto/create-vendor.dto");
 const platform_express_1 = require("@nestjs/platform-express");
 const cloudinary_middleware_1 = require("../middlewares/cloudinary.middleware");
 const paystack_1 = require("../paystack");
-const services_dto_1 = require("./dto/services.dto");
 let VendorController = class VendorController {
     constructor(vendorService) {
         this.vendorService = vendorService;
     }
     async completeOnboarding(req, body, files) {
         const userId = req.user.id;
-        console.log({ req, userId });
         if (!userId) {
             throw new common_1.BadRequestException('User not authenticated');
         }
@@ -52,11 +50,10 @@ let VendorController = class VendorController {
     }
     createProfile(req, dto) {
         const userId = req.user.id;
-        console.log('Creating profile for userId:', userId, 'with dto:', dto);
         return this.vendorService.createProfile(userId, dto);
     }
     createServices(req, body) {
-        return this.vendorService.createServices(req.user.id, body.services);
+        return this.vendorService.createServices(req.user.id, body.vendorId, body.services);
     }
     bulkUpdateServices(req, body) {
         return this.vendorService.bulkUpdateServices(req.user.id, body.updates);
@@ -146,7 +143,7 @@ __decorate([
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, services_dto_1.CreateServicesDto]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "createServices", null);
 __decorate([

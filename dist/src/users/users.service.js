@@ -90,7 +90,6 @@ let UsersService = class UsersService {
                 throw new common_1.BadRequestException('Profile image is required');
             }
             const imageUrl = await this.cloudinaryService.uploadImage(file);
-            console.log({ file, imageUrl });
             const updatedPicture = await this.prisma.vendor.update({
                 where: { userId },
                 data: {

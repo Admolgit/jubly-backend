@@ -30,7 +30,6 @@ let UsersController = class UsersController {
         return this.usersService.getClientsByVendor(clientVendorId);
     }
     updateProfileImage(req, file) {
-        console.log('FILE', file);
         return this.usersService.updateProfilePicture(req.user.id, file);
     }
     updateProfile(req, dto) {

@@ -110,7 +110,6 @@ export class UsersService {
       }
 
       const imageUrl = await this.cloudinaryService.uploadImage(file);
-      console.log({ file, imageUrl });
       const updatedPicture = await this.prisma.vendor.update({
         where: { userId },
         data: {

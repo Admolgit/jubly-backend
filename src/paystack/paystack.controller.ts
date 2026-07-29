@@ -280,8 +280,6 @@ export class PaystackController {
           throw new BadRequestException('Incomplete booking metadata');
         }
 
-        console.log('event.data.metadata', event.data.metadata);
-
         const book = await this.bookingService.createBooking(vendorUserId, {
           userId: vendorUserId,
           clientId,
@@ -294,8 +292,6 @@ export class PaystackController {
           endTime: new Date(endTime),
           status: 'CONFIRMED',
         });
-
-        console.log({ book });
 
         await this.prisma.transaction.update({
           where: { providerRef: event.data.reference },
@@ -312,8 +308,6 @@ export class PaystackController {
             senderDescription: 'Payment via Paystack',
           },
         });
-
-        console.log({ senderDetails });
 
         const dto = {
           amount: event.data.amount,

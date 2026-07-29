@@ -63,7 +63,6 @@ export class VendorService {
     tx?: Prisma.TransactionClient,
   ) {
     try {
-      console.log({ userId, dto });
       const prisma = tx ?? this.prisma;
 
       if (userId) {
@@ -95,62 +94,67 @@ export class VendorService {
 
   async createServices(
     userId: string,
+    vendorId: string,
     services: ServiceItemDto[],
     tx?: Prisma.TransactionClient,
   ) {
     try {
       if (tx) {
-        return this._createServicesLogic(tx, userId, services);
+        return this._createServicesLogic(tx, userId, vendorId, services);
       }
 
       return this.prisma.$transaction((db) =>
-        this._createServicesLogic(db, userId, services),
+        this._createServicesLogic(db, userId, vendorId, services),
       );
     } catch (error: any) {
-      throw new InternalServerErrorException('Failed', error.message);
+      throw new InternalServerErrorException(
+        error.message || 'Failed to create services',
+      );
     }
   }
 
   private async _createServicesLogic(
     db: Prisma.TransactionClient,
     userId: string,
+    vendorId: string,
     services: ServiceItemDto[],
   ) {
-    try {
-      const user = await db.user.findUnique({ where: { id: userId } });
-      if (!user) throw new NotFoundException('User not found');
+    const user = await db.user.findUnique({
+      where: { id: userId },
+    });
 
-      const created = await Promise.all(
-        services.map((s) =>
-          db.service.upsert({
-            where: {
-              userId_name: {
-                userId,
-                name: s.name ?? '',
-              },
-            },
-            update: {
-              description: s.description ?? '',
-              price: s.price ?? 0,
-              durationMins: s.durationMins ?? null,
-              vendorId: s.vendorId,
-            },
-            create: {
-              userId,
-              name: s.name ?? '',
-              description: s.description ?? '',
-              price: s.price ?? 0,
-              durationMins: s.durationMins ?? null,
-              vendorId: s.vendorId,
-            },
-          }),
-        ),
-      );
-
-      return successResponse({ created }, 'Services successfully created', 201);
-    } catch (error: any) {
-      throw new InternalServerErrorException('Failed', error.message);
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
+
+    const created = await Promise.all(
+      services.map((service) =>
+        db.service.upsert({
+          where: {
+            userId_name: {
+              userId,
+              name: service.name || '',
+            },
+          },
+          update: {
+            description: service.description,
+            price: service.price,
+            durationMins: service.durationMins,
+            vendorId,
+          },
+          create: {
+            userId,
+            vendorId,
+            name: service.name ?? '',
+            description: service.description,
+            price: service.price ?? 0,
+            durationMins: service.durationMins,
+          },
+        }),
+      ),
+    );
+
+    return successResponse(created, 'Services successfully created', 201);
   }
 
   async createPaystackSubaccount(userId: string, dto: CreateSubaccountDto) {
