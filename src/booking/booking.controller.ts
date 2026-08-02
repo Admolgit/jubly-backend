@@ -16,6 +16,7 @@ import { BookingService, DateFilter } from './booking.service';
 import type { IBooking } from './dto/booking.dto';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { RolesGuard, Roles } from 'src/auth/role.guard';
+import { Public } from 'src/auth/public.decorator';
 
 @Controller('booking')
 export class BookingController {
@@ -30,6 +31,7 @@ export class BookingController {
   }
 
   @Post('initialize-payment')
+  @Public()
   paymentInitialize(@Body() dto: any) {
     return this.bookingService.initializeBookingPayment(
       dto.bookingId as string,
@@ -177,7 +179,7 @@ export class BookingController {
   @Roles('VENDOR', 'CLIENT')
   rescheduleBooking(
     @Req() req: { user: { id: string } },
-    @Body() dto: { date: string; startTime: string; endTime: string },
+    @Body() dto: { date: string; startTime: string; endTime?: string },
     @Param('bookingId') bookingId: string,
   ) {
     return this.bookingService.rescheduleBooking(bookingId, dto, req.user.id);

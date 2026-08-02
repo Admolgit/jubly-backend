@@ -31,6 +31,14 @@ let TransactionService = class TransactionService {
         this.prisma = prisma;
         this.activityService = activityService;
     }
+    async assertVendorOwnership(userId, vendorId) {
+        const vendor = await this.prisma.vendor.findUnique({
+            where: { userId },
+        });
+        if (!vendor || vendor.id !== vendorId) {
+            throw new common_1.ForbiddenException('Not allowed to view these transactions');
+        }
+    }
     async create(userId, dto) {
         try {
             await this.prisma.transaction.create({
@@ -87,8 +95,9 @@ let TransactionService = class TransactionService {
             throw new common_1.InternalServerErrorException('Failed to record this transactions', error.message);
         }
     }
-    async findAllVendorTransactions(vendorId, page, limit, search) {
+    async findAllVendorTransactions(userId, vendorId, page, limit, search) {
         try {
+            await this.assertVendorOwnership(userId, vendorId);
             let where = {};
             if (vendorId) {
                 where.vendorId = vendorId;
@@ -142,11 +151,15 @@ let TransactionService = class TransactionService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.ForbiddenException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch this transactions', error.message);
         }
     }
-    async getTotalTransactionsAmountByVendorId(vendorId, view) {
+    async getTotalTransactionsAmountByVendorId(userId, vendorId, view) {
         try {
+            await this.assertVendorOwnership(userId, vendorId);
             let where = {};
             if (view === 'day') {
                 const today = new Date();
@@ -179,6 +192,16 @@ let TransactionService = class TransactionService {
                     lt: endOfMonth,
                 };
             }
+            else if (view === 'year') {
+                const today = new Date();
+                const startOfYear = new Date(today.getFullYear(), 0, 1);
+                const endOfYear = new Date(today.getFullYear() + 1, 0, 1);
+                where.vendorId = vendorId;
+                where.paidAt = {
+                    gte: startOfYear,
+                    lt: endOfYear,
+                };
+            }
             const total = await this.prisma.transaction.aggregate({
                 where: {
                     ...where,
@@ -193,6 +216,9 @@ let TransactionService = class TransactionService {
             return (0, response_1.successResponse)({ total: totalSum }, 'Successfully fetched transactions amount.');
         }
         catch (error) {
+            if (error instanceof common_1.ForbiddenException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch this transactions', error.message);
         }
     }

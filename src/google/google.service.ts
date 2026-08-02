@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -275,15 +276,21 @@ export class GoogleCalendarService {
 
   async getUserCalendarLinked(userId: string) {
     try {
-      const linked = await this.prisma.vendorCalendar.findFirst({
+      const calendar = await this.prisma.vendorCalendar.findFirst({
         where: {
           userId,
           linked: true,
         },
+        select: {
+          id: true,
+          provider: true,
+          linked: true,
+          expiryDate: true,
+        },
       });
 
       return successResponse(
-        { linked },
+        { linked: !!calendar, calendar },
         'Successfully fetched calendar linked status',
       );
     } catch (error: any) {
@@ -295,12 +302,14 @@ export class GoogleCalendarService {
   }
 
   async getCalendar({
+    userId,
     view,
     year,
     month,
     date,
     vendorId,
   }: {
+    userId: string;
     view: string;
     year: number;
     month: number;
@@ -308,6 +317,14 @@ export class GoogleCalendarService {
     vendorId?: string;
   }) {
     try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor || vendor.id !== vendorId) {
+        throw new ForbiddenException('Not allowed to view this calendar');
+      }
+
       let startTime: Date = new Date();
       let endTime: Date = new Date();
 
@@ -357,6 +374,10 @@ export class GoogleCalendarService {
 
       return this.formatCalendarData(view, bookings, startTime);
     } catch (error: any) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch calendar data.',
         error.message as string,

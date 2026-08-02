@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const google_service_1 = require("./google.service");
 const auth_service_1 = require("../auth/auth.service");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const public_decorator_1 = require("../auth/public.decorator");
 const role_guard_1 = require("../auth/role.guard");
 const prisma_service_1 = require("../../prisma/prisma.service");
 let GoogleController = class GoogleController {
@@ -25,10 +26,8 @@ let GoogleController = class GoogleController {
         this.authService = authService;
         this.prisma = prisma;
     }
-    connectGoogleCalendar(userId, direction) {
-        if (!userId)
-            throw new common_1.BadRequestException('UserId required');
-        const stateObj = { userId, direction };
+    connectGoogleCalendar(req, direction) {
+        const stateObj = { userId: req.user.id, direction };
         const state = encodeURIComponent(Buffer.from(JSON.stringify(stateObj)).toString('base64'));
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
             `client_id=${process.env.GOOGLE_CLIENT_ID}` +
@@ -53,10 +52,19 @@ let GoogleController = class GoogleController {
             throw new common_1.BadRequestException('Invalid state');
         }
         const result = await this.googleService.saveTokens(parsedState.userId, code);
-        const appJwt = this.authService.generateJwt(parsedState.userId);
-        let frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
-        if (parsedState.direction === 'onboarding') {
-            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/vendor-availability?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
+        const user = await this.prisma.user.findUnique({
+            where: { id: parsedState.userId },
+        });
+        if (!user) {
+            throw new common_1.BadRequestException('User not found');
+        }
+        const appJwt = await this.authService.generateJwt(user);
+        let frontendRedirectUrl;
+        if (parsedState.direction === 'onboarding-calendar') {
+            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
+        }
+        else {
+            frontendRedirectUrl = `${process.env.FRONTEND_BASE_URL}/dashboard?calendarLinked=true&userId=${encodeURIComponent(result.userId)}&accessToken=${encodeURIComponent(result.accessToken)}&access_token=${encodeURIComponent(appJwt)}`;
         }
         await this.prisma.vendor.update({
             where: {
@@ -68,13 +76,12 @@ let GoogleController = class GoogleController {
         });
         return res.redirect(frontendRedirectUrl);
     }
-    getCalenderLinkedStatus(userId) {
-        if (!userId)
-            throw new common_1.BadRequestException('UserId required');
-        return this.googleService.getUserCalendarLinked(userId);
+    getCalenderLinkedStatus(req) {
+        return this.googleService.getUserCalendarLinked(req.user.id);
     }
-    getCalendar(view, year, month, date, vendorId) {
+    getCalendar(req, view, year, month, date, vendorId) {
         return this.googleService.getCalendar({
+            userId: req.user.id,
             view,
             year: Number(year),
             month: Number(month),
@@ -95,14 +102,17 @@ let GoogleController = class GoogleController {
 exports.GoogleController = GoogleController;
 __decorate([
     (0, common_1.Get)('calendar'),
-    __param(0, (0, common_1.Query)('userId')),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)('direction')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], GoogleController.prototype, "connectGoogleCalendar", null);
 __decorate([
     (0, common_1.Get)('/calendar/callback'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Query)('code')),
     __param(1, (0, common_1.Query)('state')),
     __param(2, (0, common_1.Res)()),
@@ -112,22 +122,25 @@ __decorate([
 ], GoogleController.prototype, "googleRedirect", null);
 __decorate([
     (0, common_1.Get)('linked'),
-    __param(0, (0, common_1.Query)('userId')),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], GoogleController.prototype, "getCalenderLinkedStatus", null);
 __decorate([
     (0, common_1.Get)('/calendar-list/:vendorId'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
-    __param(0, (0, common_1.Query)('view')),
-    __param(1, (0, common_1.Query)('year')),
-    __param(2, (0, common_1.Query)('month')),
-    __param(3, (0, common_1.Query)('date')),
-    __param(4, (0, common_1.Param)('vendorId')),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('view')),
+    __param(2, (0, common_1.Query)('year')),
+    __param(3, (0, common_1.Query)('month')),
+    __param(4, (0, common_1.Query)('date')),
+    __param(5, (0, common_1.Param)('vendorId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:paramtypes", [Object, String, String, String, String, String]),
     __metadata("design:returntype", void 0)
 ], GoogleController.prototype, "getCalendar", null);
 __decorate([

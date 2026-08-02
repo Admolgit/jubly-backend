@@ -14,7 +14,6 @@ import { ActivityService } from 'src/activity/activityLog.service';
     CloudinaryService,
     PaystackService,
     ActivityService,
-    ActivityService,
   ],
   imports: [],
 })

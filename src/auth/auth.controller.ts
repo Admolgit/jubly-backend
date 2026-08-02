@@ -18,6 +18,7 @@ import { AuthService } from './auth.service';
 import * as authDto from './dto/auth.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { VendorService } from 'src/vendor/vendor.service';
+import { Public } from './public.decorator';
 // import { JwtAuthGuard } from './jwt.authGuard';
 // import { Roles, RolesGuard } from './role.guard';
 
@@ -29,11 +30,13 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @Public()
   register(@Body() dto: authDto.RegisterDto) {
     return this.authService.register(dto);
   }
 
   @Post('client-register')
+  @Public()
   registerClient(
     @Body()
     dto: {
@@ -47,15 +50,18 @@ export class AuthController {
   }
 
   @Post('login')
+  @Public()
   login(@Body() dto: authDto.LoginDto) {
     return this.authService.login(dto);
   }
 
   @Get('google/login')
+  @Public()
   @UseGuards(AuthGuard('google-login'))
   async googleLogin() {}
 
   @Get('google/callback')
+  @Public()
   @UseGuards(AuthGuard('google-login'))
   async googleCallback(@Req() req: Request & { user: any }, @Res() res: any) {
     const googleProfileInfo = req.user;
@@ -93,11 +99,13 @@ export class AuthController {
   }
 
   @Post('verify-email')
+  @Public()
   verifyEmail(@Body() dto: { email: string; otp: string }) {
     return this.authService.verifyEmailOtp(dto);
   }
 
   @Post('resend-otp')
+  @Public()
   resendOtp(@Body() dto: { email: string }) {
     return this.authService.resendOtp(dto);
   }
@@ -114,17 +122,19 @@ export class AuthController {
   }
 
   @Post('refresh-token')
-  refreshToken(@Body('refereshToken') refreshToken: string) {
+  @Public()
+  refreshToken(@Body('refreshToken') refreshToken: string) {
     return this.authService.refreshToken(refreshToken);
   }
 
   @Get('pending-vendor/:userId')
+  @Public()
   getPendingVendor(@Param('userId') userId: string) {
     return this.vendorServices.getPendingVendorsById(userId);
   }
 
   @Get('/user/:userId')
-  getUserById(@Param(':userId') userId: string) {
+  getUserById(@Param('userId') userId: string) {
     return this.authService.getUserById(userId);
   }
 }

@@ -26,7 +26,6 @@ exports.VendorModule = VendorModule = __decorate([
             cloudinary_service_1.CloudinaryService,
             paystack_service_1.PaystackService,
             activityLog_service_1.ActivityService,
-            activityLog_service_1.ActivityService,
         ],
         imports: [],
     })

@@ -31,6 +31,20 @@ export class AuthService {
     private activityService: ActivityService,
   ) {}
 
+  private sanitizeUser<T extends Record<string, any> | null | undefined>(
+    user: T,
+  ) {
+    if (!user) return user;
+    const {
+      password,
+      refreshTokenHash,
+      verificationCode,
+      codeExpiresAt,
+      ...safeUser
+    } = user;
+    return safeUser;
+  }
+
   async register(dto: RegisterDto) {
     try {
       const existingUser = await this.prisma.user.findUnique({
@@ -65,7 +79,11 @@ export class AuthService {
 
       await this.nodemailService.sendOTP(dto.email, otpGenerated);
 
-      return successResponse({ user, token }, 'Registration successful', 201);
+      return successResponse(
+        { user: this.sanitizeUser(user), token },
+        'Registration successful',
+        201,
+      );
     } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
@@ -112,7 +130,7 @@ export class AuthService {
       await this.nodemailService.sendTempPassword(dto.email, generatedPassword);
 
       return successResponse(
-        { client },
+        { client: this.sanitizeUser(client) },
         'Client is registered successfully.',
         201,
       );
@@ -163,7 +181,7 @@ export class AuthService {
           },
         });
         return successResponse(
-          { user, token, refreshToken },
+          { user: this.sanitizeUser(user), token, refreshToken },
           'User not verfied',
           400,
         );
@@ -195,7 +213,7 @@ export class AuthService {
           },
         });
         return successResponse(
-          { user, token, refreshToken },
+          { user: this.sanitizeUser(user), token, refreshToken },
           'Complete registration',
           404,
         );
@@ -236,7 +254,7 @@ export class AuthService {
         });
 
         return successResponse(
-          { user, token, refreshToken },
+          { user: this.sanitizeUser(user), token, refreshToken },
           'Onboarding not completed',
           404,
         );
@@ -271,7 +289,10 @@ export class AuthService {
         },
       });
 
-      return successResponse({ user, token, refreshToken }, 'Login successful');
+      return successResponse(
+        { user: this.sanitizeUser(user), token, refreshToken },
+        'Login successful',
+      );
     } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
@@ -319,7 +340,7 @@ export class AuthService {
 
       const token = await this.generateJwt(user);
       const refreshToken = await this.jwtService.signAsync(
-        { sub: user.id, role: user.role },
+        { sub: user.id, email: user.email, role: user.role },
         { expiresIn: '14d' },
       );
 
@@ -332,7 +353,7 @@ export class AuthService {
 
       return successResponse(
         {
-          user,
+          user: this.sanitizeUser(user),
           token,
           refreshToken,
           alreadyExists,
@@ -351,7 +372,7 @@ export class AuthService {
 
   async generateJwt(user: any): Promise<string> {
     return await this.jwtService.signAsync(
-      { sub: user.id, role: user.role },
+      { sub: user.id, email: user.email, role: user.role },
       { expiresIn: '7d' },
     );
   }
@@ -374,14 +395,12 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const accessToken = this.jwtService.sign(
-        { id: user.id, role: user.role },
+      const token = this.jwtService.sign(
+        { sub: user.id, email: user.email, role: user.role },
         { expiresIn: '15m' },
       );
 
-      return {
-        accessToken,
-      };
+      return successResponse({ token }, 'Token refreshed successfully');
     } catch (error: any) {
       throw new InternalServerErrorException(
         'Refresh token expired or invalid',
@@ -539,7 +558,7 @@ export class AuthService {
         },
       });
 
-      return successResponse({ user }, 'successful');
+      return successResponse({ user: this.sanitizeUser(user) }, 'successful');
     } catch (error: any) {
       throw new InternalServerErrorException('User failed', error.message);
     }

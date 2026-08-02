@@ -51,6 +51,7 @@ const auth_service_1 = require("./auth.service");
 const authDto = __importStar(require("./dto/auth.dto"));
 const passport_1 = require("@nestjs/passport");
 const vendor_service_1 = require("../vendor/vendor.service");
+const public_decorator_1 = require("./public.decorator");
 let AuthController = class AuthController {
     constructor(authService, vendorServices) {
         this.authService = authService;
@@ -111,6 +112,7 @@ let AuthController = class AuthController {
 exports.AuthController = AuthController;
 __decorate([
     (0, common_1.Post)('register'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -118,6 +120,7 @@ __decorate([
 ], AuthController.prototype, "register", null);
 __decorate([
     (0, common_1.Post)('client-register'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -125,6 +128,7 @@ __decorate([
 ], AuthController.prototype, "registerClient", null);
 __decorate([
     (0, common_1.Post)('login'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -132,6 +136,7 @@ __decorate([
 ], AuthController.prototype, "login", null);
 __decorate([
     (0, common_1.Get)('google/login'),
+    (0, public_decorator_1.Public)(),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google-login')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -139,6 +144,7 @@ __decorate([
 ], AuthController.prototype, "googleLogin", null);
 __decorate([
     (0, common_1.Get)('google/callback'),
+    (0, public_decorator_1.Public)(),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google-login')),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Res)()),
@@ -148,6 +154,7 @@ __decorate([
 ], AuthController.prototype, "googleCallback", null);
 __decorate([
     (0, common_1.Post)('verify-email'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -155,6 +162,7 @@ __decorate([
 ], AuthController.prototype, "verifyEmail", null);
 __decorate([
     (0, common_1.Post)('resend-otp'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -169,13 +177,15 @@ __decorate([
 ], AuthController.prototype, "changePassword", null);
 __decorate([
     (0, common_1.Post)('refresh-token'),
-    __param(0, (0, common_1.Body)('refereshToken')),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Body)('refreshToken')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "refreshToken", null);
 __decorate([
     (0, common_1.Get)('pending-vendor/:userId'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -183,7 +193,7 @@ __decorate([
 ], AuthController.prototype, "getPendingVendor", null);
 __decorate([
     (0, common_1.Get)('/user/:userId'),
-    __param(0, (0, common_1.Param)(':userId')),
+    __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)

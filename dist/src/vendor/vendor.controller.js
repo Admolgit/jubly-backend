@@ -16,19 +16,18 @@ exports.VendorController = void 0;
 const common_1 = require("@nestjs/common");
 const vendor_service_1 = require("./vendor.service");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const public_decorator_1 = require("../auth/public.decorator");
 const role_guard_1 = require("../auth/role.guard");
 const create_vendor_dto_1 = require("./dto/create-vendor.dto");
 const platform_express_1 = require("@nestjs/platform-express");
 const cloudinary_middleware_1 = require("../middlewares/cloudinary.middleware");
 const paystack_1 = require("../paystack");
-const services_dto_1 = require("./dto/services.dto");
 let VendorController = class VendorController {
     constructor(vendorService) {
         this.vendorService = vendorService;
     }
     async completeOnboarding(req, body, files) {
         const userId = req.user.id;
-        console.log({ req, userId });
         if (!userId) {
             throw new common_1.BadRequestException('User not authenticated');
         }
@@ -52,11 +51,10 @@ let VendorController = class VendorController {
     }
     createProfile(req, dto) {
         const userId = req.user.id;
-        console.log('Creating profile for userId:', userId, 'with dto:', dto);
         return this.vendorService.createProfile(userId, dto);
     }
     createServices(req, body) {
-        return this.vendorService.createServices(req.user.id, body.services);
+        return this.vendorService.createServices(req.user.id, body.vendorId, body.services);
     }
     bulkUpdateServices(req, body) {
         return this.vendorService.bulkUpdateServices(req.user.id, body.updates);
@@ -71,6 +69,14 @@ let VendorController = class VendorController {
     createSubaccount(req, dto) {
         const userId = req.user.id;
         return this.vendorService.createPaystackSubaccount(userId, dto);
+    }
+    updateBankDetails(req, dto) {
+        return this.vendorService.updateBankDetails(req.user.id, dto);
+    }
+    submitIdentityImage(req, identityType, files) {
+        return this.vendorService.submitIdentity(req.user.id, identityType, {
+            documentFront: files.documentFrontUrl?.[0],
+        });
     }
     submitPortfolioImages(req, files) {
         return this.vendorService.uploadPortfolio(req.user.id, files);
@@ -121,7 +127,7 @@ __decorate([
         { name: 'profileImage', maxCount: 1 },
         { name: 'documentFrontUrl', maxCount: 1 },
         { name: 'portfolio', maxCount: 10 },
-    ])),
+    ], cloudinary_middleware_1.cloudinaryMulterOptions)),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, common_1.UploadedFiles)()),
@@ -146,7 +152,7 @@ __decorate([
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, services_dto_1.CreateServicesDto]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "createServices", null);
 __decorate([
@@ -161,6 +167,7 @@ __decorate([
 ], VendorController.prototype, "bulkUpdateServices", null);
 __decorate([
     (0, common_1.Get)('onboarding/vendor-services/:userId'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -187,13 +194,31 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "createSubaccount", null);
 __decorate([
+    (0, common_1.Patch)('bank-details'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, paystack_1.UpdateBankDetailsDto]),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "updateBankDetails", null);
+__decorate([
     (0, common_1.Patch)('onboarding/identity-image'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)([
         { name: 'documentFrontUrl', maxCount: 1 },
         { name: 'documentBackUrl', maxCount: 1 },
-    ])),
+    ], cloudinary_middleware_1.cloudinaryMulterOptions)),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)('identityType')),
+    __param(2, (0, common_1.UploadedFiles)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, Object]),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "submitIdentityImage", null);
+__decorate([
     (0, common_1.Patch)('onboarding/portfolio-images'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
@@ -258,6 +283,7 @@ __decorate([
 ], VendorController.prototype, "getPendingVendors", null);
 __decorate([
     (0, common_1.Get)('booking-vendor/:slug'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('slug')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -265,6 +291,7 @@ __decorate([
 ], VendorController.prototype, "getBookingPage", null);
 __decorate([
     (0, common_1.Get)('service/:serviceId'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('serviceId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -272,6 +299,7 @@ __decorate([
 ], VendorController.prototype, "getServiceById", null);
 __decorate([
     (0, common_1.Get)('search-vendor'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [create_vendor_dto_1.QueryVendorsDto]),
@@ -289,6 +317,7 @@ __decorate([
 ], VendorController.prototype, "exportBookingsCSV", null);
 __decorate([
     (0, common_1.Get)('all-vendors'),
+    (0, public_decorator_1.Public)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)

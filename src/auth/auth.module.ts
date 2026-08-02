@@ -10,6 +10,7 @@ import { PaystackService } from 'src/paystack/paystack.service';
 import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
 import { GoogleLoginStrategy } from 'src/middlewares/google-login-strategy.middleware';
 import { ActivityService } from 'src/activity/activityLog.service';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   controllers: [AuthController],
@@ -30,6 +31,7 @@ import { ActivityService } from 'src/activity/activityLog.service';
     PaystackService,
     GoogleLoginStrategy,
     ActivityService,
+    JwtStrategy,
   ],
   exports: [JwtModule, PassportModule, NodemailerModule],
 })
