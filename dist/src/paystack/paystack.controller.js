@@ -186,6 +186,7 @@ let PaystackController = class PaystackController {
                     providerRef: event.data.reference,
                 },
             });
+            console.log({ metadata: event.data.metadata });
             if (!transactionExists) {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
@@ -194,6 +195,7 @@ let PaystackController = class PaystackController {
             }
             {
                 const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+                console.log({ metadata: event.data.metadata });
                 if (!vendorId ||
                     !vendorUserId ||
                     !serviceId ||
