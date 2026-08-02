@@ -21,6 +21,7 @@ const fs_1 = require("fs");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         rawBody: true,
+        bodyParser: false,
     });
     app.set('trust proxy', 1);
     app.useGlobalPipes(new common_1.ValidationPipe({
@@ -52,7 +53,12 @@ async function bootstrap() {
     app.use((0, cookie_parser_1.default)());
     app.use((0, helmet_1.default)());
     app.use((0, compression_1.default)());
-    app.use((0, express_1.json)({ limit: '50mb' }));
+    app.use((0, express_1.json)({
+        limit: '50mb',
+        verify: (req, res, buf) => {
+            req.rawBody = buf;
+        },
+    }));
     app.use((0, express_1.urlencoded)({ extended: true, limit: '50mb' }));
     const limiter = (0, express_rate_limit_1.default)({
         windowMs: 15 * 60 * 1000,
