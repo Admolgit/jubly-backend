@@ -247,10 +247,10 @@ let BookingService = class BookingService {
             const client = await this.prisma.user.findFirst({
                 where: {
                     email: dto.clientEmail,
-                    role: client_1.UserRole.CLIENT,
                 },
             });
-            let savedClientId = client?.id ?? '';
+            console.log({ client });
+            let savedClientId = client?.id;
             if (!client) {
                 const saved = await this.authService.registerClient({
                     clientName: dto.clientName,

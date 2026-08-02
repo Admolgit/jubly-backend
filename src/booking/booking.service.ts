@@ -208,8 +208,6 @@ export class BookingService {
 
       const calendarIntegration = await this.getVendorCalendar(userId);
 
-      console.log({ dto });
-
       const booking = await this.prisma.booking.create({
         data: {
           vendorId: vendor.id,
@@ -305,11 +303,11 @@ export class BookingService {
       const client = await this.prisma.user.findFirst({
         where: {
           email: dto.clientEmail,
-          role: UserRole.CLIENT,
+          // role: UserRole.CLIENT,
         },
       });
 
-      let savedClientId: string = client?.id ?? '';
+      let savedClientId: string | undefined = client?.id;
       if (!client) {
         const saved = await this.authService.registerClient({
           clientName: dto.clientName,
