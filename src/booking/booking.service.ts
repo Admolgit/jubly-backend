@@ -243,6 +243,7 @@ export class BookingService {
               attendeeEmail: dto.clientEmail,
               attendeeName: dto.clientName,
               vendorEmail: user.email,
+              bookingId: booking.id,
             },
           );
         } catch (err: any) {
@@ -271,25 +272,6 @@ export class BookingService {
 
   async initializeBookingPayment(bookingId: string, dto: any) {
     try {
-      const client = await this.prisma.user.findFirst({
-        where: {
-          email: dto.clientEmail,
-          role: UserRole.CLIENT,
-        },
-      });
-
-      let savedClientId: string = client?.id ?? '';
-      if (!client) {
-        const saved = await this.authService.registerClient({
-          clientName: dto.clientName,
-          email: dto.clientEmail,
-          phone: dto.phone,
-          clientVendorId: dto.vendorId,
-        });
-
-        savedClientId = saved.data.client.id;
-      }
-
       const services = await this.prisma.service.findUnique({
         where: { id: dto.serviceId },
       });
@@ -310,6 +292,33 @@ export class BookingService {
 
       if (!vendor) {
         throw new NotFoundException('Vendor not found');
+      }
+
+      if (
+        vendorUser &&
+        dto.clientEmail &&
+        vendorUser.email.toLowerCase() === String(dto.clientEmail).toLowerCase()
+      ) {
+        throw new BadRequestException('Vendors cannot book their own service');
+      }
+
+      const client = await this.prisma.user.findFirst({
+        where: {
+          email: dto.clientEmail,
+          role: UserRole.CLIENT,
+        },
+      });
+
+      let savedClientId: string = client?.id ?? '';
+      if (!client) {
+        const saved = await this.authService.registerClient({
+          clientName: dto.clientName,
+          email: dto.clientEmail,
+          phone: dto.phone,
+          clientVendorId: dto.vendorId,
+        });
+
+        savedClientId = saved.data.client.id;
       }
 
       const amount = services.price;
@@ -368,6 +377,10 @@ export class BookingService {
         201,
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to initialize payment',
         error.message as string,
