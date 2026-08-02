@@ -15,6 +15,7 @@ import {
 import { GoogleCalendarService } from './google.service';
 import { AuthService } from 'src/auth/auth.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Public } from 'src/auth/public.decorator';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { PrismaService } from 'prisma/prisma.service';
 
@@ -27,13 +28,13 @@ export class GoogleController {
   ) {}
 
   @Get('calendar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
   connectGoogleCalendar(
-    @Query('userId') userId: string,
+    @Req() req: { user: { id: string } },
     @Query('direction') direction: string,
   ) {
-    if (userId === undefined) throw new BadRequestException('UserId required');
-
-    const stateObj = { userId, direction };
+    const stateObj = { userId: req.user.id, direction };
     const state = encodeURIComponent(
       Buffer.from(JSON.stringify(stateObj)).toString('base64'),
     );
@@ -52,6 +53,7 @@ export class GoogleController {
   }
 
   @Get('/calendar/callback')
+  @Public()
   async googleRedirect(
     @Query('code') code: string,
     @Query('state') state: string,
@@ -74,7 +76,15 @@ export class GoogleController {
       code,
     );
 
-    const appJwt: any = this.authService.generateJwt(parsedState.userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: parsedState.userId },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const appJwt = await this.authService.generateJwt(user);
 
     let frontendRedirectUrl: string;
     if (parsedState.direction === 'onboarding-calendar') {
@@ -100,17 +110,17 @@ export class GoogleController {
   }
 
   @Get('linked')
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles('VENDOR')
-  getCalenderLinkedStatus(@Query('userId') userId: string) {
-    if (!userId) throw new BadRequestException('UserId required');
-    return this.googleService.getUserCalendarLinked(userId);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getCalenderLinkedStatus(@Req() req: { user: { id: string } }) {
+    return this.googleService.getUserCalendarLinked(req.user.id);
   }
 
   @Get('/calendar-list/:vendorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   getCalendar(
+    @Req() req: { user: { id: string } },
     @Query('view') view: 'month' | 'week' | 'day',
     @Query('year') year?: string,
     @Query('month') month?: string,
@@ -118,6 +128,7 @@ export class GoogleController {
     @Param('vendorId') vendorId?: string,
   ) {
     return this.googleService.getCalendar({
+      userId: req.user.id,
       view,
       year: Number(year),
       month: Number(month),

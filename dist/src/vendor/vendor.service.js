@@ -31,7 +31,7 @@ let VendorService = class VendorService {
     }
     async completeOnboarding(userId, dto, files) {
         try {
-            await this.createServices(userId, dto.services, dto.profile.vendorId);
+            await this.createServices(userId, dto.profile.vendorId, dto.services);
             const createdVendor = await this.submitIdentity(userId, dto.identityType, files);
             await this.createPaystackSubaccount(userId, dto.subaccount);
             await this.submitProfileImage(userId, files.profileImage);
@@ -44,7 +44,6 @@ let VendorService = class VendorService {
     }
     async createProfile(userId, dto, tx) {
         try {
-            console.log({ userId, dto });
             const prisma = tx ?? this.prisma;
             if (userId) {
                 const exists = await prisma.vendor.findUnique({ where: { userId } });
@@ -69,49 +68,47 @@ let VendorService = class VendorService {
             throw new common_1.InternalServerErrorException('Failed', error.message);
         }
     }
-    async createServices(userId, services, tx) {
+    async createServices(userId, vendorId, services, tx) {
         try {
             if (tx) {
-                return this._createServicesLogic(tx, userId, services);
+                return this._createServicesLogic(tx, userId, vendorId, services);
             }
-            return this.prisma.$transaction((db) => this._createServicesLogic(db, userId, services));
+            return this.prisma.$transaction((db) => this._createServicesLogic(db, userId, vendorId, services));
         }
         catch (error) {
-            throw new common_1.InternalServerErrorException('Failed', error.message);
+            throw new common_1.InternalServerErrorException(error.message || 'Failed to create services');
         }
     }
-    async _createServicesLogic(db, userId, services) {
-        try {
-            const user = await db.user.findUnique({ where: { id: userId } });
-            if (!user)
-                throw new common_1.NotFoundException('User not found');
-            const created = await Promise.all(services.map((s) => db.service.upsert({
-                where: {
-                    userId_name: {
-                        userId,
-                        name: s.name ?? '',
-                    },
-                },
-                update: {
-                    description: s.description ?? '',
-                    price: s.price ?? 0,
-                    durationMins: s.durationMins ?? null,
-                    vendorId: s.vendorId,
-                },
-                create: {
+    async _createServicesLogic(db, userId, vendorId, services) {
+        const user = await db.user.findUnique({
+            where: { id: userId },
+        });
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        const created = await Promise.all(services.map((service) => db.service.upsert({
+            where: {
+                userId_name: {
                     userId,
-                    name: s.name ?? '',
-                    description: s.description ?? '',
-                    price: s.price ?? 0,
-                    durationMins: s.durationMins ?? null,
-                    vendorId: s.vendorId,
+                    name: service.name || '',
                 },
-            })));
-            return (0, response_1.successResponse)({ created }, 'Services successfully created', 201);
-        }
-        catch (error) {
-            throw new common_1.InternalServerErrorException('Failed', error.message);
-        }
+            },
+            update: {
+                description: service.description,
+                price: service.price,
+                durationMins: service.durationMins,
+                vendorId,
+            },
+            create: {
+                userId,
+                vendorId,
+                name: service.name ?? '',
+                description: service.description,
+                price: service.price ?? 0,
+                durationMins: service.durationMins,
+            },
+        })));
+        return (0, response_1.successResponse)(created, 'Services successfully created', 201);
     }
     async createPaystackSubaccount(userId, dto) {
         try {
@@ -176,6 +173,61 @@ let VendorService = class VendorService {
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to create subaccount', error.message);
+        }
+    }
+    async updateBankDetails(userId, dto) {
+        try {
+            if (!/^\d{10}$/.test(dto.accountNumber)) {
+                throw new common_1.BadRequestException('Account number must contain 10 digits');
+            }
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor || !vendor.paystackSubaccount) {
+                throw new common_1.NotFoundException('Vendor payout account not found');
+            }
+            const subAccount = await this.prisma.subAccount.findFirst({
+                where: { userId, paystackAccountId: vendor.paystackSubaccount },
+            });
+            if (!subAccount) {
+                throw new common_1.NotFoundException('Vendor payout account not found');
+            }
+            const resolvedAccount = await this.paystackService.resolveBankAccount(dto.accountNumber, dto.settlementBank);
+            if (!resolvedAccount?.status || !resolvedAccount?.data?.account_name) {
+                throw new common_1.BadRequestException('Unable to verify these bank details');
+            }
+            const accountName = resolvedAccount.data.account_name;
+            await this.paystackService.updateSubaccount(vendor.paystackSubaccount, {
+                businessName: vendor.businessName,
+                settlementBank: dto.settlementBank,
+                accountNumber: dto.accountNumber,
+            });
+            const [updatedSubAccount] = await this.prisma.$transaction([
+                this.prisma.subAccount.update({
+                    where: { id: subAccount.id },
+                    data: {
+                        bankName: dto.settlementBank,
+                        accountNumber: dto.accountNumber,
+                        accountName,
+                    },
+                }),
+                this.prisma.vendor.update({
+                    where: { id: vendor.id },
+                    data: {
+                        bankAccountNumber: dto.accountNumber,
+                        bankCode: dto.settlementBank,
+                    },
+                }),
+            ]);
+            return (0, response_1.successResponse)(updatedSubAccount, 'Bank details updated successfully');
+        }
+        catch (error) {
+            if (error instanceof common_1.BadRequestException ||
+                error instanceof common_1.NotFoundException ||
+                error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to update bank details', error.message);
         }
     }
     async submitProfileImage(userId, file) {

@@ -67,6 +67,46 @@ export class PaystackService {
     }
   }
 
+  async updateSubaccount(
+    subaccountCode: string,
+    payload: {
+      businessName: string;
+      settlementBank: string;
+      accountNumber: string;
+    },
+  ) {
+    try {
+      const response: any = await axios.put(
+        `${this.baseUrl}/subaccount/${subaccountCode}`,
+        {
+          business_name: payload.businessName,
+          settlement_bank: payload.settlementBank,
+          account_number: payload.accountNumber,
+        },
+        { headers: this.getAuthHeaders() },
+      );
+
+      if (!response.data?.status) {
+        throw new HttpException(
+          response.data?.message || 'Failed to update Paystack subaccount',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        error.response?.data?.message ||
+          error.message ||
+          'Failed to update Paystack subaccount',
+        error.response?.status || HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
   async deactivateSubaccount(subaccountCode: string) {
     const response: { data: any } = await axios.put(
       `https://api.paystack.co/subaccount/${subaccountCode}`,

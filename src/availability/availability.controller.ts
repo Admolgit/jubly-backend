@@ -15,6 +15,7 @@ import {
 import { AvailabilityService } from './availability.service';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Public } from 'src/auth/public.decorator';
 import { UserRole } from '@prisma/client';
 import { CreateVendorAvailabilityDto } from './dto/availability.dto';
 
@@ -23,6 +24,7 @@ export class AvailabilityController {
   constructor(private availabilityService: AvailabilityService) {}
 
   @Get('slots/:vendorId/:date/:serviceId')
+  @Public()
   getVendorAvailableSlots(
     @Param('vendorId') vendorId: string,
     @Param('serviceId') serviceId: string,

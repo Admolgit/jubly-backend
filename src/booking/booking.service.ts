@@ -168,7 +168,6 @@ export class BookingService {
 
   async createBooking(userId: string, dto: IBooking) {
     try {
-      console.log({ userId, dto });
       const startTime = this.parseDateInput(dto.startTime, 'startTime');
       const endTime = this.parseDateInput(dto.endTime, 'endTime');
       const bookingDate = this.toBookingDate(dto.date, startTime);
@@ -193,8 +192,6 @@ export class BookingService {
         },
       });
 
-      console.log({ service });
-
       if (!service) {
         throw new NotFoundException('Service not found');
       }
@@ -205,13 +202,13 @@ export class BookingService {
         },
       });
 
-      console.log({ vendor });
-
       if (!vendor) {
         throw new NotFoundException('Vendor not found');
       }
 
       const calendarIntegration = await this.getVendorCalendar(userId);
+
+      console.log({ dto });
 
       const booking = await this.prisma.booking.create({
         data: {
@@ -220,14 +217,13 @@ export class BookingService {
           date: bookingDate,
           clientEmail: dto.clientEmail,
           clientName: dto.clientName,
+          clientAddress: dto.clientAddress,
           clientId: dto.clientId,
           startTime,
           endTime,
           status: 'CONFIRMED',
         },
       });
-
-      console.log({ booking });
 
       if (calendarIntegration) {
         try {
@@ -330,6 +326,7 @@ export class BookingService {
             serviceId: dto.serviceId,
             title: services.name,
             clientName: dto.clientName,
+            clientAddress: dto.clientAddress,
             email: dto.clientEmail,
             vendorEmail: vendorUser?.email,
             businessName: dto.businessName,
@@ -342,6 +339,7 @@ export class BookingService {
             state: dto.state,
             country: dto.country,
             vendorUserId: vendorUser?.id,
+            userId: vendorUser?.id,
           },
         },
         {
@@ -379,6 +377,14 @@ export class BookingService {
 
   async dashboardStats(userId: string, vendorId: string) {
     try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor || vendor.id !== vendorId) {
+        throw new ForbiddenException('Not allowed to view this dashboard');
+      }
+
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -541,6 +547,10 @@ export class BookingService {
         'Successful',
       );
     } catch (error: any) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch dashboard stats.',
         error.message as string,
@@ -932,8 +942,6 @@ export class BookingService {
         where: { userId },
       });
 
-      console.log({ vendor });
-
       if (!vendor) {
         throw new NotFoundException('User not found');
       }
@@ -1015,8 +1023,6 @@ export class BookingService {
         },
       });
 
-      console.log({ bookings });
-
       const total = await this.prisma.booking.count({ where });
 
       return successResponse(bookings, 'Successfully fetched bookings', 200, {
@@ -1048,18 +1054,16 @@ export class BookingService {
       const baseDate = date ? new Date(date) : new Date();
 
       const user = await this.prisma.user.findUnique({
-        where: { email: email },
+        where: { id: userId },
       });
 
       if (!user) {
         throw new NotFoundException('User not found');
       }
 
-      const where: any = {};
-
-      if (userId) {
-        where.clientEmail = user.email;
-      }
+      const where: any = {
+        clientEmail: user.email,
+      };
 
       if (status) {
         where.status = status;
@@ -1416,6 +1420,10 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
+      if (booking.userId !== userId && booking.vendor.userId !== userId) {
+        throw new ForbiddenException('Not allowed to cancel this booking');
+      }
+
       const updatedBooking = await this.prisma.booking.update({
         where: { id: bookingId },
         data: {
@@ -1475,14 +1483,13 @@ export class BookingService {
 
   async rescheduleBooking(
     bookingId: string,
-    dto: { date: string; startTime: string; endTime: string },
+    dto: { date: string; startTime: string; endTime?: string },
     userId: string,
   ) {
     try {
       const { date, startTime, endTime } = dto;
 
       const start = this.parseDateInput(`${date}T${startTime}`, 'startTime');
-      const end = this.parseDateInput(`${date}T${endTime}`, 'endTime');
       const bookingDate = this.toBookingDate(date, start);
 
       const user = await this.prisma.user.findUnique({
@@ -1493,10 +1500,6 @@ export class BookingService {
 
       if (!user) {
         throw new NotFoundException('User not found');
-      }
-
-      if (start >= end) {
-        throw new BadRequestException('End time must be after start time');
       }
 
       const booking = await this.prisma.booking.findUnique({
@@ -1511,9 +1514,20 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
-      // if (booking.clientEmail !== user.email && booking.vendorId !== userId) {
-      //   throw new ForbiddenException('Not allowed to reschedule this booking');
-      // }
+      if (booking.userId !== userId && booking.vendor.userId !== userId) {
+        throw new ForbiddenException('Not allowed to reschedule this booking');
+      }
+
+      const end = endTime
+        ? this.parseDateInput(date + 'T' + endTime, 'endTime')
+        : new Date(
+            start.getTime() +
+              (booking.endTime.getTime() - booking.startTime.getTime()),
+          );
+
+      if (start >= end) {
+        throw new BadRequestException('End time must be after start time');
+      }
 
       if (start < new Date()) {
         throw new BadRequestException('Cannot reschedule to a past time');
@@ -1548,26 +1562,30 @@ export class BookingService {
         },
       });
 
-      const calendarIntegration = this.getVendorCalendar(userId);
+      const calendarIntegration = await this.getVendorCalendar(
+        booking.vendor.userId,
+      );
 
-      const calendarApi =
-        await this.googleCalendarService.calendarEnv(calendarIntegration);
+      if (calendarIntegration && booking.googleEventId) {
+        const calendarApi =
+          await this.googleCalendarService.calendarEnv(calendarIntegration);
 
-      await calendarApi.events.update({
-        calendarId: 'primary',
-        eventId: booking.googleEventId!,
-        sendUpdates: 'all',
-        requestBody: {
-          start: {
-            dateTime: new Date(startTime).toISOString(),
-            timeZone: 'Africa/Lagos',
+        await calendarApi.events.update({
+          calendarId: 'primary',
+          eventId: booking.googleEventId,
+          sendUpdates: 'all',
+          requestBody: {
+            start: {
+              dateTime: start.toISOString(),
+              timeZone: this.bookingTimezone,
+            },
+            end: {
+              dateTime: end.toISOString(),
+              timeZone: this.bookingTimezone,
+            },
           },
-          end: {
-            dateTime: new Date(endTime).toISOString(),
-            timeZone: 'Africa/Lagos',
-          },
-        },
-      });
+        });
+      }
 
       await this.nodemailerService.bookingStatusChangeMail({
         subject: 'Your Booking Has Been Rescheldule',
@@ -1582,12 +1600,16 @@ export class BookingService {
         oldEnd: booking.endTime,
         newDate: new Date(date),
         newStart: new Date(startTime),
-        newEnd: new Date(endTime),
+        newEnd: end,
         action: 'Reschedule',
       });
 
       return successResponse(updated, 'Rescheduled successfully.');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to reschedule booking.',
         error.message as string,

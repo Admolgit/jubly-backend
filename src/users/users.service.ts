@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -26,6 +27,20 @@ export class UsersService {
     private activityService: ActivityService,
   ) {}
 
+  private sanitizeUser<T extends Record<string, any> | null | undefined>(
+    user: T,
+  ) {
+    if (!user) return user;
+    const {
+      password,
+      refreshTokenHash,
+      verificationCode,
+      codeExpiresAt,
+      ...safeUser
+    } = user;
+    return safeUser;
+  }
+
   async getMe(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -35,7 +50,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return successResponse({ user }, 'successful');
+    return successResponse({ user: this.sanitizeUser(user) }, 'successful');
   }
 
   async updateProfile(userId: string, dto: any) {
@@ -94,7 +109,10 @@ export class UsersService {
         color: 'indigo',
       });
 
-      return successResponse(updatedUser, 'Profile updated successfully.');
+      return successResponse(
+        this.sanitizeUser(updatedUser),
+        'Profile updated successfully.',
+      );
     } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to initialize payment',
@@ -103,14 +121,16 @@ export class UsersService {
     }
   }
 
-  async updateProfilePicture(userId: string, file: Express.Multer.File) {
+  async updateProfilePicture(
+    userId: string,
+    file: Express.Multer.File | undefined,
+  ) {
     try {
       if (!file) {
         throw new BadRequestException('Profile image is required');
       }
 
       const imageUrl = await this.cloudinaryService.uploadImage(file);
-      console.log({ file, imageUrl });
       const updatedPicture = await this.prisma.vendor.update({
         where: { userId },
         data: {
@@ -140,7 +160,10 @@ export class UsersService {
         throw new NotFoundException('User not found');
       }
 
-      return successResponse(user, 'User fetched successfully.');
+      return successResponse(
+        this.sanitizeUser(user),
+        'User fetched successfully.',
+      );
     } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to fetch user',
@@ -150,12 +173,23 @@ export class UsersService {
   }
 
   async getClientsByVendor(
-    vendorId,
+    userId: string,
+    vendorId: string,
     page?: number,
     limit?: number,
     search?: string,
   ) {
     try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor || vendor.id !== vendorId) {
+        throw new ForbiddenException(
+          'You are not allowed to view these clients',
+        );
+      }
+
       let where: any = {};
       if (vendorId) {
         where.clientVendorId = vendorId;
@@ -186,7 +220,7 @@ export class UsersService {
       const total = await this.prisma.user.count({ where });
 
       return successResponse(
-        { clients },
+        { clients: clients.map((client) => this.sanitizeUser(client)) },
         'Successfully fetched clients.',
         200,
         {
@@ -196,6 +230,10 @@ export class UsersService {
         },
       );
     } catch (error: any) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch user',
         error.message as string,
@@ -248,7 +286,10 @@ export class UsersService {
         },
       });
 
-      return successResponse(user, 'User fetched successfully.');
+      return successResponse(
+        this.sanitizeUser(user),
+        'User fetched successfully.',
+      );
     } catch (error: any) {
       throw new InternalServerErrorException(
         'Failed to create enquiry.',

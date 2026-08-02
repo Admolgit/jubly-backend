@@ -204,20 +204,32 @@ let GoogleCalendarService = class GoogleCalendarService {
     }
     async getUserCalendarLinked(userId) {
         try {
-            const linked = await this.prisma.vendorCalendar.findFirst({
+            const calendar = await this.prisma.vendorCalendar.findFirst({
                 where: {
                     userId,
                     linked: true,
                 },
+                select: {
+                    id: true,
+                    provider: true,
+                    linked: true,
+                    expiryDate: true,
+                },
             });
-            return (0, response_1.successResponse)({ linked }, 'Successfully fetched calendar linked status');
+            return (0, response_1.successResponse)({ linked: !!calendar, calendar }, 'Successfully fetched calendar linked status');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch dashboard stats.', error.message);
         }
     }
-    async getCalendar({ view, year, month, date, vendorId, }) {
+    async getCalendar({ userId, view, year, month, date, vendorId, }) {
         try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor || vendor.id !== vendorId) {
+                throw new common_1.ForbiddenException('Not allowed to view this calendar');
+            }
             let startTime = new Date();
             let endTime = new Date();
             if (view === 'month') {
@@ -256,6 +268,9 @@ let GoogleCalendarService = class GoogleCalendarService {
             return this.formatCalendarData(view, bookings, startTime);
         }
         catch (error) {
+            if (error instanceof common_1.ForbiddenException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch calendar data.', error.message);
         }
     }

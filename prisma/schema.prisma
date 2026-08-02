@@ -161,6 +161,7 @@ model Booking {
   googleEventId String?
   serviceId     String
   clientName    String?
+  clientAddress String?
 
   date        DateTime // booking day
   startTime   DateTime // "10:00"

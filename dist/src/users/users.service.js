@@ -22,6 +22,12 @@ let UsersService = class UsersService {
         this.cloudinaryService = cloudinaryService;
         this.activityService = activityService;
     }
+    sanitizeUser(user) {
+        if (!user)
+            return user;
+        const { password, refreshTokenHash, verificationCode, codeExpiresAt, ...safeUser } = user;
+        return safeUser;
+    }
     async getMe(userId) {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
@@ -29,7 +35,7 @@ let UsersService = class UsersService {
         if (!user) {
             throw new common_1.NotFoundException('User not found');
         }
-        return (0, response_1.successResponse)({ user }, 'successful');
+        return (0, response_1.successResponse)({ user: this.sanitizeUser(user) }, 'successful');
     }
     async updateProfile(userId, dto) {
         try {
@@ -78,7 +84,7 @@ let UsersService = class UsersService {
                 actorType: existingUser?.role === client_1.UserRole.VENDOR ? 'VENDOR' : 'CLIENT',
                 color: 'indigo',
             });
-            return (0, response_1.successResponse)(updatedUser, 'Profile updated successfully.');
+            return (0, response_1.successResponse)(this.sanitizeUser(updatedUser), 'Profile updated successfully.');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
@@ -90,7 +96,6 @@ let UsersService = class UsersService {
                 throw new common_1.BadRequestException('Profile image is required');
             }
             const imageUrl = await this.cloudinaryService.uploadImage(file);
-            console.log({ file, imageUrl });
             const updatedPicture = await this.prisma.vendor.update({
                 where: { userId },
                 data: {
@@ -111,14 +116,20 @@ let UsersService = class UsersService {
             if (!user) {
                 throw new common_1.NotFoundException('User not found');
             }
-            return (0, response_1.successResponse)(user, 'User fetched successfully.');
+            return (0, response_1.successResponse)(this.sanitizeUser(user), 'User fetched successfully.');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
         }
     }
-    async getClientsByVendor(vendorId, page, limit, search) {
+    async getClientsByVendor(userId, vendorId, page, limit, search) {
         try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor || vendor.id !== vendorId) {
+                throw new common_1.ForbiddenException('You are not allowed to view these clients');
+            }
             let where = {};
             if (vendorId) {
                 where.clientVendorId = vendorId;
@@ -143,13 +154,16 @@ let UsersService = class UsersService {
                 },
             });
             const total = await this.prisma.user.count({ where });
-            return (0, response_1.successResponse)({ clients }, 'Successfully fetched clients.', 200, {
+            return (0, response_1.successResponse)({ clients: clients.map((client) => this.sanitizeUser(client)) }, 'Successfully fetched clients.', 200, {
                 total,
                 page,
                 limit,
             });
         }
         catch (error) {
+            if (error instanceof common_1.ForbiddenException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
         }
     }
@@ -184,7 +198,7 @@ let UsersService = class UsersService {
                     email: email,
                 },
             });
-            return (0, response_1.successResponse)(user, 'User fetched successfully.');
+            return (0, response_1.successResponse)(this.sanitizeUser(user), 'User fetched successfully.');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to create enquiry.', error.message);

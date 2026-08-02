@@ -2,6 +2,7 @@ export interface IBooking {
   userId: string;
   clientId: string;
   clientName: string;
+  clientAddress?: string;
   serviceId: string;
   clientEmail: string;
   startTime: Date;

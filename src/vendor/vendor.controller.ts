@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Public } from 'src/auth/public.decorator';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import {
   CompleteVendorOnboardingDto,
@@ -31,8 +32,8 @@ import {
   FilesInterceptor,
 } from '@nestjs/platform-express';
 import { cloudinaryMulterOptions } from 'src/middlewares/cloudinary.middleware';
-import { CreateSubaccountDto } from 'src/paystack';
-import { BulkUpdateItemDto, CreateServicesDto } from './dto/services.dto';
+import { CreateSubaccountDto, UpdateBankDetailsDto } from 'src/paystack';
+import { BulkUpdateItemDto } from './dto/services.dto';
 
 @Controller('vendor')
 export class VendorController {
@@ -42,11 +43,14 @@ export class VendorController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'profileImage', maxCount: 1 },
-      { name: 'documentFrontUrl', maxCount: 1 },
-      { name: 'portfolio', maxCount: 10 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'profileImage', maxCount: 1 },
+        { name: 'documentFrontUrl', maxCount: 1 },
+        { name: 'portfolio', maxCount: 10 },
+      ],
+      cloudinaryMulterOptions,
+    ),
   )
   async completeOnboarding(
     @Req() req: { user: { id: string } },
@@ -59,8 +63,6 @@ export class VendorController {
     },
   ) {
     const userId = req.user.id;
-
-    console.log({ req, userId });
 
     if (!userId) {
       throw new BadRequestException('User not authenticated');
@@ -97,15 +99,18 @@ export class VendorController {
     @Body() dto: CreateVendorDto,
   ) {
     const userId = req.user.id;
-    console.log('Creating profile for userId:', userId, 'with dto:', dto);
     return this.vendorService.createProfile(userId, dto);
   }
 
   @Post('onboarding/services')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
-  createServices(@Req() req, @Body() body: CreateServicesDto) {
-    return this.vendorService.createServices(req.user.id, body.services);
+  createServices(@Req() req, @Body() body: any) {
+    return this.vendorService.createServices(
+      req.user.id,
+      body.vendorId,
+      body.services,
+    );
   }
 
   @Patch('onboarding/update-services')
@@ -119,6 +124,7 @@ export class VendorController {
   }
 
   @Get('onboarding/vendor-services/:userId')
+  @Public()
   getVendorServices(@Param('userId') userId: string) {
     return this.vendorService.getVendorServices(userId);
   }
@@ -142,15 +148,41 @@ export class VendorController {
     return this.vendorService.createPaystackSubaccount(userId, dto);
   }
 
+  @Patch('bank-details')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  updateBankDetails(
+    @Req() req: { user: { id: string } },
+    @Body() dto: UpdateBankDetailsDto,
+  ) {
+    return this.vendorService.updateBankDetails(req.user.id, dto);
+  }
   @Patch('onboarding/identity-image')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'documentFrontUrl', maxCount: 1 },
-      { name: 'documentBackUrl', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'documentFrontUrl', maxCount: 1 },
+        { name: 'documentBackUrl', maxCount: 1 },
+      ],
+      cloudinaryMulterOptions,
+    ),
   )
+  submitIdentityImage(
+    @Req() req: { user: { id: string } },
+    @Body('identityType') identityType: string,
+    @UploadedFiles()
+    files: {
+      documentFrontUrl?: Express.Multer.File[];
+      documentBackUrl?: Express.Multer.File[];
+    },
+  ) {
+    return this.vendorService.submitIdentity(req.user.id, identityType, {
+      documentFront: files.documentFrontUrl?.[0],
+    });
+  }
+
   @Patch('onboarding/portfolio-images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
@@ -205,16 +237,19 @@ export class VendorController {
   }
 
   @Get('booking-vendor/:slug')
+  @Public()
   getBookingPage(@Param('slug') slug: string) {
     return this.vendorService.vendorBooking(slug);
   }
 
   @Get('service/:serviceId')
+  @Public()
   getServiceById(@Param('serviceId') serviceId: string) {
     return this.vendorService.getServiceById(serviceId);
   }
 
   @Get('search-vendor')
+  @Public()
   searchVendors(@Query() query: QueryVendorsDto) {
     return this.vendorService.findVendors(query);
   }
@@ -236,6 +271,7 @@ export class VendorController {
   }
 
   @Get('all-vendors')
+  @Public()
   getAllVendorsHome() {
     return this.vendorService.getAllVendors();
   }

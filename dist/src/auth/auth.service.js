@@ -65,6 +65,12 @@ let AuthService = class AuthService {
         this.nodemailService = nodemailService;
         this.activityService = activityService;
     }
+    sanitizeUser(user) {
+        if (!user)
+            return user;
+        const { password, refreshTokenHash, verificationCode, codeExpiresAt, ...safeUser } = user;
+        return safeUser;
+    }
     async register(dto) {
         try {
             const existingUser = await this.prisma.user.findUnique({
@@ -93,7 +99,7 @@ let AuthService = class AuthService {
                 role: user.role,
             });
             await this.nodemailService.sendOTP(dto.email, otpGenerated);
-            return (0, response_1.successResponse)({ user, token }, 'Registration successful', 201);
+            return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token }, 'Registration successful', 201);
         }
         catch (error) {
             if (error instanceof common_2.UnauthorizedException) {
@@ -124,7 +130,7 @@ let AuthService = class AuthService {
                 },
             });
             await this.nodemailService.sendTempPassword(dto.email, generatedPassword);
-            return (0, response_1.successResponse)({ client }, 'Client is registered successfully.', 201);
+            return (0, response_1.successResponse)({ client: this.sanitizeUser(client) }, 'Client is registered successfully.', 201);
         }
         catch (error) {
             if (error instanceof common_2.UnauthorizedException) {
@@ -154,7 +160,7 @@ let AuthService = class AuthService {
                         isOnline: true,
                     },
                 });
-                return (0, response_1.successResponse)({ user, token, refreshToken }, 'User not verfied', 400);
+                return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token, refreshToken }, 'User not verfied', 400);
             }
             const vendor = await this.prisma.vendor.findUnique({
                 where: { userId: user.id },
@@ -171,7 +177,7 @@ let AuthService = class AuthService {
                         isOnline: true,
                     },
                 });
-                return (0, response_1.successResponse)({ user, token, refreshToken }, 'Complete registration', 404);
+                return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token, refreshToken }, 'Complete registration', 404);
             }
             if (vendor &&
                 vendor.isApproved === false &&
@@ -192,7 +198,7 @@ let AuthService = class AuthService {
                         isOnline: true,
                     },
                 });
-                return (0, response_1.successResponse)({ user, token, refreshToken }, 'Onboarding not completed', 404);
+                return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token, refreshToken }, 'Onboarding not completed', 404);
             }
             if (vendor &&
                 vendor.isApproved === false &&
@@ -210,7 +216,7 @@ let AuthService = class AuthService {
                     isOnline: true,
                 },
             });
-            return (0, response_1.successResponse)({ user, token, refreshToken }, 'Login successful');
+            return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token, refreshToken }, 'Login successful');
         }
         catch (error) {
             if (error instanceof common_2.UnauthorizedException) {
@@ -246,14 +252,14 @@ let AuthService = class AuthService {
                 });
             }
             const token = await this.generateJwt(user);
-            const refreshToken = await this.jwtService.signAsync({ sub: user.id, role: user.role }, { expiresIn: '14d' });
+            const refreshToken = await this.jwtService.signAsync({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
             const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
             await this.prisma.user.update({
                 where: { id: user.id },
                 data: { refreshTokenHash, lastLogin: new Date(), isOnline: true },
             });
             return (0, response_1.successResponse)({
-                user,
+                user: this.sanitizeUser(user),
                 token,
                 refreshToken,
                 alreadyExists,
@@ -264,7 +270,7 @@ let AuthService = class AuthService {
         }
     }
     async generateJwt(user) {
-        return await this.jwtService.signAsync({ sub: user.id, role: user.role }, { expiresIn: '7d' });
+        return await this.jwtService.signAsync({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
     }
     async refreshToken(refreshToken) {
         try {
@@ -279,10 +285,8 @@ let AuthService = class AuthService {
             if (!isValid) {
                 throw new common_2.UnauthorizedException('Invalid refresh token');
             }
-            const accessToken = this.jwtService.sign({ id: user.id, role: user.role }, { expiresIn: '15m' });
-            return {
-                accessToken,
-            };
+            const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '15m' });
+            return (0, response_1.successResponse)({ token }, 'Token refreshed successfully');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Refresh token expired or invalid', error.message);
@@ -400,7 +404,7 @@ let AuthService = class AuthService {
                     id: userId,
                 },
             });
-            return (0, response_1.successResponse)({ user }, 'successful');
+            return (0, response_1.successResponse)({ user: this.sanitizeUser(user) }, 'successful');
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('User failed', error.message);

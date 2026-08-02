@@ -25,11 +25,11 @@ let TransactionController = class TransactionController {
         const userId = req.user.id;
         return this.transactionService.getDashboardStats(userId);
     }
-    findAllVendorTransactions(vendorId, page, limit, search) {
-        return this.transactionService.findAllVendorTransactions(vendorId, page, limit, search);
+    findAllVendorTransactions(req, vendorId, page, limit, search) {
+        return this.transactionService.findAllVendorTransactions(req.user.id, vendorId, page, limit, search);
     }
-    getTotalTransactionsAmountByVendorId(vendorId, view) {
-        return this.transactionService.getTotalTransactionsAmountByVendorId(vendorId, view);
+    getTotalTransactionsAmountByVendorId(req, vendorId, view) {
+        return this.transactionService.getTotalTransactionsAmountByVendorId(req.user.id, vendorId, view);
     }
     getAnalytics(req, view) {
         return this.transactionService.getEarningsAnalytics(req.user.id, view);
@@ -53,20 +53,26 @@ __decorate([
 ], TransactionController.prototype, "dashboardStats", null);
 __decorate([
     (0, common_1.Get)(':vendorId'),
-    __param(0, (0, common_1.Param)('vendorId')),
-    __param(1, (0, common_1.Query)('page')),
-    __param(2, (0, common_1.Query)('limit')),
-    __param(3, (0, common_1.Query)('search')),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('vendorId')),
+    __param(2, (0, common_1.Query)('page')),
+    __param(3, (0, common_1.Query)('limit')),
+    __param(4, (0, common_1.Query)('search')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Number, Number, String]),
+    __metadata("design:paramtypes", [Object, String, Number, Number, String]),
     __metadata("design:returntype", void 0)
 ], TransactionController.prototype, "findAllVendorTransactions", null);
 __decorate([
     (0, common_1.Get)(':vendorId/amount'),
-    __param(0, (0, common_1.Param)('vendorId')),
-    __param(1, (0, common_1.Query)('view')),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('vendorId')),
+    __param(2, (0, common_1.Query)('view')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [Object, String, String]),
     __metadata("design:returntype", void 0)
 ], TransactionController.prototype, "getTotalTransactionsAmountByVendorId", null);
 __decorate([

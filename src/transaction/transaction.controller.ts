@@ -28,13 +28,17 @@ export class TransactionController {
   }
 
   @Get(':vendorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
   findAllVendorTransactions(
+    @Req() req: { user: { id: string } },
     @Param('vendorId') vendorId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
   ) {
     return this.transactionService.findAllVendorTransactions(
+      req.user.id,
       vendorId,
       page as number,
       limit as number,
@@ -43,11 +47,15 @@ export class TransactionController {
   }
 
   @Get(':vendorId/amount')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
   getTotalTransactionsAmountByVendorId(
+    @Req() req: { user: { id: string } },
     @Param('vendorId') vendorId: string,
     @Query('view') view: 'day' | 'week' | 'month' | 'year',
   ) {
     return this.transactionService.getTotalTransactionsAmountByVendorId(
+      req.user.id,
       vendorId,
       view,
     );

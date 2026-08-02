@@ -13,21 +13,16 @@ const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = require("dotenv");
 const compression_1 = __importDefault(require("compression"));
-const body_parser_1 = __importDefault(require("body-parser"));
 const redis_keepAlive_1 = require("./server/redis.keepAlive");
 const common_1 = require("@nestjs/common");
 const path_1 = require("path");
 const fs_1 = require("fs");
 (0, dotenv_1.config)();
 async function bootstrap() {
-    const app = await core_1.NestFactory.create(app_module_1.AppModule);
+    const app = await core_1.NestFactory.create(app_module_1.AppModule, {
+        rawBody: true,
+    });
     app.set('trust proxy', 1);
-    app.use(body_parser_1.default.json({
-        verify: (req, _res, buf) => {
-            req.rawBody = buf;
-        },
-    }));
-    app.use(body_parser_1.default.urlencoded({ extended: true }));
     app.useGlobalPipes(new common_1.ValidationPipe({
         transform: true,
         whitelist: true,
