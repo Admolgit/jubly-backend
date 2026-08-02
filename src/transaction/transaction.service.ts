@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -29,6 +30,16 @@ export class TransactionService {
     private prisma: PrismaService,
     private activityService: ActivityService,
   ) {}
+
+  private async assertVendorOwnership(userId: string, vendorId: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor || vendor.id !== vendorId) {
+      throw new ForbiddenException('Not allowed to view these transactions');
+    }
+  }
 
   async create(userId: string, dto: any) {
     try {
@@ -94,12 +105,15 @@ export class TransactionService {
   }
 
   async findAllVendorTransactions(
+    userId: string,
     vendorId: string,
     page?: number,
     limit?: number,
     search?: string,
   ) {
     try {
+      await this.assertVendorOwnership(userId, vendorId);
+
       let where: any = {};
       if (vendorId) {
         where.vendorId = vendorId;
@@ -164,6 +178,10 @@ export class TransactionService {
         },
       );
     } catch (error: any) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch this transactions',
         error.message as string,
@@ -172,10 +190,13 @@ export class TransactionService {
   }
 
   async getTotalTransactionsAmountByVendorId(
+    userId: string,
     vendorId: string,
     view: 'day' | 'week' | 'month' | 'year',
   ) {
     try {
+      await this.assertVendorOwnership(userId, vendorId);
+
       let where: any = {};
 
       if (view === 'day') {
@@ -226,6 +247,15 @@ export class TransactionService {
           gte: startOfMonth,
           lt: endOfMonth,
         };
+      } else if (view === 'year') {
+        const today = new Date();
+        const startOfYear = new Date(today.getFullYear(), 0, 1);
+        const endOfYear = new Date(today.getFullYear() + 1, 0, 1);
+        where.vendorId = vendorId;
+        where.paidAt = {
+          gte: startOfYear,
+          lt: endOfYear,
+        };
       }
 
       const total = await this.prisma.transaction.aggregate({
@@ -246,6 +276,10 @@ export class TransactionService {
         'Successfully fetched transactions amount.',
       );
     } catch (error: any) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch this transactions',
         error.message as string,

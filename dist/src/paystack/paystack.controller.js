@@ -54,6 +54,7 @@ const transaction_service_1 = require("../transaction/transaction.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const booking_service_1 = require("../booking/booking.service");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const public_decorator_1 = require("../auth/public.decorator");
 const role_guard_1 = require("../auth/role.guard");
 const response_1 = require("../utils/response");
 let PaystackController = class PaystackController {
@@ -290,6 +291,7 @@ let PaystackController = class PaystackController {
 exports.PaystackController = PaystackController;
 __decorate([
     (0, common_1.Get)('/resolve-bank/:accountNumber/:bankCode'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -297,6 +299,7 @@ __decorate([
 ], PaystackController.prototype, "resolveBankAccount", null);
 __decorate([
     (0, common_1.Get)('/verify-payment/:reference'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('reference')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -304,6 +307,7 @@ __decorate([
 ], PaystackController.prototype, "verifyPayment", null);
 __decorate([
     (0, common_1.Get)('/callback'),
+    (0, public_decorator_1.Public)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Res)()),
@@ -323,6 +327,7 @@ __decorate([
 ], PaystackController.prototype, "refundPayment", null);
 __decorate([
     (0, common_1.Post)('webhook'),
+    (0, public_decorator_1.Public)(),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Headers)()),
@@ -332,6 +337,7 @@ __decorate([
 ], PaystackController.prototype, "paystackWebhook", null);
 __decorate([
     (0, common_1.Get)('list'),
+    (0, public_decorator_1.Public)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)

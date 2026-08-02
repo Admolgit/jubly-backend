@@ -26,6 +26,7 @@ import { TransactionService } from 'src/transaction/transaction.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { BookingService } from 'src/booking/booking.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Public } from 'src/auth/public.decorator';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { successResponse } from 'src/utils/response';
 
@@ -40,6 +41,7 @@ export class PaystackController {
   ) {}
 
   @Get('/resolve-bank/:accountNumber/:bankCode')
+  @Public()
   resolveBankAccount(@Param() dto) {
     return this.paystackService.resolveBankAccount(
       dto.accountNumber,
@@ -48,11 +50,13 @@ export class PaystackController {
   }
 
   @Get('/verify-payment/:reference')
+  @Public()
   verifyPayment(@Param('reference') reference: string) {
     return this.paystackService.verifyTransaction(reference);
   }
 
   @Get('/callback')
+  @Public()
   @HttpCode(200)
   handleCallback(@Req() req: any, @Res() res: any) {
     const reference = req.query.reference;
@@ -178,6 +182,7 @@ export class PaystackController {
   }
 
   @Post('webhook')
+  @Public()
   @HttpCode(HttpStatus.OK)
   async paystackWebhook(@Req() req: any, @Headers() headers) {
     try {
@@ -369,6 +374,7 @@ export class PaystackController {
   }
 
   @Get('list')
+  @Public()
   getBankList() {
     return this.paystackService.getBankList();
   }

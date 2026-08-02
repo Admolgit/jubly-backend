@@ -168,6 +168,7 @@ let BookingService = class BookingService {
                 throw new common_1.NotFoundException('Vendor not found');
             }
             const calendarIntegration = await this.getVendorCalendar(userId);
+            console.log({ dto });
             const booking = await this.prisma.booking.create({
                 data: {
                     vendorId: vendor.id,
@@ -304,6 +305,12 @@ let BookingService = class BookingService {
     }
     async dashboardStats(userId, vendorId) {
         try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor || vendor.id !== vendorId) {
+                throw new common_1.ForbiddenException('Not allowed to view this dashboard');
+            }
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -427,6 +434,9 @@ let BookingService = class BookingService {
             }, 'Successful');
         }
         catch (error) {
+            if (error instanceof common_1.ForbiddenException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch dashboard stats.', error.message);
         }
     }
@@ -811,15 +821,14 @@ let BookingService = class BookingService {
             const limitNum = Number(limit);
             const baseDate = date ? new Date(date) : new Date();
             const user = await this.prisma.user.findUnique({
-                where: { email: email },
+                where: { id: userId },
             });
             if (!user) {
                 throw new common_1.NotFoundException('User not found');
             }
-            const where = {};
-            if (userId) {
-                where.clientEmail = user.email;
-            }
+            const where = {
+                clientEmail: user.email,
+            };
             if (status) {
                 where.status = status;
             }
@@ -1088,6 +1097,9 @@ let BookingService = class BookingService {
             });
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
+            }
+            if (booking.userId !== userId && booking.vendor.userId !== userId) {
+                throw new common_1.ForbiddenException('Not allowed to cancel this booking');
             }
             const updatedBooking = await this.prisma.booking.update({
                 where: { id: bookingId },

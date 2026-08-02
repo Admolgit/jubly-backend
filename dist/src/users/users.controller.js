@@ -15,10 +15,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const public_decorator_1 = require("../auth/public.decorator");
 const users_service_1 = require("./users.service");
 const role_guard_1 = require("../auth/role.guard");
 const platform_express_1 = require("@nestjs/platform-express");
 const notification_dto_1 = require("./dto/notification.dto");
+const cloudinary_middleware_1 = require("../middlewares/cloudinary.middleware");
 let UsersController = class UsersController {
     constructor(usersService) {
         this.usersService = usersService;
@@ -26,11 +28,8 @@ let UsersController = class UsersController {
     getMe(req) {
         return this.usersService.getMe(req.user.id);
     }
-    getClientsByVendor(clientVendorId) {
-        return this.usersService.getClientsByVendor(clientVendorId);
-    }
-    updateProfileImage(req, file) {
-        return this.usersService.updateProfilePicture(req.user.id, file);
+    updateProfileImage(req, files) {
+        return this.usersService.updateProfilePicture(req.user.id, files.profileImage?.[0]);
     }
     updateProfile(req, dto) {
         return this.usersService.updateProfile(req.user.id, dto);
@@ -61,6 +60,9 @@ let UsersController = class UsersController {
         const userId = req.user.id;
         return this.usersService.createAndSend(userId, dto);
     }
+    getClientsByVendor(req, clientVendorId) {
+        return this.usersService.getClientsByVendor(req.user.id, clientVendorId);
+    }
 };
 exports.UsersController = UsersController;
 __decorate([
@@ -73,18 +75,12 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getMe", null);
 __decorate([
-    (0, common_1.Get)(':clientVendorId'),
-    __param(0, (0, common_1.Param)('clientVendorId')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", void 0)
-], UsersController.prototype, "getClientsByVendor", null);
-__decorate([
     (0, common_1.Patch)('profile-image'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)([{ name: 'profileImage', maxCount: 1 }])),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)([{ name: 'profileImage', maxCount: 1 }], cloudinary_middleware_1.cloudinaryMulterOptions)),
     __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.UploadedFiles)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
@@ -101,6 +97,8 @@ __decorate([
 ], UsersController.prototype, "updateProfile", null);
 __decorate([
     (0, common_1.Get)('user/:userId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -126,6 +124,7 @@ __decorate([
 ], UsersController.prototype, "getUserByEmail", null);
 __decorate([
     (0, common_1.Post)('enquiry'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -170,6 +169,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "createAndSendNotification", null);
+__decorate([
+    (0, common_1.Get)(':clientVendorId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('clientVendorId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getClientsByVendor", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService])

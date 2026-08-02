@@ -28,3 +28,13 @@ export class CreateSubaccountDto {
   @IsString()
   accountNumber: string;
 }
+
+export class UpdateBankDetailsDto {
+  @IsNotEmpty()
+  @IsString()
+  settlementBank: string;
+
+  @IsNotEmpty()
+  @IsString()
+  accountNumber: string;
+}

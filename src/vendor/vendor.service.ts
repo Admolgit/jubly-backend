@@ -6,6 +6,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -17,7 +18,7 @@ import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { Prisma } from '@prisma/client';
 import { generateSlug } from 'src/utils/generateSlug';
 import { PaystackService } from 'src/paystack/paystack.service';
-import { CreateSubaccountDto } from 'src/paystack';
+import { CreateSubaccountDto, UpdateBankDetailsDto } from 'src/paystack';
 import { BulkUpdateItemDto, ServiceItemDto } from './dto/services.dto';
 import { Parser } from 'json2csv';
 import dayjs from 'dayjs';
@@ -34,7 +35,7 @@ export class VendorService {
 
   async completeOnboarding(userId: string, dto, files) {
     try {
-      await this.createServices(userId, dto.services, dto.profile.vendorId);
+      await this.createServices(userId, dto.profile.vendorId, dto.services);
 
       const createdVendor = await this.submitIdentity(
         userId,
@@ -250,6 +251,81 @@ export class VendorService {
     }
   }
 
+  async updateBankDetails(userId: string, dto: UpdateBankDetailsDto) {
+    try {
+      if (!/^\d{10}$/.test(dto.accountNumber)) {
+        throw new BadRequestException('Account number must contain 10 digits');
+      }
+
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor || !vendor.paystackSubaccount) {
+        throw new NotFoundException('Vendor payout account not found');
+      }
+
+      const subAccount = await this.prisma.subAccount.findFirst({
+        where: { userId, paystackAccountId: vendor.paystackSubaccount },
+      });
+
+      if (!subAccount) {
+        throw new NotFoundException('Vendor payout account not found');
+      }
+
+      const resolvedAccount = await this.paystackService.resolveBankAccount(
+        dto.accountNumber,
+        dto.settlementBank,
+      );
+
+      if (!resolvedAccount?.status || !resolvedAccount?.data?.account_name) {
+        throw new BadRequestException('Unable to verify these bank details');
+      }
+
+      const accountName = resolvedAccount.data.account_name;
+      await this.paystackService.updateSubaccount(vendor.paystackSubaccount, {
+        businessName: vendor.businessName,
+        settlementBank: dto.settlementBank,
+        accountNumber: dto.accountNumber,
+      });
+
+      const [updatedSubAccount] = await this.prisma.$transaction([
+        this.prisma.subAccount.update({
+          where: { id: subAccount.id },
+          data: {
+            bankName: dto.settlementBank,
+            accountNumber: dto.accountNumber,
+            accountName,
+          },
+        }),
+        this.prisma.vendor.update({
+          where: { id: vendor.id },
+          data: {
+            bankAccountNumber: dto.accountNumber,
+            bankCode: dto.settlementBank,
+          },
+        }),
+      ]);
+
+      return successResponse(
+        updatedSubAccount,
+        'Bank details updated successfully',
+      );
+    } catch (error: any) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException ||
+        error instanceof HttpException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to update bank details',
+        error.message,
+      );
+    }
+  }
   async submitProfileImage(userId: string, file: Express.Multer.File) {
     try {
       if (!file) {

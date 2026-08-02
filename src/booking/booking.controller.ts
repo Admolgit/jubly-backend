@@ -16,6 +16,7 @@ import { BookingService, DateFilter } from './booking.service';
 import type { IBooking } from './dto/booking.dto';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { RolesGuard, Roles } from 'src/auth/role.guard';
+import { Public } from 'src/auth/public.decorator';
 
 @Controller('booking')
 export class BookingController {
@@ -30,6 +31,7 @@ export class BookingController {
   }
 
   @Post('initialize-payment')
+  @Public()
   paymentInitialize(@Body() dto: any) {
     return this.bookingService.initializeBookingPayment(
       dto.bookingId as string,

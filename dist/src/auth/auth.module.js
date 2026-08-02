@@ -19,6 +19,7 @@ const paystack_service_1 = require("../paystack/paystack.service");
 const nodemailer_module_1 = require("../nodemailer/nodemailer.module");
 const google_login_strategy_middleware_1 = require("../middlewares/google-login-strategy.middleware");
 const activityLog_service_1 = require("../activity/activityLog.service");
+const jwt_strategy_1 = require("./jwt.strategy");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -42,6 +43,7 @@ exports.AuthModule = AuthModule = __decorate([
             paystack_service_1.PaystackService,
             google_login_strategy_middleware_1.GoogleLoginStrategy,
             activityLog_service_1.ActivityService,
+            jwt_strategy_1.JwtStrategy,
         ],
         exports: [jwt_1.JwtModule, passport_1.PassportModule, nodemailer_module_1.NodemailerModule],
     })

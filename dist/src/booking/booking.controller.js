@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const booking_service_1 = require("./booking.service");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
 const role_guard_1 = require("../auth/role.guard");
+const public_decorator_1 = require("../auth/public.decorator");
 let BookingController = class BookingController {
     constructor(bookingService) {
         this.bookingService = bookingService;
@@ -96,6 +97,7 @@ __decorate([
 ], BookingController.prototype, "createBooking", null);
 __decorate([
     (0, common_1.Post)('initialize-payment'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

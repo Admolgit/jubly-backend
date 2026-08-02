@@ -31,7 +31,7 @@ let VendorService = class VendorService {
     }
     async completeOnboarding(userId, dto, files) {
         try {
-            await this.createServices(userId, dto.services, dto.profile.vendorId);
+            await this.createServices(userId, dto.profile.vendorId, dto.services);
             const createdVendor = await this.submitIdentity(userId, dto.identityType, files);
             await this.createPaystackSubaccount(userId, dto.subaccount);
             await this.submitProfileImage(userId, files.profileImage);
@@ -173,6 +173,61 @@ let VendorService = class VendorService {
         }
         catch (error) {
             throw new common_1.InternalServerErrorException('Failed to create subaccount', error.message);
+        }
+    }
+    async updateBankDetails(userId, dto) {
+        try {
+            if (!/^\d{10}$/.test(dto.accountNumber)) {
+                throw new common_1.BadRequestException('Account number must contain 10 digits');
+            }
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor || !vendor.paystackSubaccount) {
+                throw new common_1.NotFoundException('Vendor payout account not found');
+            }
+            const subAccount = await this.prisma.subAccount.findFirst({
+                where: { userId, paystackAccountId: vendor.paystackSubaccount },
+            });
+            if (!subAccount) {
+                throw new common_1.NotFoundException('Vendor payout account not found');
+            }
+            const resolvedAccount = await this.paystackService.resolveBankAccount(dto.accountNumber, dto.settlementBank);
+            if (!resolvedAccount?.status || !resolvedAccount?.data?.account_name) {
+                throw new common_1.BadRequestException('Unable to verify these bank details');
+            }
+            const accountName = resolvedAccount.data.account_name;
+            await this.paystackService.updateSubaccount(vendor.paystackSubaccount, {
+                businessName: vendor.businessName,
+                settlementBank: dto.settlementBank,
+                accountNumber: dto.accountNumber,
+            });
+            const [updatedSubAccount] = await this.prisma.$transaction([
+                this.prisma.subAccount.update({
+                    where: { id: subAccount.id },
+                    data: {
+                        bankName: dto.settlementBank,
+                        accountNumber: dto.accountNumber,
+                        accountName,
+                    },
+                }),
+                this.prisma.vendor.update({
+                    where: { id: vendor.id },
+                    data: {
+                        bankAccountNumber: dto.accountNumber,
+                        bankCode: dto.settlementBank,
+                    },
+                }),
+            ]);
+            return (0, response_1.successResponse)(updatedSubAccount, 'Bank details updated successfully');
+        }
+        catch (error) {
+            if (error instanceof common_1.BadRequestException ||
+                error instanceof common_1.NotFoundException ||
+                error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to update bank details', error.message);
         }
     }
     async submitProfileImage(userId, file) {

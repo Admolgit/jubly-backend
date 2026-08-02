@@ -8,15 +8,18 @@ import {
   Post,
   Query,
   Req,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Public } from 'src/auth/public.decorator';
 import { UsersService } from './users.service';
 import type { Request } from 'express';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateNotificationDto } from './dto/notification.dto';
+import { cloudinaryMulterOptions } from 'src/middlewares/cloudinary.middleware';
 
 @Controller('users')
 export class UsersController {
@@ -29,22 +32,23 @@ export class UsersController {
     return this.usersService.getMe(req.user.id);
   }
 
-  @Get(':clientVendorId')
-  getClientsByVendor(@Param('clientVendorId') clientVendorId: string) {
-    return this.usersService.getClientsByVendor(clientVendorId);
-  }
-
   @Patch('profile-image')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'profileImage', maxCount: 1 }]),
+    FileFieldsInterceptor(
+      [{ name: 'profileImage', maxCount: 1 }],
+      cloudinaryMulterOptions,
+    ),
   )
   updateProfileImage(
     @Req() req: Request & { user: { id: string } },
-    file: Express.Multer.File,
+    @UploadedFiles() files: { profileImage?: Express.Multer.File[] },
   ) {
-    return this.usersService.updateProfilePicture(req.user.id, file);
+    return this.usersService.updateProfilePicture(
+      req.user.id,
+      files.profileImage?.[0],
+    );
   }
 
   @Patch('user/update')
@@ -57,6 +61,8 @@ export class UsersController {
     return this.usersService.updateProfile(req.user.id, dto);
   }
   @Get('user/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
   getUserById(@Param('userId') userId: string) {
     return this.usersService.getUserById(userId);
   }
@@ -76,6 +82,7 @@ export class UsersController {
   }
 
   @Post('enquiry')
+  @Public()
   createEnquiry(
     @Body()
     body: {
@@ -135,5 +142,15 @@ export class UsersController {
   ) {
     const userId = req.user.id;
     return this.usersService.createAndSend(userId, dto);
+  }
+
+  @Get(':clientVendorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getClientsByVendor(
+    @Req() req: Request & { user: { id: string } },
+    @Param('clientVendorId') clientVendorId: string,
+  ) {
+    return this.usersService.getClientsByVendor(req.user.id, clientVendorId);
   }
 }
