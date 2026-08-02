@@ -33,11 +33,11 @@ import { successResponse } from 'src/utils/response';
 @Controller('paystack')
 export class PaystackController {
   constructor(
-    private paystackService: PaystackService,
-    private prisma: PrismaService,
-    private transactionsService: TransactionService,
-    private mailService: NodemailerService,
-    private bookingService: BookingService,
+    private readonly paystackService: PaystackService,
+    private readonly prisma: PrismaService,
+    private readonly transactionsService: TransactionService,
+    private readonly mailService: NodemailerService,
+    private readonly bookingService: BookingService,
   ) {}
 
   @Get('/resolve-bank/:accountNumber/:bankCode')

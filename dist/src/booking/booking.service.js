@@ -198,6 +198,7 @@ let BookingService = class BookingService {
                         attendeeEmail: dto.clientEmail,
                         attendeeName: dto.clientName,
                         vendorEmail: user.email,
+                        bookingId: booking.id,
                     });
                 }
                 catch (err) {
@@ -221,22 +222,6 @@ let BookingService = class BookingService {
     }
     async initializeBookingPayment(bookingId, dto) {
         try {
-            const client = await this.prisma.user.findFirst({
-                where: {
-                    email: dto.clientEmail,
-                    role: client_1.UserRole.CLIENT,
-                },
-            });
-            let savedClientId = client?.id ?? '';
-            if (!client) {
-                const saved = await this.authService.registerClient({
-                    clientName: dto.clientName,
-                    email: dto.clientEmail,
-                    phone: dto.phone,
-                    clientVendorId: dto.vendorId,
-                });
-                savedClientId = saved.data.client.id;
-            }
             const services = await this.prisma.service.findUnique({
                 where: { id: dto.serviceId },
             });
@@ -253,6 +238,27 @@ let BookingService = class BookingService {
             });
             if (!vendor) {
                 throw new common_1.NotFoundException('Vendor not found');
+            }
+            if (vendorUser &&
+                dto.clientEmail &&
+                vendorUser.email.toLowerCase() === String(dto.clientEmail).toLowerCase()) {
+                throw new common_1.BadRequestException('Vendors cannot book their own service');
+            }
+            const client = await this.prisma.user.findFirst({
+                where: {
+                    email: dto.clientEmail,
+                    role: client_1.UserRole.CLIENT,
+                },
+            });
+            let savedClientId = client?.id ?? '';
+            if (!client) {
+                const saved = await this.authService.registerClient({
+                    clientName: dto.clientName,
+                    email: dto.clientEmail,
+                    phone: dto.phone,
+                    clientVendorId: dto.vendorId,
+                });
+                savedClientId = saved.data.client.id;
             }
             const amount = services.price;
             const response = await axios_1.default.post(`${process.env.PAYSTACK_BASE_URL}/transaction/initialize`, {
@@ -300,6 +306,9 @@ let BookingService = class BookingService {
             }, 'Successful', 201);
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
         }
     }
