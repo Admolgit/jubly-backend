@@ -24,6 +24,7 @@ config();
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
+    bodyParser: false,
   });
   app.set('trust proxy', 1);
 
@@ -66,7 +67,14 @@ async function bootstrap() {
   app.use(cookieParser());
   app.use(helmet());
   app.use(compression());
-  app.use(json({ limit: '50mb' }));
+  app.use(
+    json({
+      limit: '50mb',
+      verify: (req: any, res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Rate limiter
