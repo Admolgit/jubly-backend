@@ -134,6 +134,7 @@ export class AuthController {
   }
 
   @Get('/user/:userId')
+  @Public()
   getUserById(@Param('userId') userId: string) {
     return this.authService.getUserById(userId);
   }
