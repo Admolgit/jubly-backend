@@ -193,6 +193,7 @@ __decorate([
 ], AuthController.prototype, "getPendingVendor", null);
 __decorate([
     (0, common_1.Get)('/user/:userId'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
