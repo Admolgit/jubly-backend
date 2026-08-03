@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
+  HttpException,
   HttpStatus,
   Injectable,
   InternalServerErrorException,
@@ -363,6 +364,10 @@ export class AuthService {
         { isSignup, requestedRedirectUrl, alreadyExists },
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Google Login/Register failed',
         error.message,
@@ -402,6 +407,10 @@ export class AuthService {
 
       return successResponse({ token }, 'Token refreshed successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Refresh token expired or invalid',
         error.message,
@@ -426,6 +435,10 @@ export class AuthService {
       });
       return successResponse(null, 'Password reset successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Password reset failed',
         error.message,
@@ -481,6 +494,10 @@ export class AuthService {
       });
       return successResponse(null, 'Password changed successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Change password failed',
         error.message,
@@ -515,6 +532,10 @@ export class AuthService {
 
       return successResponse(null, 'Email verified successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to verify email',
         error.message,
@@ -543,6 +564,10 @@ export class AuthService {
 
       return successResponse(null, 'Verification code resent successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Resend OTP failed',
         error.message,
@@ -560,6 +585,10 @@ export class AuthService {
 
       return successResponse({ user: this.sanitizeUser(user) }, 'successful');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException('User failed', error.message);
     }
   }

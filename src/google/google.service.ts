@@ -5,6 +5,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -294,6 +295,10 @@ export class GoogleCalendarService {
         'Successfully fetched calendar linked status',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch dashboard stats.',
         error.message as string,
@@ -410,13 +415,11 @@ export class GoogleCalendarService {
       let startTime: Date = new Date();
       let endTime: Date = new Date();
 
-      // ✅ MONTH VIEW
       if (view === 'month') {
         startTime = new Date(year, month - 1, 1);
         endTime = new Date(year, month, 0, 23, 59, 59);
       }
 
-      // ✅ WEEK VIEW
       if (view === 'week') {
         const current = new Date(date as string);
         const day = current.getDay();
@@ -430,7 +433,6 @@ export class GoogleCalendarService {
         endTime.setHours(23, 59, 59);
       }
 
-      // ✅ DAY VIEW
       if (view === 'day') {
         startTime = new Date(date as string);
         startTime.setHours(0, 0, 0, 0);
@@ -439,7 +441,6 @@ export class GoogleCalendarService {
         endTime.setHours(23, 59, 59);
       }
 
-      // 🔥 FETCH BOOKINGS
       const bookings = await this.prisma.booking.findMany({
         where: {
           clientEmail: user.email,
@@ -456,6 +457,10 @@ export class GoogleCalendarService {
 
       return this.formatCalendarData(view, bookings, startTime);
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch clients calendar data.',
         error.message as string,
@@ -475,7 +480,7 @@ export class GoogleCalendarService {
 
           calendar[key].push({
             id: b.id,
-            title: b.clientName || b.clientEmail,
+            title: b.name,
             startTime: b.startTime,
             endTime: b.endTime,
             status: b.status,
@@ -523,6 +528,10 @@ export class GoogleCalendarService {
         );
       }
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to format calendar data.',
         error.message as string,

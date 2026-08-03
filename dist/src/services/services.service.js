@@ -52,6 +52,9 @@ let ServicesService = class ServicesService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch services', error instanceof Error ? error.message : 'Unknown error');
         }
     }
@@ -70,6 +73,9 @@ let ServicesService = class ServicesService {
             return (0, response_1.successResponse)(null, 'Service status updated successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to update service status', error instanceof Error ? error.message : 'Unknown error');
         }
     }
@@ -84,6 +90,9 @@ let ServicesService = class ServicesService {
             return (0, response_1.successResponse)(service, 'Service fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch service', error instanceof Error ? error.message : 'Unknown error');
         }
     }

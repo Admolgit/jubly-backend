@@ -158,6 +158,7 @@ model Booking {
   id            String  @id @default(auto()) @map("_id") @db.ObjectId
   vendorId      String
   clientId      String?
+  name          String
   googleEventId String?
   serviceId     String
   clientName    String?
