@@ -54,7 +54,7 @@ let BookingController = class BookingController {
     async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
         return this.bookingService.getBookings(req.user.id, page, limit, search, dateFilter, date, status);
     }
-    async getClientsBookings(req, page = '1', limit = '10', search, dateFilter, date, status, email) {
+    getClientsBookings(req, page = '1', limit = '10', search, dateFilter, date, status, email) {
         return this.bookingService.getClientsBookings(req.user.id, page, limit, search, dateFilter, date, status, email);
     }
     getStats(req) {
@@ -202,7 +202,7 @@ __decorate([
     __param(7, (0, common_1.Query)('email')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object, Object, String, String, String, String, String]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getClientsBookings", null);
 __decorate([
     (0, common_1.Get)('clients/stats'),

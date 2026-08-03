@@ -7,6 +7,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -56,6 +57,10 @@ export class TransactionService {
         },
       });
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to record this transactions',
         error.message as string,
@@ -97,6 +102,10 @@ export class TransactionService {
         color: 'yellow',
       });
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to record this transactions',
         error.message as string,
@@ -431,6 +440,10 @@ export class TransactionService {
 
       return successResponse({ total, data }, 'Analytics fetched successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch analytics',
         error.message,

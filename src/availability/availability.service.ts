@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -44,6 +45,10 @@ export class AvailabilityService {
         orderBy: { dayOfWeek: 'asc' },
       });
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch vendor availability',
         error?.message,
@@ -174,6 +179,10 @@ export class AvailabilityService {
 
       return successResponse({ grouped }, 'Availability fetched successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch vendor availability',
         error?.message,
@@ -240,6 +249,10 @@ export class AvailabilityService {
         'Availability updated successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to set vendor availability',
         error?.message,
@@ -262,6 +275,10 @@ export class AvailabilityService {
 
       return successResponse({ deleted }, 'Availability deleted successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to set vendor availability',
         error?.message,
@@ -321,6 +338,10 @@ export class AvailabilityService {
         'Existing buffer time fetched successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch existing buffer time.',
         error.message as string,

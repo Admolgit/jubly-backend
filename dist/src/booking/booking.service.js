@@ -63,19 +63,8 @@ let BookingService = class BookingService {
         }
         return { year, month, day };
     }
-    toBookingDate(value, fallbackDate) {
-        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            return new Date(`${value}T00:00:00.000+01:00`);
-        }
-        const baseDate = value instanceof Date
-            ? new Date(value)
-            : typeof value === 'string'
-                ? this.parseDateInput(value, 'date')
-                : fallbackDate;
-        if (!baseDate) {
-            throw new common_1.BadRequestException('date is required');
-        }
-        const { year, month, day } = this.getDatePartsInBookingTimezone(baseDate);
+    toBookingDate(startTime) {
+        const { year, month, day } = this.getDatePartsInBookingTimezone(startTime);
         return new Date(`${year}-${month}-${day}T00:00:00.000+01:00`);
     }
     getCreatedAtRange(dateFilter, date) {
@@ -139,9 +128,12 @@ let BookingService = class BookingService {
         try {
             const startTime = this.parseDateInput(dto.startTime, 'startTime');
             const endTime = this.parseDateInput(dto.endTime, 'endTime');
-            const bookingDate = this.toBookingDate(dto.date, startTime);
+            const bookingDate = this.toBookingDate(startTime);
             if (endTime <= startTime) {
                 throw new common_1.BadRequestException('endTime must be later than startTime');
+            }
+            if (startTime < new Date()) {
+                throw new common_1.BadRequestException('Cannot book a past date or time');
             }
             const user = await this.prisma.user.findUnique({
                 where: {
@@ -168,7 +160,6 @@ let BookingService = class BookingService {
                 throw new common_1.NotFoundException('Vendor not found');
             }
             const calendarIntegration = await this.getVendorCalendar(userId);
-            console.log({ dto });
             const booking = await this.prisma.booking.create({
                 data: {
                     vendorId: vendor.id,
@@ -178,6 +169,7 @@ let BookingService = class BookingService {
                     clientName: dto.clientName,
                     clientAddress: dto.clientAddress,
                     clientId: dto.clientId,
+                    name: service.name,
                     startTime,
                     endTime,
                     status: 'CONFIRMED',
@@ -217,11 +209,18 @@ let BookingService = class BookingService {
             return booking;
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Internal server error', error.message);
         }
     }
     async initializeBookingPayment(bookingId, dto) {
         try {
+            const startTime = this.parseDateInput(dto.startTime, 'startTime');
+            if (startTime < new Date()) {
+                throw new common_1.BadRequestException('Cannot book a past date or time');
+            }
             const services = await this.prisma.service.findUnique({
                 where: { id: dto.serviceId },
             });
@@ -249,7 +248,6 @@ let BookingService = class BookingService {
                     email: dto.clientEmail,
                 },
             });
-            console.log({ client });
             let savedClientId = client?.id;
             if (!client) {
                 const saved = await this.authService.registerClient({
@@ -481,6 +479,9 @@ let BookingService = class BookingService {
             return (0, response_1.successResponse)(bookings, 'Successfully fetched next 24 hours bookings');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
         }
     }
@@ -512,6 +513,9 @@ let BookingService = class BookingService {
             return (0, response_1.successResponse)(bookings, 'Successfully fetched upcoming bookings');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch upcoming bookings.', error.message);
         }
     }
@@ -548,6 +552,9 @@ let BookingService = class BookingService {
             return (0, response_1.successResponse)(bookings, 'Successfully fetched upcoming bookings');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch upcoming bookings.', error.message);
         }
     }
@@ -590,6 +597,9 @@ let BookingService = class BookingService {
             return (0, response_1.successResponse)(groupedService, 'Successfully counted bookings by service');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch count by service', error.message);
         }
     }
@@ -642,6 +652,9 @@ let BookingService = class BookingService {
             }, 'Successfully fetched admin booking stats');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch admin booking stats.', error.message);
         }
     }
@@ -728,6 +741,9 @@ let BookingService = class BookingService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch admin bookings.', error.message);
         }
     }
@@ -821,6 +837,9 @@ let BookingService = class BookingService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
         }
     }
@@ -904,6 +923,9 @@ let BookingService = class BookingService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
         }
     }
@@ -1041,6 +1063,9 @@ let BookingService = class BookingService {
             }, 'Successfully fetched clients stats');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
         }
     }
@@ -1081,6 +1106,9 @@ let BookingService = class BookingService {
             return (0, response_1.successResponse)({ activeBooking, total }, 'Stats fetched successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch bookings stats.', error.message);
         }
     }
@@ -1107,7 +1135,9 @@ let BookingService = class BookingService {
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
             }
-            if (booking.userId !== userId && booking.vendor.userId !== userId) {
+            if (booking.clientId !== userId &&
+                booking.clientEmail !== user.email &&
+                booking.vendor.userId !== userId) {
                 throw new common_1.ForbiddenException('Not allowed to cancel this booking');
             }
             const updatedBooking = await this.prisma.booking.update({
@@ -1163,7 +1193,7 @@ let BookingService = class BookingService {
         try {
             const { date, startTime, endTime } = dto;
             const start = this.parseDateInput(`${date}T${startTime}`, 'startTime');
-            const bookingDate = this.toBookingDate(date, start);
+            const bookingDate = this.toBookingDate(start);
             const user = await this.prisma.user.findUnique({
                 where: {
                     id: userId,
@@ -1182,7 +1212,9 @@ let BookingService = class BookingService {
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
             }
-            if (booking.userId !== userId && booking.vendor.userId !== userId) {
+            if (booking.clientId !== userId &&
+                booking.clientEmail !== user.email &&
+                booking.vendor.userId !== userId) {
                 throw new common_1.ForbiddenException('Not allowed to reschedule this booking');
             }
             const end = endTime

@@ -13,6 +13,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node --max-old-space-size=384 dist/src/main.js",
     "repair:booking-dates": "ts-node src/scripts/repair-booking-dates.ts",
+    "repair:booking-names": "ts-node src/scripts/repair-booking-names.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

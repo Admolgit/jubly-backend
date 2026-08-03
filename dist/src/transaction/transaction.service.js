@@ -55,6 +55,9 @@ let TransactionService = class TransactionService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to record this transactions', error.message);
         }
     }
@@ -92,6 +95,9 @@ let TransactionService = class TransactionService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to record this transactions', error.message);
         }
     }
@@ -335,6 +341,9 @@ let TransactionService = class TransactionService {
             return (0, response_1.successResponse)({ total, data }, 'Analytics fetched successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch analytics', error.message);
         }
     }

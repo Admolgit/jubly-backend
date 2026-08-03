@@ -54,6 +54,10 @@ export class VendorService {
         201,
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException('Failed', error.message);
     }
   }
@@ -89,6 +93,10 @@ export class VendorService {
 
       return successResponse({ vendor }, 'Vendor created successfully', 201);
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException('Failed', error.message);
     }
   }
@@ -108,6 +116,10 @@ export class VendorService {
         this._createServicesLogic(db, userId, vendorId, services),
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         error.message || 'Failed to create services',
       );
@@ -244,6 +256,10 @@ export class VendorService {
         201,
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to create subaccount',
         error.message,
@@ -354,6 +370,10 @@ export class VendorService {
         'Profile image submitted successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to submit image',
         error.message,
@@ -396,6 +416,10 @@ export class VendorService {
         'Identity image submitted successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to submit identity',
         error.message,
@@ -446,6 +470,10 @@ export class VendorService {
         'Uploaded portfolio successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to upload portfolio.',
         error.message,
@@ -472,6 +500,10 @@ export class VendorService {
         201,
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to update vendor profile',
         error.message,
@@ -509,6 +541,10 @@ export class VendorService {
         'Service updated successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to update vendor services',
         error.message,
@@ -529,6 +565,10 @@ export class VendorService {
         'Vendor services fetched successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch vendor services',
         error.message,
@@ -547,6 +587,10 @@ export class VendorService {
         'Pending vendors retrieved successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to get pending vendors',
         error.message,
@@ -568,6 +612,10 @@ export class VendorService {
         'Pending vendor fetched successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch pending vendor',
         error.message,
@@ -588,6 +636,10 @@ export class VendorService {
 
       return successResponse({ vendors }, 'Vendors retrieved successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to get all vendors',
         error.message,
@@ -641,6 +693,10 @@ export class VendorService {
         'Vendor status retrieved successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to get vendor status',
         error.message,
@@ -661,6 +717,10 @@ export class VendorService {
 
       return successResponse({ rejectVendor }, 'Vendor rejected successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to reject vendor',
         error.message,
@@ -713,6 +773,10 @@ export class VendorService {
 
       return successResponse({ vendor }, 'Vendor fetched successfully.');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch vendor profile',
         error.message,
@@ -800,6 +864,10 @@ export class VendorService {
 
       return successResponse({ service }, 'Service fetched successfully');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetched service',
         error.message,
@@ -829,6 +897,10 @@ export class VendorService {
 
       return successResponse({ data, total }, 'Successful');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetched vendors',
         error.message,

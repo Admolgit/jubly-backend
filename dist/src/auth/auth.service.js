@@ -266,6 +266,9 @@ let AuthService = class AuthService {
             }, isSignup ? 'Sign-up successful' : 'Login successful', common_1.HttpStatus.OK, { isSignup, requestedRedirectUrl, alreadyExists });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Google Login/Register failed', error.message);
         }
     }
@@ -289,6 +292,9 @@ let AuthService = class AuthService {
             return (0, response_1.successResponse)({ token }, 'Token refreshed successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Refresh token expired or invalid', error.message);
         }
     }
@@ -305,6 +311,9 @@ let AuthService = class AuthService {
             return (0, response_1.successResponse)(null, 'Password reset successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Password reset failed', error.message);
         }
     }
@@ -345,6 +354,9 @@ let AuthService = class AuthService {
             return (0, response_1.successResponse)(null, 'Password changed successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Change password failed', error.message);
         }
     }
@@ -373,6 +385,9 @@ let AuthService = class AuthService {
             return (0, response_1.successResponse)(null, 'Email verified successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to verify email', error.message);
         }
     }
@@ -394,6 +409,9 @@ let AuthService = class AuthService {
             return (0, response_1.successResponse)(null, 'Verification code resent successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Resend OTP failed', error.message);
         }
     }
@@ -407,6 +425,9 @@ let AuthService = class AuthService {
             return (0, response_1.successResponse)({ user: this.sanitizeUser(user) }, 'successful');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('User failed', error.message);
         }
     }
