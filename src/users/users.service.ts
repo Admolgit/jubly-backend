@@ -4,6 +4,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -66,6 +67,10 @@ export class UsersService {
 
       return successResponse({ updatedUser }, 'Profile updated successfully.');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to initialize payment',
         error.message as string,
@@ -114,6 +119,10 @@ export class UsersService {
         'Profile updated successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to initialize payment',
         error.message as string,
@@ -143,6 +152,10 @@ export class UsersService {
         'Profile picture updated successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to update profile pics',
         error.message as string,
@@ -165,6 +178,10 @@ export class UsersService {
         'User fetched successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch user',
         error.message as string,
@@ -249,6 +266,10 @@ export class UsersService {
 
       return successResponse(subAccount, 'Sub account fetched successfully.');
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch user',
         error.message as string,
@@ -271,6 +292,10 @@ export class UsersService {
 
       return successResponse(enquiry, 'Enquiry submitted successfully.', 201);
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to create enquiry.',
         error.message as string,
@@ -291,6 +316,10 @@ export class UsersService {
         'User fetched successfully.',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to create enquiry.',
         error.message as string,
@@ -321,6 +350,10 @@ export class UsersService {
         'Notification setting successfully created.',
       );
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to update notification.',
         error as string,
@@ -337,6 +370,10 @@ export class UsersService {
       });
       return successResponse(result, 'Notification fetched successfully.');
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to update notification.',
         error as string,
@@ -449,6 +486,10 @@ export class UsersService {
         },
       );
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to update notification.',
         error as string,

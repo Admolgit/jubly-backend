@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { successResponse } from 'src/utils/response';
 
@@ -51,6 +55,10 @@ export class ServicesService {
         limit,
       });
     } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch services',
         error instanceof Error ? error.message : 'Unknown error',
@@ -74,6 +82,10 @@ export class ServicesService {
 
       return successResponse(null, 'Service status updated successfully.');
     } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to update service status',
         error instanceof Error ? error.message : 'Unknown error',
@@ -91,6 +103,10 @@ export class ServicesService {
       });
       return successResponse(service, 'Service fetched successfully.');
     } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch service',
         error instanceof Error ? error.message : 'Unknown error',

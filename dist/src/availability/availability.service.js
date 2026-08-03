@@ -41,6 +41,9 @@ let AvailabilityService = class AvailabilityService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch vendor availability', error?.message);
         }
     }
@@ -131,6 +134,9 @@ let AvailabilityService = class AvailabilityService {
             return (0, response_1.successResponse)({ grouped }, 'Availability fetched successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch vendor availability', error?.message);
         }
     }
@@ -178,6 +184,9 @@ let AvailabilityService = class AvailabilityService {
             return (0, response_1.successResponse)({ updatedAvailabilities }, 'Availability updated successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to set vendor availability', error?.message);
         }
     }
@@ -195,6 +204,9 @@ let AvailabilityService = class AvailabilityService {
             return (0, response_1.successResponse)({ deleted }, 'Availability deleted successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to set vendor availability', error?.message);
         }
     }
@@ -238,6 +250,9 @@ let AvailabilityService = class AvailabilityService {
             return (0, response_1.successResponse)(existingBuffer, 'Existing buffer time fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch existing buffer time.', error.message);
         }
     }

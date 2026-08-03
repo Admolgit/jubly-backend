@@ -136,7 +136,7 @@ export class BookingController {
   @Get('clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('CLIENT')
-  async getClientsBookings(
+  getClientsBookings(
     @Req() req: { user: { id: string } },
     @Query('page') page = '1',
     @Query('limit') limit = '10',

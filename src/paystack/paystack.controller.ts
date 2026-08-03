@@ -240,8 +240,6 @@ export class PaystackController {
         },
       });
 
-      console.log({ metadata: event.data.metadata });
-
       if (!transactionExists) {
         throw new BadRequestException('Transaction was not initialized');
       }
@@ -273,8 +271,6 @@ export class PaystackController {
           vendorUserId,
           phone,
         } = event.data.metadata;
-
-        console.log({ metadata: event.data.metadata });
 
         if (
           !vendorId ||

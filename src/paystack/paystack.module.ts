@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { PaystackService } from './paystack.service';
 import { PaystackController } from './paystack.controller';
+import { PaystackReconciliationService } from './paystack-reconciliation.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { BookingService } from 'src/booking/booking.service';
@@ -15,6 +16,7 @@ import { ActivityService } from 'src/activity/activityLog.service';
   providers: [
     PrismaService,
     PaystackService,
+    PaystackReconciliationService,
     TransactionService,
     NodemailerService,
     BookingService,

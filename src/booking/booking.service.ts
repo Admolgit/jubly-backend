@@ -78,23 +78,8 @@ export class BookingService {
     return { year, month, day };
   }
 
-  private toBookingDate(value?: string | Date, fallbackDate?: Date) {
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return new Date(`${value}T00:00:00.000+01:00`);
-    }
-
-    const baseDate =
-      value instanceof Date
-        ? new Date(value)
-        : typeof value === 'string'
-          ? this.parseDateInput(value, 'date')
-          : fallbackDate;
-
-    if (!baseDate) {
-      throw new BadRequestException('date is required');
-    }
-
-    const { year, month, day } = this.getDatePartsInBookingTimezone(baseDate);
+  private toBookingDate(startTime: Date) {
+    const { year, month, day } = this.getDatePartsInBookingTimezone(startTime);
 
     return new Date(`${year}-${month}-${day}T00:00:00.000+01:00`);
   }
@@ -170,10 +155,14 @@ export class BookingService {
     try {
       const startTime = this.parseDateInput(dto.startTime, 'startTime');
       const endTime = this.parseDateInput(dto.endTime, 'endTime');
-      const bookingDate = this.toBookingDate(dto.date, startTime);
+      const bookingDate = this.toBookingDate(startTime);
 
       if (endTime <= startTime) {
         throw new BadRequestException('endTime must be later than startTime');
+      }
+
+      if (startTime < new Date()) {
+        throw new BadRequestException('Cannot book a past date or time');
       }
 
       const user = await this.prisma.user.findUnique({
@@ -208,8 +197,6 @@ export class BookingService {
 
       const calendarIntegration = await this.getVendorCalendar(userId);
 
-      console.log({ dto });
-
       const booking = await this.prisma.booking.create({
         data: {
           vendorId: vendor.id,
@@ -219,6 +206,7 @@ export class BookingService {
           clientName: dto.clientName,
           clientAddress: dto.clientAddress,
           clientId: dto.clientId,
+          name: service.name,
           startTime,
           endTime,
           status: 'CONFIRMED',
@@ -263,6 +251,10 @@ export class BookingService {
 
       return booking;
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Internal server error',
         error.message as string,
@@ -272,6 +264,12 @@ export class BookingService {
 
   async initializeBookingPayment(bookingId: string, dto: any) {
     try {
+      const startTime = this.parseDateInput(dto.startTime, 'startTime');
+
+      if (startTime < new Date()) {
+        throw new BadRequestException('Cannot book a past date or time');
+      }
+
       const services = await this.prisma.service.findUnique({
         where: { id: dto.serviceId },
       });
@@ -305,11 +303,11 @@ export class BookingService {
       const client = await this.prisma.user.findFirst({
         where: {
           email: dto.clientEmail,
-          role: UserRole.CLIENT,
+          // role: UserRole.CLIENT,
         },
       });
 
-      let savedClientId: string = client?.id ?? '';
+      let savedClientId: string | undefined = client?.id;
       if (!client) {
         const saved = await this.authService.registerClient({
           clientName: dto.clientName,
@@ -609,6 +607,10 @@ export class BookingService {
         'Successfully fetched next 24 hours bookings',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch bookings.',
         error.message as string,
@@ -650,6 +652,10 @@ export class BookingService {
         'Successfully fetched upcoming bookings',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch upcoming bookings.',
         error.message as string,
@@ -695,6 +701,10 @@ export class BookingService {
         'Successfully fetched upcoming bookings',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch upcoming bookings.',
         error.message as string,
@@ -750,6 +760,10 @@ export class BookingService {
         'Successfully counted bookings by service',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch count by service',
         error.message as string,
@@ -819,6 +833,10 @@ export class BookingService {
         'Successfully fetched admin booking stats',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch admin booking stats.',
         error.message as string,
@@ -930,6 +948,10 @@ export class BookingService {
         },
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch admin bookings.',
         error.message as string,
@@ -1044,6 +1066,10 @@ export class BookingService {
         lastPage: Math.ceil(total / limitNum),
       });
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch bookings.',
         error.message,
@@ -1148,6 +1174,10 @@ export class BookingService {
         lastPage: Math.ceil(total / limitNum),
       });
     } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch bookings.',
         (error as Error).message,
@@ -1347,6 +1377,10 @@ export class BookingService {
         'Successfully fetched clients stats',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch bookings.',
         error.message as string,
@@ -1398,6 +1432,10 @@ export class BookingService {
         'Stats fetched successfully',
       );
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch bookings stats.',
         error.message as string,
@@ -1433,7 +1471,11 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
-      if (booking.userId !== userId && booking.vendor.userId !== userId) {
+      if (
+        booking.clientId !== userId &&
+        booking.clientEmail !== user.email &&
+        booking.vendor.userId !== userId
+      ) {
         throw new ForbiddenException('Not allowed to cancel this booking');
       }
 
@@ -1503,7 +1545,7 @@ export class BookingService {
       const { date, startTime, endTime } = dto;
 
       const start = this.parseDateInput(`${date}T${startTime}`, 'startTime');
-      const bookingDate = this.toBookingDate(date, start);
+      const bookingDate = this.toBookingDate(start);
 
       const user = await this.prisma.user.findUnique({
         where: {
@@ -1527,7 +1569,11 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
-      if (booking.userId !== userId && booking.vendor.userId !== userId) {
+      if (
+        booking.clientId !== userId &&
+        booking.clientEmail !== user.email &&
+        booking.vendor.userId !== userId
+      ) {
         throw new ForbiddenException('Not allowed to reschedule this booking');
       }
 

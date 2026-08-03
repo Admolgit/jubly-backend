@@ -219,6 +219,9 @@ let GoogleCalendarService = class GoogleCalendarService {
             return (0, response_1.successResponse)({ linked: !!calendar, calendar }, 'Successfully fetched calendar linked status');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch dashboard stats.', error.message);
         }
     }
@@ -320,6 +323,9 @@ let GoogleCalendarService = class GoogleCalendarService {
             return this.formatCalendarData(view, bookings, startTime);
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch clients calendar data.', error.message);
         }
     }
@@ -333,7 +339,7 @@ let GoogleCalendarService = class GoogleCalendarService {
                         calendar[key] = [];
                     calendar[key].push({
                         id: b.id,
-                        title: b.clientName || b.clientEmail,
+                        title: b.name,
                         startTime: b.startTime,
                         endTime: b.endTime,
                         status: b.status,
@@ -364,6 +370,9 @@ let GoogleCalendarService = class GoogleCalendarService {
             }
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to format calendar data.', error.message);
         }
     }

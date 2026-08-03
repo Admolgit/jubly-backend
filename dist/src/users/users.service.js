@@ -50,6 +50,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)({ updatedUser }, 'Profile updated successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
         }
     }
@@ -87,6 +90,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)(this.sanitizeUser(updatedUser), 'Profile updated successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
         }
     }
@@ -105,6 +111,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)({ updatedPicture }, 'Profile picture updated successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to update profile pics', error.message);
         }
     }
@@ -119,6 +128,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)(this.sanitizeUser(user), 'User fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
         }
     }
@@ -175,6 +187,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)(subAccount, 'Sub account fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch user', error.message);
         }
     }
@@ -188,6 +203,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)(enquiry, 'Enquiry submitted successfully.', 201);
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to create enquiry.', error.message);
         }
     }
@@ -201,6 +219,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)(this.sanitizeUser(user), 'User fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to create enquiry.', error.message);
         }
     }
@@ -225,6 +246,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)(result, 'Notification setting successfully created.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to update notification.', error);
         }
     }
@@ -238,6 +262,9 @@ let UsersService = class UsersService {
             return (0, response_1.successResponse)(result, 'Notification fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to update notification.', error);
         }
     }
@@ -320,6 +347,9 @@ let UsersService = class UsersService {
             });
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to update notification.', error);
         }
     }

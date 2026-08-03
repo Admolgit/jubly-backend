@@ -39,6 +39,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ createdVendor }, 'Onboarding completed successfully', 201);
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed', error.message);
         }
     }
@@ -65,6 +68,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ vendor }, 'Vendor created successfully', 201);
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed', error.message);
         }
     }
@@ -76,6 +82,9 @@ let VendorService = class VendorService {
             return this.prisma.$transaction((db) => this._createServicesLogic(db, userId, vendorId, services));
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException(error.message || 'Failed to create services');
         }
     }
@@ -172,6 +181,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)(pastackUserAccount, 'Paystack subaccount created and verified successfully', 201);
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to create subaccount', error.message);
         }
     }
@@ -251,6 +263,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ updatedVendor }, 'Profile image submitted successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to submit image', error.message);
         }
     }
@@ -280,6 +295,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ updatedVendor }, 'Identity image submitted successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to submit identity', error.message);
         }
     }
@@ -316,6 +334,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ uploadedPortfolios }, 'Uploaded portfolio successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to upload portfolio.', error.message);
         }
     }
@@ -333,6 +354,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ vendor }, 'Vendor profile updated successfully', 201);
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to update vendor profile', error.message);
         }
     }
@@ -361,6 +385,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ updatedServices }, 'Service updated successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to update vendor services', error.message);
         }
     }
@@ -374,6 +401,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ services }, 'Vendor services fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch vendor services', error.message);
         }
     }
@@ -385,6 +415,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ pendingVendors }, 'Pending vendors retrieved successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to get pending vendors', error.message);
         }
     }
@@ -399,6 +432,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ vendor }, 'Pending vendor fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch pending vendor', error.message);
         }
     }
@@ -415,6 +451,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ vendors }, 'Vendors retrieved successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to get all vendors', error.message);
         }
     }
@@ -456,6 +495,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ status }, 'Vendor status retrieved successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to get vendor status', error.message);
         }
     }
@@ -472,6 +514,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ rejectVendor }, 'Vendor rejected successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to reject vendor', error.message);
         }
     }
@@ -513,6 +558,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ vendor }, 'Vendor fetched successfully.');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetch vendor profile', error.message);
         }
     }
@@ -582,6 +630,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ service }, 'Service fetched successfully');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetched service', error.message);
         }
     }
@@ -607,6 +658,9 @@ let VendorService = class VendorService {
             return (0, response_1.successResponse)({ data, total }, 'Successful');
         }
         catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
             throw new common_1.InternalServerErrorException('Failed to fetched vendors', error.message);
         }
     }
