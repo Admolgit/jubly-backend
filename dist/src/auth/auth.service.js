@@ -421,6 +421,17 @@ let AuthService = class AuthService {
                 where: {
                     id: userId,
                 },
+                include: {
+                    vendor: {
+                        select: {
+                            id: true,
+                            isApproved: true,
+                            onboardingCompleted: true,
+                            kycStatus: true,
+                            isActive: true,
+                        },
+                    },
+                },
             });
             return (0, response_1.successResponse)({ user: this.sanitizeUser(user) }, 'successful');
         }
