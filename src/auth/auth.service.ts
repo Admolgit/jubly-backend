@@ -581,6 +581,17 @@ export class AuthService {
         where: {
           id: userId,
         },
+        include: {
+          vendor: {
+            select: {
+              id: true,
+              isApproved: true,
+              onboardingCompleted: true,
+              kycStatus: true,
+              isActive: true,
+            },
+          },
+        },
       });
 
       return successResponse({ user: this.sanitizeUser(user) }, 'successful');
