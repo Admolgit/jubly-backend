@@ -113,6 +113,131 @@ let NodemailerService = class NodemailerService {
     `,
         });
     }
+    async rescheduleRequestedMail(data) {
+        await this.mailerService.sendMail({
+            to: data.recipientEmail,
+            subject: `Reschedule requested for your ${data.serviceName} appointment`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+        <h2 style="color:#111;">The ${data.requestedByLabel} has requested to reschedule this booking.</h2>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          <p><strong>Current Time:</strong> ${String(data.currentDate)} at ${String(data.currentStart)} - ${String(data.currentEnd)}</p>
+          <p><strong>Proposed New Time:</strong> ${String(data.proposedDate)}</p>
+          ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
+        </div>
+
+        <p>Please log in to your dashboard to accept, reject, or propose another time.</p>
+
+        <p>The original appointment time remains unchanged until you respond.</p>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+        });
+    }
+    async rescheduleAcceptedMail(data) {
+        await this.mailerService.sendMail({
+            to: data.recipientEmail,
+            subject: `Your reschedule request for ${data.serviceName} was accepted`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+        <h2 style="color:#111;">Your reschedule request has been accepted 🎉</h2>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          <p><strong>New Time:</strong> ${String(data.newStart)} - ${String(data.newEnd)}</p>
+        </div>
+
+        <p>Your booking is now confirmed for the new time above.</p>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+        });
+    }
+    async rescheduleRejectedMail(data) {
+        await this.mailerService.sendMail({
+            to: data.recipientEmail,
+            subject: `Your reschedule request for ${data.serviceName} was rejected`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+        <h2 style="color:#111;">Your reschedule request was not accepted.</h2>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
+        </div>
+
+        <p>Your original appointment time remains unchanged.</p>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+        });
+    }
+    async rescheduleCounterProposedMail(data) {
+        await this.mailerService.sendMail({
+            to: data.recipientEmail,
+            subject: `A new time was proposed for your ${data.serviceName} appointment`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+        <h2 style="color:#111;">A different time has been proposed for this booking.</h2>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          <p><strong>Proposed New Time:</strong> ${String(data.proposedDate)}</p>
+          ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
+        </div>
+
+        <p>Please log in to your dashboard to accept or reject this new time.</p>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+        });
+    }
+    async bookingCancelledMail(data) {
+        await this.mailerService.sendMail({
+            to: data.recipientEmail,
+            subject: `Your ${data.serviceName} booking has been cancelled`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+        <h2 style="color:#111;">This booking has been cancelled by the ${data.cancelledByLabel}.</h2>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
+        </div>
+
+        <p>We apologize for any inconvenience.</p>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+        });
+    }
     async bookingStatusChangeMail(data) {
         await this.mailerService.sendMail({
             to: data?.email,

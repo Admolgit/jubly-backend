@@ -61,8 +61,7 @@ export class UsersController {
     return this.usersService.updateProfile(req.user.id, dto);
   }
   @Get('user/:userId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('VENDOR', 'CLIENT')
+  @Public()
   getUserById(@Param('userId') userId: string) {
     return this.usersService.getUserById(userId);
   }
@@ -75,8 +74,7 @@ export class UsersController {
   }
 
   @Get('email/:email')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('VENDOR', 'CLIENT')
+  @Public()
   getUserByEmail(@Param('email') email: string) {
     return this.usersService.getUserEmail(email);
   }

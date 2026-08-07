@@ -149,8 +149,8 @@ let AuthService = class AuthService {
                 throw new common_2.UnauthorizedException('Invalid credentials');
             }
             if (user.role === 'VENDOR' && !user.isVerified) {
-                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
-                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
+                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
                 const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
                 await this.prisma.user.update({
                     where: { id: user.id },
@@ -166,8 +166,8 @@ let AuthService = class AuthService {
                 where: { userId: user.id },
             });
             if (user.role === 'VENDOR' && !vendor) {
-                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
-                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
+                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
                 const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
                 await this.prisma.user.update({
                     where: { id: user.id },
@@ -187,8 +187,8 @@ let AuthService = class AuthService {
             if (vendor &&
                 vendor.isApproved === true &&
                 vendor.onboardingCompleted === false) {
-                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
-                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
+                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
                 const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
                 await this.prisma.user.update({
                     where: { id: user.id },
@@ -205,8 +205,8 @@ let AuthService = class AuthService {
                 vendor.kycStatus === 'PENDING') {
                 throw new common_2.UnauthorizedException('Vendor account pending approval');
             }
-            const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
-            const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+            const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
+            const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
             const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
             await this.prisma.user.update({
                 where: { id: user.id },
@@ -252,7 +252,7 @@ let AuthService = class AuthService {
                 });
             }
             const token = await this.generateJwt(user);
-            const refreshToken = await this.jwtService.signAsync({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+            const refreshToken = await this.jwtService.signAsync({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
             const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
             await this.prisma.user.update({
                 where: { id: user.id },
@@ -273,7 +273,7 @@ let AuthService = class AuthService {
         }
     }
     async generateJwt(user) {
-        return await this.jwtService.signAsync({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '7d' });
+        return await this.jwtService.signAsync({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
     }
     async refreshToken(refreshToken) {
         try {
@@ -288,7 +288,7 @@ let AuthService = class AuthService {
             if (!isValid) {
                 throw new common_2.UnauthorizedException('Invalid refresh token');
             }
-            const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '15m' });
+            const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
             return (0, response_1.successResponse)({ token }, 'Token refreshed successfully');
         }
         catch (error) {
