@@ -30,7 +30,7 @@ exports.AuthModule = AuthModule = __decorate([
             passport_1.PassportModule.register({ defaultStrategy: 'jwt', session: true }),
             jwt_1.JwtModule.register({
                 secret: process.env.JWT_SECRET,
-                signOptions: { expiresIn: '1d' },
+                signOptions: { expiresIn: '1h' },
             }),
             passport_1.PassportModule,
             nodemailer_module_1.NodemailerModule,
