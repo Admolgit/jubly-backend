@@ -19,6 +19,7 @@ import { BookingModule } from './booking/booking.module';
 import { UsersModule } from './users/users.module';
 import { ServicesModule } from './services/services.module';
 import { ActivityLogModule } from './activity/activityLog.module';
+import { RescheduleModule } from './reschedule/reschedule.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { ActivityLogModule } from './activity/activityLog.module';
     UsersModule,
     ServicesModule,
     ActivityLogModule,
+    RescheduleModule,
   ],
   controllers: [AppController],
   providers: [

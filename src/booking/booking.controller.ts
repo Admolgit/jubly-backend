@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
+
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Body,
@@ -174,26 +174,8 @@ export class BookingController {
     return this.bookingService.getClientBookingsStats(userId);
   }
 
-  @Patch('reschedule/:bookingId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('VENDOR', 'CLIENT')
-  rescheduleBooking(
-    @Req() req: { user: { id: string } },
-    @Body() dto: { date: string; startTime: string; endTime?: string },
-    @Param('bookingId') bookingId: string,
-  ) {
-    return this.bookingService.rescheduleBooking(bookingId, dto, req.user.id);
-  }
-
-  @Patch(':bookingId/cancel')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('VENDOR', 'CLIENT')
-  cancleBooking(
-    @Param('bookingId') bookingId: string,
-    @Req() req: { user: { id: string } },
-  ) {
-    return this.bookingService.cancelBooking(bookingId, req.user.id);
-  }
+  // Reschedule and cancellation now live in RescheduleController
+  // (POST /booking/:bookingId/reschedule, /reschedule/accept|reject|counter, /cancel).
 
   @Patch(':bookingId/mark-as-completed')
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -97,8 +97,7 @@ __decorate([
 ], UsersController.prototype, "updateProfile", null);
 __decorate([
     (0, common_1.Get)('user/:userId'),
-    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
-    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -115,8 +114,7 @@ __decorate([
 ], UsersController.prototype, "getUserSubAccount", null);
 __decorate([
     (0, common_1.Get)('email/:email'),
-    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
-    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('email')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
