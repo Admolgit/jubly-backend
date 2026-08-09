@@ -49,7 +49,17 @@ let BookingController = class BookingController {
         return this.bookingService.getAdminBookingStats();
     }
     getAdminBookings(page = '1', limit = '10', search, dateFilter, date, status, startDate, endDate) {
-        return this.bookingService.getAdminBookings(page, limit, search, dateFilter, date, status, startDate, endDate);
+        const dto = {
+            page,
+            limit,
+            search,
+            dateFilter,
+            date,
+            status,
+            startDate,
+            endDate,
+        };
+        return this.bookingService.getAdminBookings(dto);
     }
     async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
         return this.bookingService.getBookings(req.user.id, page, limit, search, dateFilter, date, status);
@@ -76,6 +86,9 @@ let BookingController = class BookingController {
     }
     getClientBookingStats(clientEmail, vendorId) {
         return this.bookingService.getClientBookingStats(clientEmail, vendorId);
+    }
+    getBusinessCategories() {
+        return this.bookingService.getBusinessCategories();
     }
 };
 exports.BookingController = BookingController;
@@ -254,6 +267,13 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getClientBookingStats", null);
+__decorate([
+    (0, common_1.Get)('business-categories'),
+    (0, public_decorator_1.Public)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getBusinessCategories", null);
 exports.BookingController = BookingController = __decorate([
     (0, common_1.Controller)('booking'),
     __metadata("design:paramtypes", [booking_service_1.BookingService])

@@ -315,7 +315,7 @@ let BookingService = class BookingService {
             const vendor = await this.prisma.vendor.findUnique({
                 where: { userId },
             });
-            if (!vendor || vendor.id !== vendorId) {
+            if (!vendor || vendor?.id !== vendorId) {
                 throw new common_1.ForbiddenException('Not allowed to view this dashboard');
             }
             const now = new Date();
@@ -658,7 +658,8 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to fetch admin booking stats.', error.message);
         }
     }
-    async getAdminBookings(page, limit, search, dateFilter, date, status, startDate, endDate) {
+    async getAdminBookings(dto) {
+        const { page, limit, search, dateFilter, date, status, startDate, endDate, } = dto;
         try {
             const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
             const limitNum = Math.max(Number.parseInt(limit, 10) || 10, 1);
@@ -1411,6 +1412,24 @@ let BookingService = class BookingService {
             amountSpent,
             bookings: clientBookings,
         }, 'Client booking stats fetched successfully');
+    }
+    async getBusinessCategories() {
+        try {
+            const categories = await this.prisma.vendor.findMany({
+                distinct: ['category'],
+                select: {
+                    category: true,
+                },
+            });
+            const categoryList = categories.map((c) => c.category);
+            return (0, response_1.successResponse)(categoryList, 'Business categories fetched');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to fetch business categories.', error.message);
+        }
     }
 };
 exports.BookingService = BookingService;

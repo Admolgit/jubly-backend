@@ -98,16 +98,18 @@ export class BookingController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.bookingService.getAdminBookings(
+    const dto = {
       page,
       limit,
-      search as string,
-      dateFilter as DateFilter,
-      date as string,
-      status as string,
-      startDate as string,
-      endDate as string,
-    );
+      search,
+      dateFilter,
+      date,
+      status,
+      startDate,
+      endDate,
+    };
+
+    return this.bookingService.getAdminBookings(dto);
   }
 
   @Get('')
@@ -174,9 +176,6 @@ export class BookingController {
     return this.bookingService.getClientBookingsStats(userId);
   }
 
-  // Reschedule and cancellation now live in RescheduleController
-  // (POST /booking/:bookingId/reschedule, /reschedule/accept|reject|counter, /cancel).
-
   @Patch(':bookingId/mark-as-completed')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR', 'CLIENT')
@@ -209,5 +208,11 @@ export class BookingController {
     @Param('vendorId') vendorId: string,
   ) {
     return this.bookingService.getClientBookingStats(clientEmail, vendorId);
+  }
+
+  @Get('business-categories')
+  @Public()
+  getBusinessCategories() {
+    return this.bookingService.getBusinessCategories();
   }
 }

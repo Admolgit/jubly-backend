@@ -32,13 +32,21 @@ let ActivityService = class ActivityService {
         });
         return (0, response_1.successResponse)(activity, 'Activity log created successfully', 201);
     }
-    async getLogsByUserId(userId) {
+    async getLogsByUserId(userId, page, limit) {
         try {
+            const where = { userId };
             const logs = await this.prisma.activityLog.findMany({
-                where: { userId },
+                where,
                 orderBy: { createdAt: 'desc' },
+                skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
+                take: limit ? Number(limit) : undefined,
             });
-            return (0, response_1.successResponse)(logs, 'Activity logs retrieved successfully');
+            const total = await this.prisma.activityLog.count({ where });
+            return (0, response_1.successResponse)(logs, 'Activity logs retrieved successfully', 200, {
+                total,
+                page,
+                limit,
+            });
         }
         catch (err) {
             console.error('Error retrieving activity logs:', err);

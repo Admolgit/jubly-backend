@@ -21,9 +21,9 @@ let ActivityLogController = class ActivityLogController {
     constructor(activityService) {
         this.activityService = activityService;
     }
-    getLogsByUserId(req) {
+    getLogsByUserId(req, page, limit) {
         const userId = req.user.id;
-        return this.activityService.getLogsByUserId(userId);
+        return this.activityService.getLogsByUserId(userId, page, limit);
     }
 };
 exports.ActivityLogController = ActivityLogController;
@@ -32,8 +32,10 @@ __decorate([
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
     __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('page')),
+    __param(2, (0, common_1.Query)('limit')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Number, Number]),
     __metadata("design:returntype", void 0)
 ], ActivityLogController.prototype, "getLogsByUserId", null);
 exports.ActivityLogController = ActivityLogController = __decorate([
