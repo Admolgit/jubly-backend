@@ -8,15 +8,14 @@ import {
   HttpStatus,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException } from '@nestjs/common';
 import { comparePassword, hashPassword } from './hash';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { successResponse } from 'src/utils/response';
-// import { KYCStatus, UserRole } from '@prisma/client';
 import Helper from 'src/utils/helpers';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { generateTempPassword } from 'src/utils/generateTempPassword';
@@ -26,10 +25,10 @@ import { ActivityService } from 'src/activity/activityLog.service';
 @Injectable()
 export class AuthService {
   constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
-    private nodemailService: NodemailerService,
-    private activityService: ActivityService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+    private readonly nodemailService: NodemailerService,
+    private readonly activityService: ActivityService,
   ) {}
 
   private sanitizeUser<T extends Record<string, any> | null | undefined>(
@@ -37,10 +36,10 @@ export class AuthService {
   ) {
     if (!user) return user;
     const {
-      password,
-      refreshTokenHash,
-      verificationCode,
-      codeExpiresAt,
+      // password,
+      // refreshTokenHash,
+      // verificationCode,
+      // codeExpiresAt,
       ...safeUser
     } = user;
     return safeUser;
@@ -160,15 +159,21 @@ export class AuthService {
         throw new UnauthorizedException('Invalid credentials');
       }
 
+      if (user?.isSuspended) {
+        throw new UnauthorizedException(
+          'Your account has been suspended. Please contact support for assistance.',
+        );
+      }
+
       if (user.role === 'VENDOR' && !user.isVerified) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshToken = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -195,12 +200,12 @@ export class AuthService {
       if (user.role === 'VENDOR' && !vendor) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshToken = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -221,26 +226,24 @@ export class AuthService {
       }
 
       if (
-        vendor &&
-        vendor.isApproved === false &&
-        vendor.kycStatus === 'NOT_SUBMITTED'
+        vendor?.isApproved === false &&
+        vendor?.kycStatus === 'NOT_SUBMITTED'
       ) {
         throw new UnauthorizedException('Complete your onboarding');
       }
 
       if (
-        vendor &&
-        vendor.isApproved === true &&
-        vendor.onboardingCompleted === false
+        vendor?.isApproved === true &&
+        vendor?.onboardingCompleted === false
       ) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshToken = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -261,22 +264,18 @@ export class AuthService {
         );
       }
 
-      if (
-        vendor &&
-        vendor.isApproved === false &&
-        vendor.kycStatus === 'PENDING'
-      ) {
+      if (vendor?.isApproved === false && vendor?.kycStatus === 'PENDING') {
         throw new UnauthorizedException('Vendor account pending approval');
       }
 
       const token = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       const refreshToken = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -320,6 +319,12 @@ export class AuthService {
         );
       }
 
+      if (user?.isSuspended) {
+        throw new UnauthorizedException(
+          'Your account has been suspended. Please contact support for assistance.',
+        );
+      }
+
       let isSignup = false;
       let alreadyExists = true;
 
@@ -342,7 +347,7 @@ export class AuthService {
       const token = await this.generateJwt(user);
       const refreshToken = await this.jwtService.signAsync(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -378,19 +383,24 @@ export class AuthService {
   async generateJwt(user: any): Promise<string> {
     return await this.jwtService.signAsync(
       { sub: user.id, email: user.email, role: user.role },
-      { expiresIn: '1h' },
+      { expiresIn: '14d' },
     );
   }
 
   async refreshToken(refreshToken: string) {
+    let payload: any;
     try {
-      const payload = this.jwtService.verify(refreshToken);
+      payload = this.jwtService.verify(refreshToken);
+    } catch {
+      throw new UnauthorizedException('Refresh token expired or invalid');
+    }
 
+    try {
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
       });
 
-      if (!user || !user.refreshTokenHash) {
+      if (!user?.refreshTokenHash) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
@@ -402,7 +412,7 @@ export class AuthService {
 
       const token = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       return successResponse({ token }, 'Token refreshed successfully');
@@ -412,7 +422,7 @@ export class AuthService {
       }
 
       throw new InternalServerErrorException(
-        'Refresh token expired or invalid',
+        'Refresh token failed',
         error.message,
       );
     }

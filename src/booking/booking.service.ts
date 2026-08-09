@@ -392,7 +392,7 @@ export class BookingService {
         where: { userId },
       });
 
-      if (!vendor || vendor.id !== vendorId) {
+      if (!vendor || vendor?.id !== vendorId) {
         throw new ForbiddenException('Not allowed to view this dashboard');
       }
 
@@ -844,16 +844,26 @@ export class BookingService {
     }
   }
 
-  async getAdminBookings(
-    page: string,
-    limit: string,
-    search?: string,
-    dateFilter?: DateFilter,
-    date?: string,
-    status?: string,
-    startDate?: string,
-    endDate?: string,
-  ) {
+  async getAdminBookings(dto: {
+    page: string;
+    limit: string;
+    search?: string;
+    dateFilter?: DateFilter;
+    date?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const {
+      page,
+      limit,
+      search,
+      dateFilter,
+      date,
+      status,
+      startDate,
+      endDate,
+    } = dto;
     try {
       const pageNum = Math.max(Number.parseInt(page, 10) || 1, 1);
       const limitNum = Math.max(Number.parseInt(limit, 10) || 10, 1);
@@ -1443,10 +1453,6 @@ export class BookingService {
     }
   }
 
-  // Cancellation and rescheduling now live in RescheduleService
-  // (see src/reschedule) which supports the full request/accept/reject/counter
-  // flow and cancelledBy/cancelledAt/cancellationReason auditing.
-
   async markAsCmpleted(bookingId: string, userId: string) {
     try {
       const user = await this.prisma.user.findUnique({
@@ -1816,5 +1822,29 @@ export class BookingService {
       },
       'Client booking stats fetched successfully',
     );
+  }
+
+  async getBusinessCategories() {
+    try {
+      const categories = await this.prisma.vendor.findMany({
+        distinct: ['category'],
+        select: {
+          category: true,
+        },
+      });
+
+      const categoryList = categories.map((c) => c.category);
+
+      return successResponse(categoryList, 'Business categories fetched');
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to fetch business categories.',
+        error.message as string,
+      );
+    }
   }
 }

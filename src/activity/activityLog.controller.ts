@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { ActivityService } from './activityLog.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
@@ -10,8 +10,12 @@ export class ActivityLogController {
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR', 'CLIENT')
-  getLogsByUserId(@Req() req: { user: { id: string } }) {
+  getLogsByUserId(
+    @Req() req: { user: { id: string } },
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
     const userId = req.user.id;
-    return this.activityService.getLogsByUserId(userId);
+    return this.activityService.getLogsByUserId(userId, page, limit);
   }
 }

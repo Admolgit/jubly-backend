@@ -28,7 +28,7 @@ export class RescheduleRepository {
       ...bookingWithRelations,
     });
   }
-  
+
   findActiveRescheduleRequest(bookingId: string) {
     return this.prisma.rescheduleRequest.findFirst({
       where: {

@@ -12,6 +12,7 @@ import {
 import {
   NotificationCategory,
   NotificationType,
+  Prisma,
   UserRole,
 } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
@@ -23,22 +24,16 @@ import { ActivityService } from 'src/activity/activityLog.service';
 @Injectable()
 export class UsersService {
   constructor(
-    private prisma: PrismaService,
-    private cloudinaryService: CloudinaryService,
-    private activityService: ActivityService,
+    private readonly prisma: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly activityService: ActivityService,
   ) {}
 
   private sanitizeUser<T extends Record<string, any> | null | undefined>(
     user: T,
   ) {
     if (!user) return user;
-    const {
-      password,
-      refreshTokenHash,
-      verificationCode,
-      codeExpiresAt,
-      ...safeUser
-    } = user;
+    const { ...safeUser } = user;
     return safeUser;
   }
 
@@ -201,7 +196,7 @@ export class UsersService {
         where: { userId },
       });
 
-      if (!vendor || vendor.id !== vendorId) {
+      if (!vendor || vendor?.id !== vendorId) {
         throw new ForbiddenException(
           'You are not allowed to view these clients',
         );
@@ -224,20 +219,32 @@ export class UsersService {
         where,
         skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
         take: limit ? Number(limit) : undefined,
-        // count the total booking for each client too
-        include: {
-          _count: {
-            select: {
-              bookings: true,
-            },
-          },
-        },
       });
+
+      const clientIds = clients.map((client) => client.id);
+
+      const bookingCounts = await this.prisma.booking.groupBy({
+        by: ['clientId'],
+        where: {
+          vendorId,
+          clientId: { in: clientIds },
+        },
+        _count: { _all: true },
+      });
+
+      const bookingCountByClientId = new Map(
+        bookingCounts.map((count) => [count.clientId, count._count._all]),
+      );
 
       const total = await this.prisma.user.count({ where });
 
       return successResponse(
-        { clients: clients.map((client) => this.sanitizeUser(client)) },
+        {
+          clients: clients.map((client) => ({
+            ...this.sanitizeUser(client),
+            bookingCount: bookingCountByClientId.get(client.id) ?? 0,
+          })),
+        },
         'Successfully fetched clients.',
         200,
         {
@@ -512,5 +519,177 @@ export class UsersService {
       },
       data: { isRead: true },
     });
+  }
+
+  async getAllUsers(filters?: {
+    role?: UserRole;
+    isSuspended?: boolean;
+    page?: number;
+    limit?: number;
+    search?: string;
+  }) {
+    try {
+      const where: Prisma.UserWhereInput = {};
+
+      if (filters?.role) {
+        where.role = filters.role;
+      }
+
+      if (filters?.isSuspended !== undefined) {
+        where.isSuspended = filters.isSuspended;
+      }
+
+      if (filters?.search) {
+        where.email = {
+          contains: filters.search,
+          mode: 'insensitive',
+        };
+
+        where.firstName = {
+          contains: filters.search,
+          mode: 'insensitive',
+        };
+
+        where.lastName = {
+          contains: filters.search,
+          mode: 'insensitive',
+        };
+
+        where.phone = {
+          contains: filters.search,
+          mode: 'insensitive',
+        };
+      }
+
+      const { page, limit } = filters || {};
+
+      const users = await this.prisma.user.findMany({
+        where,
+        skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
+        take: limit ? Number(limit) : undefined,
+      });
+
+      if (!users) {
+        throw new NotFoundException('No users found');
+      }
+
+      const total = await this.prisma.user.count({ where });
+      const totalPages = limit ? Math.ceil(total / limit) : 1;
+
+      return successResponse(users, 'Users fetched successfully.', 200, {
+        total,
+        page,
+        limit,
+        totalPages,
+      });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to fetch users.',
+        error as string,
+      );
+    }
+  }
+
+  async getAllUserAdminStats() {
+    try {
+      const totalUsers = await this.prisma.user.count();
+      const totalVendors = await this.prisma.user.count({
+        where: { role: 'VENDOR' },
+      });
+      const totalClients = await this.prisma.user.count({
+        where: { role: 'CLIENT' },
+      });
+      const totalAdmins = await this.prisma.user.count({
+        where: { role: 'ADMIN' },
+      });
+      const totalSuspendedUsers = await this.prisma.user.count({
+        where: { isSuspended: true },
+      });
+      const totalActiveUsers = await this.prisma.user.count({
+        where: { isSuspended: false },
+      });
+
+      return successResponse(
+        {
+          totalUsers,
+          totalVendors,
+          totalClients,
+          totalAdmins,
+          totalSuspendedUsers,
+          totalActiveUsers,
+        },
+        'Admin stats fetched successfully.',
+        200,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to fetch admin stats.',
+        error as string,
+      );
+    }
+  }
+
+  async suspendUser(userId: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: { isSuspended: true },
+      });
+
+      return successResponse(
+        this.sanitizeUser(updatedUser),
+        'User suspended successfully.',
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to suspend user.',
+        error as string,
+      );
+    }
+  }
+
+  async unsuspendUser(userId: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: { isSuspended: false },
+      });
+
+      return successResponse(
+        this.sanitizeUser(updatedUser),
+        'User unsuspended successfully.',
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to unsuspend user.',
+        error as string,
+      );
+    }
   }
 }

@@ -25,8 +25,8 @@ let TransactionController = class TransactionController {
         const userId = req.user.id;
         return this.transactionService.getDashboardStats(userId);
     }
-    findAllVendorTransactions(req, vendorId, page, limit, search) {
-        return this.transactionService.findAllVendorTransactions(req.user.id, vendorId, page, limit, search);
+    findAllVendorTransactions(req, vendorId, page, limit, search, status, paymentMethod, startDate, endDate) {
+        return this.transactionService.findAllVendorTransactions(req.user.id, vendorId, page, limit, search, status, paymentMethod, startDate, endDate);
     }
     getTotalTransactionsAmountByVendorId(req, vendorId, view) {
         return this.transactionService.getTotalTransactionsAmountByVendorId(req.user.id, vendorId, view);
@@ -60,8 +60,12 @@ __decorate([
     __param(2, (0, common_1.Query)('page')),
     __param(3, (0, common_1.Query)('limit')),
     __param(4, (0, common_1.Query)('search')),
+    __param(5, (0, common_1.Query)('status')),
+    __param(6, (0, common_1.Query)('paymentMethod')),
+    __param(7, (0, common_1.Query)('startDate')),
+    __param(8, (0, common_1.Query)('endDate')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, Number, Number, String]),
+    __metadata("design:paramtypes", [Object, String, Number, Number, String, String, String, String, String]),
     __metadata("design:returntype", void 0)
 ], TransactionController.prototype, "findAllVendorTransactions", null);
 __decorate([
