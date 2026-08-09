@@ -48,14 +48,20 @@ let VendorService = class VendorService {
     async createProfile(userId, dto, tx) {
         try {
             const prisma = tx ?? this.prisma;
-            if (userId) {
-                const exists = await prisma.vendor.findUnique({ where: { userId } });
-                if (exists)
-                    throw new common_1.BadRequestException('Vendor profile already exists');
+            const existingUser = await prisma.user.findUnique({
+                where: { id: userId },
+            });
+            if (!existingUser) {
+                throw new common_1.NotFoundException('User not found');
             }
             const slug = (0, generateSlug_1.generateSlug)(dto.businessName);
-            const vendor = await prisma.vendor.create({
-                data: {
+            const vendor = await prisma.vendor.upsert({
+                where: { userId },
+                update: {
+                    ...dto,
+                    kycStatus: 'NOT_SUBMITTED',
+                },
+                create: {
                     userId,
                     ...dto,
                     kycStatus: 'NOT_SUBMITTED',
@@ -77,9 +83,9 @@ let VendorService = class VendorService {
     async createServices(userId, vendorId, services, tx) {
         try {
             if (tx) {
-                return this._createServicesLogic(tx, userId, vendorId, services);
+                return this._createServicesLogic(userId, vendorId, services, tx);
             }
-            return this.prisma.$transaction((db) => this._createServicesLogic(db, userId, vendorId, services));
+            return this.prisma.$transaction((db) => this._createServicesLogic(userId, vendorId, services, db));
         }
         catch (error) {
             if (error instanceof common_1.HttpException) {
@@ -88,7 +94,7 @@ let VendorService = class VendorService {
             throw new common_1.InternalServerErrorException(error.message || 'Failed to create services');
         }
     }
-    async _createServicesLogic(db, userId, vendorId, services) {
+    async _createServicesLogic(userId, vendorId, services, db) {
         const user = await db.user.findUnique({
             where: { id: userId },
         });

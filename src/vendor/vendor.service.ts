@@ -70,16 +70,23 @@ export class VendorService {
     try {
       const prisma = tx ?? this.prisma;
 
-      if (userId) {
-        const exists = await prisma.vendor.findUnique({ where: { userId } });
-        if (exists)
-          throw new BadRequestException('Vendor profile already exists');
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!existingUser) {
+        throw new NotFoundException('User not found');
       }
 
       const slug = generateSlug(dto.businessName);
 
-      const vendor = await prisma.vendor.create({
-        data: {
+      const vendor = await prisma.vendor.upsert({
+        where: { userId },
+        update: {
+          ...dto,
+          kycStatus: 'NOT_SUBMITTED',
+        },
+        create: {
           userId,
           ...dto,
           kycStatus: 'NOT_SUBMITTED',
@@ -109,11 +116,11 @@ export class VendorService {
   ) {
     try {
       if (tx) {
-        return this._createServicesLogic(tx, userId, vendorId, services);
+        return this._createServicesLogic(userId, vendorId, services, tx);
       }
 
       return this.prisma.$transaction((db) =>
-        this._createServicesLogic(db, userId, vendorId, services),
+        this._createServicesLogic(userId, vendorId, services, db),
       );
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -127,10 +134,10 @@ export class VendorService {
   }
 
   private async _createServicesLogic(
-    db: Prisma.TransactionClient,
     userId: string,
     vendorId: string,
     services: ServiceItemDto[],
+    db: Prisma.TransactionClient,
   ) {
     const user = await db.user.findUnique({
       where: { id: userId },

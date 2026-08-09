@@ -10,7 +10,7 @@ import { successResponse } from 'src/utils/response';
 
 @Injectable()
 export class ServicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getAllServices(
     userId: string,
