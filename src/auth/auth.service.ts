@@ -168,12 +168,12 @@ export class AuthService {
       if (user.role === 'VENDOR' && !user.isVerified) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshToken = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -200,12 +200,12 @@ export class AuthService {
       if (user.role === 'VENDOR' && !vendor) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshToken = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -238,12 +238,12 @@ export class AuthService {
       ) {
         const token = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshToken = this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role },
-          { expiresIn: '1h' },
+          { expiresIn: '14d' },
         );
 
         const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -270,12 +270,12 @@ export class AuthService {
 
       const token = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       const refreshToken = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -347,7 +347,7 @@ export class AuthService {
       const token = await this.generateJwt(user);
       const refreshToken = await this.jwtService.signAsync(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -383,7 +383,7 @@ export class AuthService {
   async generateJwt(user: any): Promise<string> {
     return await this.jwtService.signAsync(
       { sub: user.id, email: user.email, role: user.role },
-      { expiresIn: '1h' },
+      { expiresIn: '14d' },
     );
   }
 
@@ -412,7 +412,7 @@ export class AuthService {
 
       const token = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '1h' },
+        { expiresIn: '14d' },
       );
 
       return successResponse({ token }, 'Token refreshed successfully');
