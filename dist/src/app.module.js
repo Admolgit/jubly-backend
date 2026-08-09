@@ -42,7 +42,7 @@ exports.AppModule = AppModule = __decorate([
             jwt_1.JwtModule.register({
                 global: true,
                 secret: process.env.JWT_SECRET,
-                signOptions: { expiresIn: '1h', algorithm: 'HS512' },
+                signOptions: { expiresIn: '14d', algorithm: 'HS512' },
             }),
             auth_module_1.AuthModule,
             prisma_module_1.PrismaModule,

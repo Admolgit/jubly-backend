@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
@@ -7,7 +6,7 @@ import { successResponse } from 'src/utils/response';
 
 @Injectable()
 export class ActivityService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async createLog(data: {
     userId?: string;
@@ -35,14 +34,29 @@ export class ActivityService {
     return successResponse(activity, 'Activity log created successfully', 201);
   }
 
-  async getLogsByUserId(userId: string) {
+  async getLogsByUserId(userId: string, page?: number, limit?: number) {
     try {
+      const where = { userId };
+
       const logs = await this.prisma.activityLog.findMany({
-        where: { userId },
+        where,
         orderBy: { createdAt: 'desc' },
+        skip: page && limit ? (Number(page) - 1) * Number(limit) : undefined,
+        take: limit ? Number(limit) : undefined,
       });
 
-      return successResponse(logs, 'Activity logs retrieved successfully');
+      const total = await this.prisma.activityLog.count({ where });
+
+      return successResponse(
+        logs,
+        'Activity logs retrieved successfully',
+        200,
+        {
+          total,
+          page,
+          limit,
+        },
+      );
     } catch (err: any) {
       console.error('Error retrieving activity logs:', err);
       throw new InternalServerErrorException(

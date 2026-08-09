@@ -17,7 +17,7 @@ import { Roles, RolesGuard } from 'src/auth/role.guard';
 
 @Controller('transactions')
 export class TransactionController {
-  constructor(private transactionService: TransactionService) {}
+  constructor(private readonly transactionService: TransactionService) {}
 
   @Get('transactions-stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,6 +36,10 @@ export class TransactionController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('paymentMethod') paymentMethod?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
     return this.transactionService.findAllVendorTransactions(
       req.user.id,
@@ -43,6 +47,10 @@ export class TransactionController {
       page as number,
       limit as number,
       search as string,
+      status,
+      paymentMethod,
+      startDate,
+      endDate,
     );
   }
 

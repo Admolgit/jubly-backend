@@ -5,10 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { BookingStatus, RescheduleStatus, UserRole } from '@prisma/client';
-import { PrismaService } from 'prisma/prisma.service';
-import { ActivityService } from 'src/activity/activityLog.service';
-import { GoogleCalendarService } from 'src/google/google.service';
-import { NodemailerService } from 'src/nodemailer/nodemailer.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { ActivityService } from '../activity/activityLog.service';
+import { GoogleCalendarService } from '../google/google.service';
+import { NodemailerService } from '../nodemailer/nodemailer.service';
 import { RescheduleService } from './reschedule.service';
 import { RescheduleRepository } from './reschedule.repository';
 import { RescheduleNotificationService } from './events/reschedule-notification.service';

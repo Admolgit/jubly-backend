@@ -101,17 +101,33 @@ let TransactionService = class TransactionService {
             throw new common_1.InternalServerErrorException('Failed to record this transactions', error.message);
         }
     }
-    async findAllVendorTransactions(userId, vendorId, page, limit, search) {
+    async findAllVendorTransactions(userId, vendorId, page, limit, search, status, paymentMethod, startDate, endDate) {
         try {
             await this.assertVendorOwnership(userId, vendorId);
             let where = {};
             if (vendorId) {
                 where.vendorId = vendorId;
             }
+            if (status) {
+                where.status = status;
+            }
+            if (paymentMethod) {
+                where.paymentMethod = paymentMethod;
+            }
+            if (startDate || endDate) {
+                where.paidAt = {
+                    ...(startDate ? { gte: new Date(startDate) } : {}),
+                    ...(endDate ? { lte: new Date(endDate) } : {}),
+                };
+            }
             if (search) {
                 where.OR = [
-                    { title: { contains: search, mode: 'insensitive' } },
-                    { description: { contains: search, mode: 'insensitive' } },
+                    {
+                        senderDetails: {
+                            senderName: { contains: search, mode: 'insensitive' },
+                        },
+                    },
+                    { providerRef: { contains: search, mode: 'insensitive' } },
                 ];
             }
             const transactions = await this.prisma.transaction.findMany({

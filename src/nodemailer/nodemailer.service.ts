@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class NodemailerService {
-  constructor(private mailerService: MailerService) {}
+  constructor(private readonly mailerService: MailerService) {}
 
   async sendOTP(email: string, otp: string) {
     await this.mailerService.sendMail({
@@ -20,15 +20,49 @@ export class NodemailerService {
   }
 
   async sendTempPassword(email: string, password: string) {
+    const loginUrl = process.env.FRONTEND_URL + '/login';
+
     await this.mailerService.sendMail({
       to: email,
-      subject: 'Your Temporary Code',
+      subject: 'Your Jubly Temporary Password',
       html: `
-      <h1>Thanks for registering for Jubly. </h1>
-      <h2>Your Temporary Code</h2>
-      <p>Your Jubly temporary password is:</p>
-      <h1>${password}</h1>
-    `,
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff;">
+            <h1 style="font-size: 20px; color: #111827; margin-bottom: 4px;">Welcome to Jubly 👋</h1>
+            <p style="font-size: 14px; color: #4b5563; margin-top: 0;">
+                Thanks for registering. Use the temporary password below to log in.
+            </p>
+
+            <div style="background-color: #f3f4f6; border-radius: 8px; padding: 16px 20px; margin: 24px 0; text-align: center;">
+                <p style="font-size: 12px; color: #6b7280; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.05em;">
+                    Temporary Password
+                </p>
+                <p style="font-size: 24px; font-weight: 700; color: #111827; margin: 0; letter-spacing: 2px;">
+                    ${password}
+                </p>
+            </div>
+
+            <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                Ypu can log in using this temporary password, if you need to manage your bookings.
+            </p>
+
+            <div style="text-align: center; margin: 28px 0;">
+                <a href="${loginUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                    Log in to Jubly
+                </a>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 16px 0;" />
+
+            <p style="font-size: 12px; color: #9ca3af; margin: 0;">
+                Sent by Jubly. Please do not reply to this email.
+            </p>
+
+            <p style="font-size:12px;color:#888">
+              Powered by Jubly
+             </p>
+        </div>
+        `,
+      text: `Your Jubly temporary password is: ${password}\n\nLog in here: ${loginUrl}\n\nPlease change your password after logging in.`,
     });
   }
 

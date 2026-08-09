@@ -20,10 +20,11 @@ import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { UpdateNotificationDto } from './dto/notification.dto';
 import { cloudinaryMulterOptions } from 'src/middlewares/cloudinary.middleware';
+import { UserRole } from '@prisma/client';
 
 @Controller('users')
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -47,7 +48,7 @@ export class UsersController {
   ) {
     return this.usersService.updateProfilePicture(
       req.user.id,
-      files.profileImage?.[0],
+      files?.profileImage?.[0],
     );
   }
 
@@ -140,6 +141,47 @@ export class UsersController {
   ) {
     const userId = req.user.id;
     return this.usersService.createAndSend(userId, dto);
+  }
+
+  @Get('all-users')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAllUsers(
+    @Query('role') role?: UserRole,
+    @Query('isSuspended') isSuspended?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    return this.usersService.getAllUsers({
+      role,
+      isSuspended:
+        isSuspended === undefined ? undefined : isSuspended === 'true',
+      page,
+      limit,
+      search,
+    });
+  }
+
+  @Get('admin-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAllUserAdminStats() {
+    return this.usersService.getAllUserAdminStats();
+  }
+
+  @Patch('suspend/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  suspendUser(@Param('userId') userId: string) {
+    return this.usersService.suspendUser(userId);
+  }
+
+  @Patch('unsuspend/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  unsuspendUser(@Param('userId') userId: string) {
+    return this.usersService.unsuspendUser(userId);
   }
 
   @Get(':clientVendorId')

@@ -119,6 +119,10 @@ export class TransactionService {
     page?: number,
     limit?: number,
     search?: string,
+    status?: string,
+    paymentMethod?: string,
+    startDate?: string,
+    endDate?: string,
   ) {
     try {
       await this.assertVendorOwnership(userId, vendorId);
@@ -126,15 +130,31 @@ export class TransactionService {
       let where: any = {};
       if (vendorId) {
         where.vendorId = vendorId;
-        // where.status = {
-        //   in: ['CONFIRMED', 'COMPLETED', 'PENDING'],
-        // };
+      }
+
+      if (status) {
+        where.status = status;
+      }
+
+      if (paymentMethod) {
+        where.paymentMethod = paymentMethod;
+      }
+
+      if (startDate || endDate) {
+        where.paidAt = {
+          ...(startDate ? { gte: new Date(startDate) } : {}),
+          ...(endDate ? { lte: new Date(endDate) } : {}),
+        };
       }
 
       if (search) {
         where.OR = [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
+          {
+            senderDetails: {
+              senderName: { contains: search, mode: 'insensitive' },
+            },
+          },
+          { providerRef: { contains: search, mode: 'insensitive' } },
         ];
       }
 

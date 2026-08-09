@@ -21,6 +21,7 @@ const role_guard_1 = require("../auth/role.guard");
 const platform_express_1 = require("@nestjs/platform-express");
 const notification_dto_1 = require("./dto/notification.dto");
 const cloudinary_middleware_1 = require("../middlewares/cloudinary.middleware");
+const client_1 = require("@prisma/client");
 let UsersController = class UsersController {
     constructor(usersService) {
         this.usersService = usersService;
@@ -29,7 +30,7 @@ let UsersController = class UsersController {
         return this.usersService.getMe(req.user.id);
     }
     updateProfileImage(req, files) {
-        return this.usersService.updateProfilePicture(req.user.id, files.profileImage?.[0]);
+        return this.usersService.updateProfilePicture(req.user.id, files?.profileImage?.[0]);
     }
     updateProfile(req, dto) {
         return this.usersService.updateProfile(req.user.id, dto);
@@ -59,6 +60,24 @@ let UsersController = class UsersController {
     createAndSendNotification(dto, req) {
         const userId = req.user.id;
         return this.usersService.createAndSend(userId, dto);
+    }
+    getAllUsers(role, isSuspended, page, limit, search) {
+        return this.usersService.getAllUsers({
+            role,
+            isSuspended: isSuspended === undefined ? undefined : isSuspended === 'true',
+            page,
+            limit,
+            search,
+        });
+    }
+    getAllUserAdminStats() {
+        return this.usersService.getAllUserAdminStats();
+    }
+    suspendUser(userId) {
+        return this.usersService.suspendUser(userId);
+    }
+    unsuspendUser(userId) {
+        return this.usersService.unsuspendUser(userId);
     }
     getClientsByVendor(req, clientVendorId) {
         return this.usersService.getClientsByVendor(req.user.id, clientVendorId);
@@ -167,6 +186,45 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "createAndSendNotification", null);
+__decorate([
+    (0, common_1.Get)('all-users'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Query)('role')),
+    __param(1, (0, common_1.Query)('isSuspended')),
+    __param(2, (0, common_1.Query)('page')),
+    __param(3, (0, common_1.Query)('limit')),
+    __param(4, (0, common_1.Query)('search')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Number, Number, String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getAllUsers", null);
+__decorate([
+    (0, common_1.Get)('admin-stats'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getAllUserAdminStats", null);
+__decorate([
+    (0, common_1.Patch)('suspend/:userId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "suspendUser", null);
+__decorate([
+    (0, common_1.Patch)('unsuspend/:userId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "unsuspendUser", null);
 __decorate([
     (0, common_1.Get)(':clientVendorId'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),

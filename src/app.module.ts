@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -26,7 +25,7 @@ import { RescheduleModule } from './reschedule/reschedule.module';
     JwtModule.register({
       global: true,
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '1h', algorithm: 'HS512' },
+      signOptions: { expiresIn: '14d', algorithm: 'HS512' },
     }),
     AuthModule,
     PrismaModule,
