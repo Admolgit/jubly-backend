@@ -67,13 +67,15 @@ export class AvailabilityService {
   isPastDay(date: Date) {
     const today = new Date();
 
-    const d1 = new Date(date);
-    d1.setHours(0, 0, 0, 0);
+    const chosenDate = new Date(date);
+    chosenDate.setHours(0, 0, 0, 0);
 
-    const d2 = new Date(today);
-    d2.setHours(0, 0, 0, 0);
+    const todayDate = new Date(today);
+    todayDate.setHours(0, 0, 0, 0);
 
-    return d1 < d2;
+    console.log({ chosenDate, todayDate, isPast: chosenDate < todayDate });
+
+    return chosenDate < todayDate;
   }
 
   async getAvailableSlots(vendorId: string, serviceId: string, date: Date) {
@@ -124,7 +126,9 @@ export class AvailabilityService {
 
       const isToday = this.isSameDay(dateObj, now);
 
-      if (this.isPastDay(dateObj)) {
+      console.log({ date, dateObj, now, isToday, slots, bookings });
+
+      if (this.isPastDay(date)) {
         throw new BadRequestException('No slots for past dates');
       }
 

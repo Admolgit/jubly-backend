@@ -313,7 +313,7 @@ export class BookingService {
           clientName: dto.clientName,
           email: dto.clientEmail,
           phone: dto.phone,
-          clientVendorId: dto.vendorId,
+          clientVendorId: vendor?.id,
         });
 
         savedClientId = saved.data.client.id;

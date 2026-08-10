@@ -9,13 +9,45 @@ config();
 import axios from 'axios';
 import { IPaystackBank } from '.';
 import { PrismaService } from 'prisma/prisma.service';
-import { HttpException, HttpStatus } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { successResponse } from 'src/utils/response';
 
+interface CachedResolution {
+  data: any;
+  expiresAt: number;
+}
+
+interface CachedBankList {
+  data: IPaystackBank[];
+  expiresAt: number;
+}
+
 export class PaystackService {
+  private readonly logger = new Logger(PaystackService.name);
+
   private readonly baseUrl =
     process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
   private readonly secretKey = process.env.PAYSTACK_SECRET_KEY;
+
+  private readonly resolveCache = new Map<string, CachedResolution>();
+
+  private readonly inFlightResolutions = new Map<string, Promise<any>>();
+
+  private bankListCache: CachedBankList | null = null;
+  private bankListInFlight: Promise<IPaystackBank[] | void> | null = null;
+
+  private readonly RESOLVE_CACHE_TTL_MS =
+    Number(process.env.PAYSTACK_RESOLVE_CACHE_TTL_MS) || 10 * 60 * 1000;
+  private readonly BANK_LIST_CACHE_TTL_MS =
+    Number(process.env.PAYSTACK_BANK_LIST_CACHE_TTL_MS) || 60 * 60 * 1000;
+  private readonly REQUEST_TIMEOUT_MS =
+    Number(process.env.PAYSTACK_TIMEOUT_MS) || 10000;
+  private readonly MAX_RESOLVE_ATTEMPTS = 3;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -67,85 +99,6 @@ export class PaystackService {
     }
   }
 
-  async updateSubaccount(
-    subaccountCode: string,
-    payload: {
-      businessName: string;
-      settlementBank: string;
-      accountNumber: string;
-    },
-  ) {
-    try {
-      const response: any = await axios.put(
-        `${this.baseUrl}/subaccount/${subaccountCode}`,
-        {
-          business_name: payload.businessName,
-          settlement_bank: payload.settlementBank,
-          account_number: payload.accountNumber,
-        },
-        { headers: this.getAuthHeaders() },
-      );
-
-      if (!response.data?.status) {
-        throw new HttpException(
-          response.data?.message || 'Failed to update Paystack subaccount',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      return response.data.data;
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      throw new HttpException(
-        error.response?.data?.message ||
-          error.message ||
-          'Failed to update Paystack subaccount',
-        error.response?.status || HttpStatus.BAD_GATEWAY,
-      );
-    }
-  }
-  async deactivateSubaccount(subaccountCode: string) {
-    const response: { data: any } = await axios.put(
-      `https://api.paystack.co/subaccount/${subaccountCode}`,
-      {
-        active: false,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      },
-    );
-
-    if (!response.data.status) {
-      throw new Error('Failed to deactivate subaccount');
-    }
-
-    return response.data;
-  }
-
-  public async createSubaccount(payload) {
-    try {
-      const res = await axios.post(
-        `${process.env.PAYSTACK_BASE_URL}/subaccount`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          },
-        },
-      );
-
-      return res;
-    } catch (error: any) {
-      console.log(error, 'Paystack subaccount creation failed', 500);
-    }
-  }
-
   async verifyTransaction(reference: string) {
     try {
       const response: any = await axios.get(
@@ -178,43 +131,184 @@ export class PaystackService {
     }
   }
 
-  async verifySubaccount(subaccountCode: string) {
-    try {
-      const response: any = await axios.get(
-        `${this.baseUrl}/subaccount/${subaccountCode}`,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          },
-        },
-      );
-
-      if (!response.status)
-        throw new HttpException('Subaccount not found', 404);
-      return response.data;
-    } catch (err: any) {
-      throw new HttpException(
-        err.response?.data || err.message,
-        err.response?.status || 500,
-      );
+  async resolveBankAccount(accountNumber: string, bankCode: string) {
+    if (!/^\d{10}$/.test(accountNumber ?? '')) {
+      throw new BadRequestException('account_number must be exactly 10 digits');
     }
+
+    if (!bankCode || typeof bankCode !== 'string') {
+      throw new BadRequestException('bank_code is required');
+    }
+
+    const isKnownBank = await this.isValidBankCode(bankCode);
+    if (!isKnownBank) {
+      throw new BadRequestException('bank_code is not a recognized bank code');
+    }
+
+    const cacheKey = `${bankCode}:${accountNumber}`;
+
+    const cached = this.resolveCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
+    // Coalesce concurrent requests for the same account/bank into one upstream call.
+    const inFlight = this.inFlightResolutions.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const resolution = this.performBankResolution(
+      accountNumber,
+      bankCode,
+      cacheKey,
+    ).finally(() => {
+      this.inFlightResolutions.delete(cacheKey);
+    });
+
+    this.inFlightResolutions.set(cacheKey, resolution);
+
+    return resolution;
   }
 
-  async resolveBankAccount(accountNumber: string, bankCode: string) {
-    try {
-      const response: any = await axios.get(`${this.baseUrl}/bank/resolve`, {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        },
-        params: { account_number: accountNumber, bank_code: bankCode },
+  private async performBankResolution(
+    accountNumber: string,
+    bankCode: string,
+    cacheKey: string,
+  ) {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= this.MAX_RESOLVE_ATTEMPTS; attempt++) {
+      try {
+        const response: any = await axios.get(`${this.baseUrl}/bank/resolve`, {
+          headers: this.getAuthHeaders(),
+          params: { account_number: accountNumber, bank_code: bankCode },
+          timeout: this.REQUEST_TIMEOUT_MS,
+        });
+
+        if (!response.data?.status) {
+          throw new HttpException(
+            response.data?.message || 'Bank account verification failed',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        this.resolveCache.set(cacheKey, {
+          data: response.data,
+          expiresAt: Date.now() + this.RESOLVE_CACHE_TTL_MS,
+        });
+
+        return response.data;
+      } catch (error: any) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
+
+        lastError = error;
+        const status = error?.response?.status;
+
+        if (status === 429 && attempt < this.MAX_RESOLVE_ATTEMPTS) {
+          const waitMs = this.getRetryDelayMs(error, attempt);
+          this.logger.warn(
+            `Paystack rate limit hit resolving bank account (attempt ${attempt}/${this.MAX_RESOLVE_ATTEMPTS}); retrying in ${waitMs}ms`,
+          );
+          await this.delay(waitMs);
+          continue;
+        }
+
+        break;
+      }
+    }
+
+    this.logSanitizedError('resolveBankAccount', lastError);
+
+    if (lastError?.response?.status === 429) {
+      throw new HttpException(
+        'Bank verification is temporarily rate-limited by our payment provider. Please try again in a moment.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    if (
+      lastError?.code === 'ECONNABORTED' ||
+      lastError?.code === 'ETIMEDOUT' ||
+      /timeout/i.test(lastError?.message || '')
+    ) {
+      throw new HttpException(
+        'Bank verification request timed out. Please try again.',
+        HttpStatus.GATEWAY_TIMEOUT,
+      );
+    }
+
+    throw new HttpException(
+      (lastError?.response?.data?.message as string) ||
+        'Unable to verify bank account details',
+      lastError?.response?.status || HttpStatus.BAD_GATEWAY,
+    );
+  }
+
+  private async isValidBankCode(bankCode: string): Promise<boolean> {
+    const banks = await this.getCachedBankList();
+    if (!banks || banks.length === 0) {
+      // Fail open: don't block resolution if the bank list itself is unavailable.
+      return true;
+    }
+    return banks.some((bank) => bank.code === bankCode);
+  }
+
+  private getCachedBankList(): Promise<IPaystackBank[] | void> {
+    if (this.bankListCache && this.bankListCache.expiresAt > Date.now()) {
+      return Promise.resolve(this.bankListCache.data);
+    }
+
+    if (this.bankListInFlight) {
+      return this.bankListInFlight;
+    }
+
+    this.bankListInFlight = this.getBankList()
+      .then((banks) => {
+        if (banks && banks.length) {
+          this.bankListCache = {
+            data: banks,
+            expiresAt: Date.now() + this.BANK_LIST_CACHE_TTL_MS,
+          };
+        }
+        return banks;
+      })
+      .finally(() => {
+        this.bankListInFlight = null;
       });
 
-      if (!response.status)
-        throw new HttpException('Bank account verification failed', 400);
-      return response.data;
-    } catch (err: any) {
-      return err;
+    return this.bankListInFlight;
+  }
+
+  private getRetryDelayMs(error: any, attempt: number): number {
+    const retryAfterHeader = error?.response?.headers?.['retry-after'];
+    if (retryAfterHeader) {
+      const seconds = Number(retryAfterHeader);
+      if (!Number.isNaN(seconds) && seconds >= 0) {
+        return Math.min(seconds * 1000, 5000);
+      }
     }
+
+    const base = 300 * 2 ** (attempt - 1);
+    const jitter = Math.random() * 100;
+    return Math.min(base + jitter, 3000);
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private logSanitizedError(context: string, error: any) {
+    const status = error?.response?.status ?? 'n/a';
+    const message =
+      (error?.response?.data?.message as string) ||
+      error?.message ||
+      'Unknown error';
+    this.logger.error(
+      `Paystack error in ${context}: status=${status} message=${message}`,
+    );
   }
 
   async createTransferRecipient(payload: {

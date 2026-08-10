@@ -142,6 +142,7 @@ let UsersService = class UsersService {
             if (!vendor || vendor?.id !== vendorId) {
                 throw new common_1.ForbiddenException('You are not allowed to view these clients');
             }
+            console.log('vendor', vendor, vendorId);
             let where = {};
             if (vendorId) {
                 where.clientVendorId = vendorId;
@@ -169,6 +170,7 @@ let UsersService = class UsersService {
             });
             const bookingCountByClientId = new Map(bookingCounts.map((count) => [count.clientId, count._count._all]));
             const total = await this.prisma.user.count({ where });
+            console.log('clients', clients);
             return (0, response_1.successResponse)({
                 clients: clients.map((client) => ({
                     ...this.sanitizeUser(client),

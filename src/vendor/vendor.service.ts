@@ -11,6 +11,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateVendorDto, QueryVendorsDto } from './dto/create-vendor.dto';
 import { successResponse } from 'src/utils/response';
@@ -70,16 +71,23 @@ export class VendorService {
     try {
       const prisma = tx ?? this.prisma;
 
-      if (userId) {
-        const exists = await prisma.vendor.findUnique({ where: { userId } });
-        if (exists)
-          throw new BadRequestException('Vendor profile already exists');
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!existingUser) {
+        throw new NotFoundException('User not found');
       }
 
       const slug = generateSlug(dto.businessName);
 
-      const vendor = await prisma.vendor.create({
-        data: {
+      const vendor = await prisma.vendor.upsert({
+        where: { userId },
+        update: {
+          ...dto,
+          kycStatus: 'NOT_SUBMITTED',
+        },
+        create: {
           userId,
           ...dto,
           kycStatus: 'NOT_SUBMITTED',
@@ -109,11 +117,11 @@ export class VendorService {
   ) {
     try {
       if (tx) {
-        return this._createServicesLogic(tx, userId, vendorId, services);
+        return this._createServicesLogic(userId, vendorId, services, tx);
       }
 
       return this.prisma.$transaction((db) =>
-        this._createServicesLogic(db, userId, vendorId, services),
+        this._createServicesLogic(userId, vendorId, services, db),
       );
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -127,10 +135,10 @@ export class VendorService {
   }
 
   private async _createServicesLogic(
-    db: Prisma.TransactionClient,
     userId: string,
     vendorId: string,
     services: ServiceItemDto[],
+    db: Prisma.TransactionClient,
   ) {
     const user = await db.user.findUnique({
       where: { id: userId },
@@ -203,37 +211,10 @@ export class VendorService {
         throw new BadRequestException('Account details does not match.');
       }
 
-      const res: any = await this.paystackService.createSubaccount({
-        business_name: dto.businessName,
-        settlement_bank: dto.settlementBank,
-        account_number: dto.accountNumber,
-        percentage_charge: 0.1,
-        charge_cap: 5000,
-      });
-
-      const paystackSubId =
-        res?.data?.data?.subaccount_code ??
-        res?.data?.data?.subaccount_id ??
-        res?.data?.data?.id ??
-        null;
-
-      if (!paystackSubId) {
-        throw new InternalServerErrorException(
-          'Paystack subaccount creation failed',
-        );
-      }
-
-      const verifyRes =
-        await this.paystackService.verifySubaccount(paystackSubId);
-
-      if (!verifyRes.status) {
-        throw new BadRequestException('Paystack subaccount creation failed');
-      }
-
       const pastackUserAccount = await this.prisma.subAccount.create({
         data: {
           userId,
-          paystackAccountId: paystackSubId,
+          paystackAccountId: `local_${randomUUID()}`,
           bankName: dto.settlementBank,
           accountNumber: dto.accountNumber,
           accountName: dto.businessName,
@@ -244,7 +225,6 @@ export class VendorService {
       await this.prisma.vendor.update({
         where: { userId },
         data: {
-          paystackSubaccount: paystackSubId,
           bankAccountNumber: dto.accountNumber,
           bankCode: dto.settlementBank,
         },
@@ -252,7 +232,7 @@ export class VendorService {
 
       return successResponse(
         pastackUserAccount,
-        'Paystack subaccount created and verified successfully',
+        'Payout account created and verified successfully',
         201,
       );
     } catch (error: any) {
@@ -277,12 +257,12 @@ export class VendorService {
         where: { userId },
       });
 
-      if (!vendor || !vendor.paystackSubaccount) {
+      if (!vendor || !vendor.bankAccountNumber) {
         throw new NotFoundException('Vendor payout account not found');
       }
 
       const subAccount = await this.prisma.subAccount.findFirst({
-        where: { userId, paystackAccountId: vendor.paystackSubaccount },
+        where: { userId },
       });
 
       if (!subAccount) {
@@ -299,11 +279,6 @@ export class VendorService {
       }
 
       const accountName = resolvedAccount.data.account_name;
-      await this.paystackService.updateSubaccount(vendor.paystackSubaccount, {
-        businessName: vendor.businessName,
-        settlementBank: dto.settlementBank,
-        accountNumber: dto.accountNumber,
-      });
 
       const [updatedSubAccount] = await this.prisma.$transaction([
         this.prisma.subAccount.update({
@@ -737,11 +712,9 @@ export class VendorService {
       throw new NotFoundException('Vendor not found');
     }
 
-    if (!vendor.paystackSubaccount) {
-      throw new BadRequestException('Vendor has no Paystack subaccount');
+    if (!vendor.bankAccountNumber) {
+      throw new BadRequestException('Vendor has no payout account');
     }
-
-    await this.paystackService.deactivateSubaccount(vendor.paystackSubaccount);
 
     await this.prisma.vendor.update({
       where: { id: vendor.id },
