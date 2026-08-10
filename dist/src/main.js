@@ -65,6 +65,17 @@ async function bootstrap() {
         max: 500,
     });
     app.use(limiter);
+    const resolveBankLimiter = (0, express_rate_limit_1.default)({
+        windowMs: 60 * 1000,
+        max: 10,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: {
+            status: false,
+            message: 'Too many bank verification requests. Please slow down and try again shortly.',
+        },
+    });
+    app.use('/api/v1/paystack/resolve-bank', resolveBankLimiter);
     app.use((0, express_session_1.default)({
         secret: process.env.JWT_SECRET,
         resave: false,

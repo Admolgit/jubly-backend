@@ -202,6 +202,8 @@ export class UsersService {
         );
       }
 
+      console.log('vendor', vendor, vendorId);
+
       let where: any = {};
       if (vendorId) {
         where.clientVendorId = vendorId;
@@ -237,6 +239,8 @@ export class UsersService {
       );
 
       const total = await this.prisma.user.count({ where });
+
+      console.log('clients', clients);
 
       return successResponse(
         {

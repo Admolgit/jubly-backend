@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VendorService = void 0;
 const common_1 = require("@nestjs/common");
+const crypto_1 = require("crypto");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const response_1 = require("../utils/response");
 const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
@@ -148,28 +149,10 @@ let VendorService = class VendorService {
             if (!verifyAccount.status) {
                 throw new common_1.BadRequestException('Account details does not match.');
             }
-            const res = await this.paystackService.createSubaccount({
-                business_name: dto.businessName,
-                settlement_bank: dto.settlementBank,
-                account_number: dto.accountNumber,
-                percentage_charge: 0.1,
-                charge_cap: 5000,
-            });
-            const paystackSubId = res?.data?.data?.subaccount_code ??
-                res?.data?.data?.subaccount_id ??
-                res?.data?.data?.id ??
-                null;
-            if (!paystackSubId) {
-                throw new common_1.InternalServerErrorException('Paystack subaccount creation failed');
-            }
-            const verifyRes = await this.paystackService.verifySubaccount(paystackSubId);
-            if (!verifyRes.status) {
-                throw new common_1.BadRequestException('Paystack subaccount creation failed');
-            }
             const pastackUserAccount = await this.prisma.subAccount.create({
                 data: {
                     userId,
-                    paystackAccountId: paystackSubId,
+                    paystackAccountId: `local_${(0, crypto_1.randomUUID)()}`,
                     bankName: dto.settlementBank,
                     accountNumber: dto.accountNumber,
                     accountName: dto.businessName,
@@ -179,12 +162,11 @@ let VendorService = class VendorService {
             await this.prisma.vendor.update({
                 where: { userId },
                 data: {
-                    paystackSubaccount: paystackSubId,
                     bankAccountNumber: dto.accountNumber,
                     bankCode: dto.settlementBank,
                 },
             });
-            return (0, response_1.successResponse)(pastackUserAccount, 'Paystack subaccount created and verified successfully', 201);
+            return (0, response_1.successResponse)(pastackUserAccount, 'Payout account created and verified successfully', 201);
         }
         catch (error) {
             if (error instanceof common_1.HttpException) {
@@ -201,11 +183,11 @@ let VendorService = class VendorService {
             const vendor = await this.prisma.vendor.findUnique({
                 where: { userId },
             });
-            if (!vendor || !vendor.paystackSubaccount) {
+            if (!vendor || !vendor.bankAccountNumber) {
                 throw new common_1.NotFoundException('Vendor payout account not found');
             }
             const subAccount = await this.prisma.subAccount.findFirst({
-                where: { userId, paystackAccountId: vendor.paystackSubaccount },
+                where: { userId },
             });
             if (!subAccount) {
                 throw new common_1.NotFoundException('Vendor payout account not found');
@@ -215,11 +197,6 @@ let VendorService = class VendorService {
                 throw new common_1.BadRequestException('Unable to verify these bank details');
             }
             const accountName = resolvedAccount.data.account_name;
-            await this.paystackService.updateSubaccount(vendor.paystackSubaccount, {
-                businessName: vendor.businessName,
-                settlementBank: dto.settlementBank,
-                accountNumber: dto.accountNumber,
-            });
             const [updatedSubAccount] = await this.prisma.$transaction([
                 this.prisma.subAccount.update({
                     where: { id: subAccount.id },
@@ -533,10 +510,9 @@ let VendorService = class VendorService {
         if (!vendor) {
             throw new common_1.NotFoundException('Vendor not found');
         }
-        if (!vendor.paystackSubaccount) {
-            throw new common_1.BadRequestException('Vendor has no Paystack subaccount');
+        if (!vendor.bankAccountNumber) {
+            throw new common_1.BadRequestException('Vendor has no payout account');
         }
-        await this.paystackService.deactivateSubaccount(vendor.paystackSubaccount);
         await this.prisma.vendor.update({
             where: { id: vendor.id },
             data: {

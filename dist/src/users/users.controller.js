@@ -79,8 +79,8 @@ let UsersController = class UsersController {
     unsuspendUser(userId) {
         return this.usersService.unsuspendUser(userId);
     }
-    getClientsByVendor(req, clientVendorId) {
-        return this.usersService.getClientsByVendor(req.user.id, clientVendorId);
+    getClientsByVendor(req, clientVendorId, page, limit, search) {
+        return this.usersService.getClientsByVendor(req.user.id, clientVendorId, page, limit, search);
     }
 };
 exports.UsersController = UsersController;
@@ -231,8 +231,11 @@ __decorate([
     (0, role_guard_1.Roles)('VENDOR'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Param)('clientVendorId')),
+    __param(2, (0, common_1.Query)('page')),
+    __param(3, (0, common_1.Query)('limit')),
+    __param(4, (0, common_1.Query)('search')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [Object, String, Number, Number, String]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getClientsByVendor", null);
 exports.UsersController = UsersController = __decorate([

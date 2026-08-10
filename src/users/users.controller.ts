@@ -190,7 +190,16 @@ export class UsersController {
   getClientsByVendor(
     @Req() req: Request & { user: { id: string } },
     @Param('clientVendorId') clientVendorId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
   ) {
-    return this.usersService.getClientsByVendor(req.user.id, clientVendorId);
+    return this.usersService.getClientsByVendor(
+      req.user.id,
+      clientVendorId,
+      page,
+      limit,
+      search,
+    );
   }
 }

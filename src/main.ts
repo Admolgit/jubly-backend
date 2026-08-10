@@ -84,6 +84,21 @@ async function bootstrap() {
   }) as express.RequestHandler;
   app.use(limiter);
 
+  // Stricter limiter for bank account resolution to protect against
+  // duplicate/rapid calls (e.g. un-debounced frontend input) tripping Paystack's own rate limit.
+  const resolveBankLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      status: false,
+      message:
+        'Too many bank verification requests. Please slow down and try again shortly.',
+    },
+  }) as express.RequestHandler;
+  app.use('/api/v1/paystack/resolve-bank', resolveBankLimiter);
+
   // Session & Passport
   app.use(
     session({
