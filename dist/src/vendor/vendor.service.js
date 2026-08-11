@@ -37,6 +37,10 @@ let VendorService = class VendorService {
             await this.createPaystackSubaccount(userId, dto.subaccount);
             await this.submitProfileImage(userId, files.profileImage);
             await this.uploadPortfolio(userId, files.portfolio);
+            await this.prisma.service.updateMany({
+                where: { userId },
+                data: { vendorId: dto.profile.vendorId },
+            });
             return (0, response_1.successResponse)({ createdVendor }, 'Onboarding completed successfully', 201);
         }
         catch (error) {

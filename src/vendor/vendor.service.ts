@@ -49,6 +49,11 @@ export class VendorService {
       await this.submitProfileImage(userId, files.profileImage);
       await this.uploadPortfolio(userId, files.portfolio);
 
+      await this.prisma.service.updateMany({
+        where: { userId },
+        data: { vendorId: dto.profile.vendorId },
+      });
+
       return successResponse(
         { createdVendor },
         'Onboarding completed successfully',

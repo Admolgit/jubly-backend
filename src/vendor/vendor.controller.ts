@@ -24,7 +24,7 @@ import { Public } from 'src/auth/public.decorator';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import {
   CompleteVendorOnboardingDto,
-  CreateVendorDto,
+  CreateVendorProfileDto,
   QueryVendorsDto,
 } from './dto/create-vendor.dto';
 import {
@@ -96,7 +96,7 @@ export class VendorController {
   @Roles('VENDOR')
   createProfile(
     @Req() req: { user: { id: string } },
-    @Body() dto: CreateVendorDto,
+    @Body() dto: CreateVendorProfileDto,
   ) {
     const userId = req.user.id;
     return this.vendorService.createProfile(userId, dto);
