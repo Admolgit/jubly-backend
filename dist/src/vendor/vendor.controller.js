@@ -142,7 +142,7 @@ __decorate([
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, create_vendor_dto_1.CreateVendorDto]),
+    __metadata("design:paramtypes", [Object, create_vendor_dto_1.CreateVendorProfileDto]),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "createProfile", null);
 __decorate([

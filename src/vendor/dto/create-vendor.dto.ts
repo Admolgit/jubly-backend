@@ -5,19 +5,43 @@ import { Type } from 'class-transformer';
 
 export class CreateVendorDto {
   @IsString()
-  businessName: string;
+  businessName!: string;
 
   @IsString()
-  category: string;
+  category!: string;
 
   @IsString()
-  city: string;
+  city!: string;
 
   @IsString()
-  state: string;
+  state!: string;
 
   @IsString()
-  country: string;
+  country!: string;
+
+  @IsString()
+  vendorId?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+}
+
+export class CreateVendorProfileDto {
+  @IsString()
+  businessName!: string;
+
+  @IsString()
+  category!: string;
+
+  @IsString()
+  city!: string;
+
+  @IsString()
+  state!: string;
+
+  @IsString()
+  country!: string;
 
   @IsOptional()
   @IsString()
