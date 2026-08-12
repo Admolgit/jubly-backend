@@ -1,5 +1,7 @@
+# =========================
 # Stage 1: Build
-FROM node:20-alpine AS builder
+# =========================
+FROM node:20 AS builder
 
 WORKDIR /src
 
@@ -9,21 +11,23 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci
 
-# Copy Prisma schema first
+# Copy Prisma schema
 COPY prisma ./prisma
 
 # Generate Prisma Client
 RUN npx prisma generate
 
-# Copy application source
+# Copy application
 COPY . .
 
 # Build NestJS
 RUN npm run build
 
 
+# =========================
 # Stage 2: Production
-FROM node:20-alpine
+# =========================
+FROM node:20
 
 WORKDIR /src
 
@@ -38,11 +42,10 @@ RUN npm ci --omit=dev
 # Copy compiled application
 COPY --from=builder /src/dist ./dist
 
-# Copy Prisma generated client
+# Copy generated Prisma Client
 COPY --from=builder /src/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /src/node_modules/@prisma ./node_modules/@prisma
 
-# Expose port
 EXPOSE 5000
 
 CMD ["node", "--max-old-space-size=4096", "dist/src/main.js"]
