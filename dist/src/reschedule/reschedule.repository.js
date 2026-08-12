@@ -53,6 +53,12 @@ let RescheduleRepository = class RescheduleRepository {
     updateBooking(bookingId, data) {
         return this.prisma.booking.update({ where: { id: bookingId }, data });
     }
+    incrementVendorCancellationStrikes(vendorId) {
+        return this.prisma.vendor.update({
+            where: { id: vendorId },
+            data: { cancellationStrikes: { increment: 1 } },
+        });
+    }
     findConflictingBooking(vendorId, excludeBookingId, start, end) {
         return this.prisma.booking.findFirst({
             where: {

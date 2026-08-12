@@ -91,6 +91,7 @@ describe('RescheduleService', () => {
       | 'listRescheduleHistory'
       | 'updateBooking'
       | 'findConflictingBooking'
+      | 'incrementVendorCancellationStrikes'
     >
   >;
   let activityService: { createLog: jest.Mock };
@@ -117,6 +118,7 @@ describe('RescheduleService', () => {
       listRescheduleHistory: jest.fn(),
       updateBooking: jest.fn(),
       findConflictingBooking: jest.fn(),
+      incrementVendorCancellationStrikes: jest.fn(),
     } as any;
     activityService = { createLog: jest.fn().mockResolvedValue({}) };
     googleCalendarService = { calendarEnv: jest.fn() };
@@ -468,6 +470,103 @@ describe('RescheduleService', () => {
           recipientEmail: 'client@example.com',
           cancelledByLabel: 'vendor',
         }),
+      );
+    });
+
+    function bookingStartingIn(hours: number) {
+      const start = new Date(Date.now() + hours * 60 * 60 * 1000);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      return buildBooking({
+        startTime: start,
+        endTime: end,
+        services: { id: 'service-1', name: 'Bridal Makeup', price: 20000 },
+      });
+    }
+
+    it.each([
+      [30, 20000, 0, '24+ hours before'],
+      [18, 18000, 2000, '12-24 hours before'],
+      [6, 15000, 5000, '2-12 hours before'],
+      [1.5, 10000, 10000, '1-2 hours before'],
+      [0.5, 5000, 15000, 'Less than 1 hour before'],
+    ])(
+      'when the client cancels %sh before start, refunds %s and compensates the vendor %s (%s)',
+      async (hoursBeforeStart, refundAmount, vendorCompensationAmount, label) => {
+        prisma.user.findUnique.mockResolvedValue(buildUser());
+        repository.findBookingById.mockResolvedValue(
+          bookingStartingIn(hoursBeforeStart as number),
+        );
+        repository.findActiveRescheduleRequest.mockResolvedValue(null);
+        repository.updateBooking.mockResolvedValue(buildBooking());
+
+        await service.cancelBooking(BOOKING_ID, CLIENT_USER_ID, {});
+
+        expect(repository.updateBooking).toHaveBeenCalledWith(
+          BOOKING_ID,
+          expect.objectContaining({
+            cancellationTier: label,
+            refundAmount,
+            vendorCompensationAmount,
+          }),
+        );
+        expect(repository.incrementVendorCancellationStrikes).not.toHaveBeenCalled();
+      },
+    );
+
+    it('gives no refund when the client cancels after the appointment time has passed (no-show)', async () => {
+      const start = new Date(Date.now() - 60 * 60 * 1000);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      prisma.user.findUnique.mockResolvedValue(buildUser());
+      repository.findBookingById.mockResolvedValue(
+        buildBooking({
+          startTime: start,
+          endTime: end,
+          services: { id: 'service-1', name: 'Bridal Makeup', price: 20000 },
+        }),
+      );
+      repository.findActiveRescheduleRequest.mockResolvedValue(null);
+      repository.updateBooking.mockResolvedValue(buildBooking());
+
+      await service.cancelBooking(BOOKING_ID, CLIENT_USER_ID, {});
+
+      expect(repository.updateBooking).toHaveBeenCalledWith(
+        BOOKING_ID,
+        expect.objectContaining({
+          cancellationTier: 'After appointment time / no-show',
+          refundAmount: 0,
+          vendorCompensationAmount: 20000,
+        }),
+      );
+    });
+
+    it('always gives a full refund and records a strike when the vendor cancels, regardless of timing', async () => {
+      const start = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes out
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      prisma.user.findUnique.mockResolvedValue(
+        buildUser({ id: VENDOR_USER_ID, email: 'vendor@example.com', role: UserRole.VENDOR }),
+      );
+      repository.findBookingById.mockResolvedValue(
+        buildBooking({
+          startTime: start,
+          endTime: end,
+          services: { id: 'service-1', name: 'Bridal Makeup', price: 20000 },
+        }),
+      );
+      repository.findActiveRescheduleRequest.mockResolvedValue(null);
+      repository.updateBooking.mockResolvedValue(buildBooking());
+
+      await service.cancelBooking(BOOKING_ID, VENDOR_USER_ID, {});
+
+      expect(repository.updateBooking).toHaveBeenCalledWith(
+        BOOKING_ID,
+        expect.objectContaining({
+          cancellationTier: 'Vendor cancellation',
+          refundAmount: 20000,
+          vendorCompensationAmount: 0,
+        }),
+      );
+      expect(repository.incrementVendorCancellationStrikes).toHaveBeenCalledWith(
+        'vendor-doc-1',
       );
     });
 

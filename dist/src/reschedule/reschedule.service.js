@@ -20,6 +20,7 @@ const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const reschedule_repository_1 = require("./reschedule.repository");
 const reschedule_notification_events_1 = require("./events/reschedule-notification.events");
 const reschedule_notification_service_1 = require("./events/reschedule-notification.service");
+const cancellation_policy_util_1 = require("./cancellation-policy.util");
 const NON_ACTIONABLE_STATUSES = [
     client_1.BookingStatus.CANCELLED,
     client_1.BookingStatus.CANCELLED_BY_CLIENT,
@@ -454,13 +455,28 @@ let RescheduleService = class RescheduleService {
                     responseReason: 'Booking was cancelled',
                 });
             }
+            const cancelledAt = new Date();
+            const { tier, refundAmount, vendorCompensationAmount } = (0, cancellation_policy_util_1.computeCancellationOutcome)({
+                amount: booking.services.price,
+                appointmentStart: booking.startTime,
+                cancelledAt,
+                cancelledByRole: participant.role,
+            });
             const updatedBooking = await this.repository.updateBooking(bookingId, {
                 status: newStatus,
                 cancelledBy: user.id,
                 cancelledByRole: participant.role,
-                cancelledAt: new Date(),
+                cancelledAt,
                 cancellationReason: dto.reason,
+                cancellationTier: tier.label,
+                refundPercentage: tier.clientRefundPercentage,
+                vendorCompensationPercentage: tier.vendorCompensationPercentage,
+                refundAmount,
+                vendorCompensationAmount,
             });
+            if (participant.role === client_1.UserRole.VENDOR) {
+                await this.repository.incrementVendorCancellationStrikes(booking.vendorId);
+            }
             await this.activityService.createLog({
                 vendorId: booking.vendorId,
                 userId: user.id,
@@ -475,6 +491,9 @@ let RescheduleService = class RescheduleService {
                     oldStatus: booking.status,
                     newStatus,
                     reason: dto.reason,
+                    cancellationTier: tier.label,
+                    refundAmount,
+                    vendorCompensationAmount,
                 },
             });
             this.notify(reschedule_notification_events_1.RescheduleNotificationEvent.BOOKING_CANCELLED, {
@@ -482,6 +501,9 @@ let RescheduleService = class RescheduleService {
                 recipientUserId: participant.counterpartUserId ?? '',
                 triggeredByUserId: user.id,
                 reason: dto.reason,
+                cancellationTier: tier.label,
+                refundAmount,
+                vendorCompensationAmount,
             });
             const counterpartRole = participant.role === client_1.UserRole.VENDOR
                 ? client_1.UserRole.CLIENT
@@ -494,6 +516,10 @@ let RescheduleService = class RescheduleService {
                 vendorName: booking.vendor.businessName,
                 cancelledByLabel: participant.role.toLowerCase(),
                 reason: dto.reason,
+                cancellationTier: tier.label,
+                refundAmount,
+                refundPercentage: tier.clientRefundPercentage,
+                vendorCompensationAmount,
             }));
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }

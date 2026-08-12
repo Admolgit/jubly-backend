@@ -36,12 +36,20 @@ export class AuthService {
   ) {
     if (!user) return user;
     const {
-      // password,
-      // refreshTokenHash,
-      // verificationCode,
-      // codeExpiresAt,
+      password,
+      refreshTokenHash,
+      verificationCode,
+      codeExpiresAt,
       ...safeUser
     } = user;
+
+    console.log({
+      password,
+      refreshTokenHash,
+      verificationCode,
+      codeExpiresAt,
+    });
+
     return safeUser;
   }
 
@@ -51,39 +59,64 @@ export class AuthService {
         where: { email: dto.email },
       });
 
-      if (existingUser) {
+      if (existingUser?.isVerified) {
         throw new BadRequestException('Email already in use');
       }
 
-      const otpGenerated = Helper.generateUniqueCharacters(6);
+      if (existingUser && !existingUser?.isVerified) {
+        const otpGenerated = Helper.generateUniqueCharacters(6);
+        const user = await this.prisma.user.update({
+          where: { email: dto.email },
+          data: {
+            verificationCode: otpGenerated,
+            codeExpiresAt: Helper.set24HourExpiry(),
+          },
+        });
 
-      const hashed = await hashPassword(dto.password);
-      const user = await this.prisma.user.create({
-        data: {
-          email: dto.email,
-          password: hashed,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          phone: dto.phone,
-          role: dto.role,
-          verificationCode: otpGenerated,
-          codeExpiresAt: Helper.set24HourExpiry(),
-        },
-      });
+        const token = this.jwtService.sign({
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+        });
 
-      const token = this.jwtService.sign({
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-      });
+        await this.nodemailService.sendOTP(dto.email, otpGenerated);
 
-      await this.nodemailService.sendOTP(dto.email, otpGenerated);
+        return successResponse(
+          { user: this.sanitizeUser(user), token },
+          'Email already in use',
+          200,
+        );
+      } else {
+        const otpGenerated = Helper.generateUniqueCharacters(6);
 
-      return successResponse(
-        { user: this.sanitizeUser(user), token },
-        'Registration successful',
-        201,
-      );
+        const hashed = await hashPassword(dto.password);
+        const user = await this.prisma.user.create({
+          data: {
+            email: dto.email,
+            password: hashed,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            phone: dto.phone,
+            role: dto.role,
+            verificationCode: otpGenerated,
+            codeExpiresAt: Helper.set24HourExpiry(),
+          },
+        });
+
+        const token = this.jwtService.sign({
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+        });
+
+        await this.nodemailService.sendOTP(dto.email, otpGenerated);
+
+        return successResponse(
+          { user: this.sanitizeUser(user), token },
+          'Registration successful',
+          201,
+        );
+      }
     } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
@@ -229,7 +262,32 @@ export class AuthService {
         vendor?.isApproved === false &&
         vendor?.kycStatus === 'NOT_SUBMITTED'
       ) {
-        throw new UnauthorizedException('Complete your onboarding');
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+
+        return successResponse(
+          { user: this.sanitizeUser(user), token, refreshToken },
+          'Complete your onboarding',
+          404,
+        );
       }
 
       if (

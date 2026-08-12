@@ -304,7 +304,15 @@ export class NodemailerService {
     vendorName: string;
     cancelledByLabel: string;
     reason?: string;
+    cancellationTier?: string;
+    refundAmount?: number;
+    refundPercentage?: number;
+    vendorCompensationAmount?: number;
   }) {
+    const hasRefundInfo =
+      typeof data.refundAmount === 'number' &&
+      typeof data.refundPercentage === 'number';
+
     await this.mailerService.sendMail({
       to: data.recipientEmail,
       subject: `Your ${data.serviceName} booking has been cancelled`,
@@ -317,6 +325,12 @@ export class NodemailerService {
           <p><strong>Service:</strong> ${data.serviceName}</p>
           <p><strong>Vendor:</strong> ${data.vendorName}</p>
           ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
+          ${
+            hasRefundInfo
+              ? `<p><strong>Refund:</strong> ₦${data.refundAmount!.toLocaleString()} (${Math.round(data.refundPercentage! * 100)}%)</p>`
+              : ''
+          }
+          ${data.cancellationTier ? `<p><strong>Cancellation window:</strong> ${data.cancellationTier}</p>` : ''}
         </div>
 
         <p>We apologize for any inconvenience.</p>

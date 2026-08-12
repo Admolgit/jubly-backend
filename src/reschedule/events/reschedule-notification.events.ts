@@ -12,4 +12,7 @@ export interface RescheduleNotificationPayload {
   triggeredByUserId: string;
   reason?: string;
   proposedDate?: Date;
+  cancellationTier?: string;
+  refundAmount?: number;
+  vendorCompensationAmount?: number;
 }

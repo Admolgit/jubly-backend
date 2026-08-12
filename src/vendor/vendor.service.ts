@@ -606,6 +606,9 @@ export class VendorService {
   async getAllVendors() {
     try {
       const vendors = await this.prisma.vendor.findMany({
+        where: {
+          kycStatus: 'APPROVED',
+        },
         include: {
           services: true,
         },
@@ -775,6 +778,7 @@ export class VendorService {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
           userId: user.id,
+          kycStatus: 'APPROVED',
         },
         include: {
           user: {

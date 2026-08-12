@@ -28,6 +28,7 @@ import {
   RescheduleNotificationPayload,
 } from './events/reschedule-notification.events';
 import { RescheduleNotificationService } from './events/reschedule-notification.service';
+import { computeCancellationOutcome } from './cancellation-policy.util';
 
 const NON_ACTIONABLE_STATUSES: readonly BookingStatus[] = [
   BookingStatus.CANCELLED,
@@ -655,13 +656,33 @@ export class RescheduleService {
         });
       }
 
+      const cancelledAt = new Date();
+      const { tier, refundAmount, vendorCompensationAmount } =
+        computeCancellationOutcome({
+          amount: booking.services.price,
+          appointmentStart: booking.startTime,
+          cancelledAt,
+          cancelledByRole: participant.role,
+        });
+
       const updatedBooking = await this.repository.updateBooking(bookingId, {
         status: newStatus,
         cancelledBy: user.id,
         cancelledByRole: participant.role,
-        cancelledAt: new Date(),
+        cancelledAt,
         cancellationReason: dto.reason,
+        cancellationTier: tier.label,
+        refundPercentage: tier.clientRefundPercentage,
+        vendorCompensationPercentage: tier.vendorCompensationPercentage,
+        refundAmount,
+        vendorCompensationAmount,
       });
+
+      if (participant.role === UserRole.VENDOR) {
+        await this.repository.incrementVendorCancellationStrikes(
+          booking.vendorId,
+        );
+      }
 
       await this.activityService.createLog({
         vendorId: booking.vendorId,
@@ -678,6 +699,9 @@ export class RescheduleService {
           oldStatus: booking.status,
           newStatus,
           reason: dto.reason,
+          cancellationTier: tier.label,
+          refundAmount,
+          vendorCompensationAmount,
         },
       });
 
@@ -686,6 +710,9 @@ export class RescheduleService {
         recipientUserId: participant.counterpartUserId ?? '',
         triggeredByUserId: user.id,
         reason: dto.reason,
+        cancellationTier: tier.label,
+        refundAmount,
+        vendorCompensationAmount,
       });
 
       const counterpartRole =
@@ -702,6 +729,10 @@ export class RescheduleService {
           vendorName: booking.vendor.businessName,
           cancelledByLabel: participant.role.toLowerCase(),
           reason: dto.reason,
+          cancellationTier: tier.label,
+          refundAmount,
+          refundPercentage: tier.clientRefundPercentage,
+          vendorCompensationAmount,
         }),
       );
 
