@@ -35,6 +35,12 @@ enum BookingStatus {
   CANCELLED_BY_VENDOR
 }
 
+// Only STANDARD exists today; this is the hook for a future
+// vendor-selectable Flexible/Standard/Strict cancellation policy.
+enum CancellationPolicyType {
+  STANDARD
+}
+
 enum RescheduleStatus {
   PENDING
   ACCEPTED
@@ -103,6 +109,10 @@ model Vendor {
   paystackSubaccount String?
   vendorViews        Int?
 
+  // Number of bookings this vendor has cancelled (as opposed to the client) —
+  // vendor-initiated cancellations always fully refund the client.
+  cancellationStrikes Int @default(0)
+
   bookings           Booking[]
   vendorAvailability VendorAvailability[]
   transaction        Transaction[]        @relation("Transaction")
@@ -159,6 +169,8 @@ model VendorBookingSettings {
 
   bufferTime Int @default(0)
 
+  cancellationPolicy CancellationPolicyType @default(STANDARD)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -187,6 +199,13 @@ model Booking {
   cancelledByRole    UserRole?
   cancelledAt        DateTime?
   cancellationReason String?
+
+  // Cancellation penalty outcome, computed from the applicable policy at cancellation time
+  cancellationTier             String?
+  refundPercentage             Float?
+  vendorCompensationPercentage Float?
+  refundAmount                 Float?
+  vendorCompensationAmount     Float?
 
   // A booking may only be rescheduled once unless an admin overrides it
   rescheduleCount Int @default(0)

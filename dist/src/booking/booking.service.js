@@ -1252,7 +1252,7 @@ let BookingService = class BookingService {
         if (!vendor) {
             throw new common_1.NotFoundException('Vendor not found');
         }
-        const [all, pending, confirmed, completed, cancelled] = await Promise.all([
+        const [all, pending, confirmed, completed, cancelled, cancelled_by_client, cancelled_by_vendor,] = await Promise.all([
             this.prisma.booking.count({
                 where: {
                     vendorId: vendor.id,
@@ -1273,6 +1273,18 @@ let BookingService = class BookingService {
             this.prisma.booking.count({
                 where: { status: client_1.BookingStatus.CANCELLED, vendorId: vendor.id },
             }),
+            this.prisma.booking.count({
+                where: {
+                    status: client_1.BookingStatus.CANCELLED_BY_CLIENT,
+                    vendorId: vendor.id,
+                },
+            }),
+            this.prisma.booking.count({
+                where: {
+                    status: client_1.BookingStatus.CANCELLED_BY_VENDOR,
+                    vendorId: vendor.id,
+                },
+            }),
         ]);
         return (0, response_1.successResponse)({
             all,
@@ -1280,6 +1292,8 @@ let BookingService = class BookingService {
             confirmed,
             completed,
             cancelled,
+            cancelled_by_client,
+            cancelled_by_vendor,
         }, 'Status fetched successfully');
     }
     async getBusinessInsights(userId) {

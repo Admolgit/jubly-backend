@@ -67,7 +67,13 @@ let AuthService = class AuthService {
     sanitizeUser(user) {
         if (!user)
             return user;
-        const { ...safeUser } = user;
+        const { password, refreshTokenHash, verificationCode, codeExpiresAt, ...safeUser } = user;
+        console.log({
+            password,
+            refreshTokenHash,
+            verificationCode,
+            codeExpiresAt,
+        });
         return safeUser;
     }
     async register(dto) {
@@ -75,30 +81,49 @@ let AuthService = class AuthService {
             const existingUser = await this.prisma.user.findUnique({
                 where: { email: dto.email },
             });
-            if (existingUser) {
+            if (existingUser?.isVerified) {
                 throw new common_1.BadRequestException('Email already in use');
             }
-            const otpGenerated = helpers_1.default.generateUniqueCharacters(6);
-            const hashed = await (0, hash_1.hashPassword)(dto.password);
-            const user = await this.prisma.user.create({
-                data: {
-                    email: dto.email,
-                    password: hashed,
-                    firstName: dto.firstName,
-                    lastName: dto.lastName,
-                    phone: dto.phone,
-                    role: dto.role,
-                    verificationCode: otpGenerated,
-                    codeExpiresAt: helpers_1.default.set24HourExpiry(),
-                },
-            });
-            const token = this.jwtService.sign({
-                sub: user.id,
-                email: user.email,
-                role: user.role,
-            });
-            await this.nodemailService.sendOTP(dto.email, otpGenerated);
-            return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token }, 'Registration successful', 201);
+            if (existingUser && !existingUser?.isVerified) {
+                const otpGenerated = helpers_1.default.generateUniqueCharacters(6);
+                const user = await this.prisma.user.update({
+                    where: { email: dto.email },
+                    data: {
+                        verificationCode: otpGenerated,
+                        codeExpiresAt: helpers_1.default.set24HourExpiry(),
+                    },
+                });
+                const token = this.jwtService.sign({
+                    sub: user.id,
+                    email: user.email,
+                    role: user.role,
+                });
+                await this.nodemailService.sendOTP(dto.email, otpGenerated);
+                return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token }, 'Email already in use', 200);
+            }
+            else {
+                const otpGenerated = helpers_1.default.generateUniqueCharacters(6);
+                const hashed = await (0, hash_1.hashPassword)(dto.password);
+                const user = await this.prisma.user.create({
+                    data: {
+                        email: dto.email,
+                        password: hashed,
+                        firstName: dto.firstName,
+                        lastName: dto.lastName,
+                        phone: dto.phone,
+                        role: dto.role,
+                        verificationCode: otpGenerated,
+                        codeExpiresAt: helpers_1.default.set24HourExpiry(),
+                    },
+                });
+                const token = this.jwtService.sign({
+                    sub: user.id,
+                    email: user.email,
+                    role: user.role,
+                });
+                await this.nodemailService.sendOTP(dto.email, otpGenerated);
+                return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token }, 'Registration successful', 201);
+            }
         }
         catch (error) {
             if (error instanceof common_1.UnauthorizedException) {
@@ -183,7 +208,18 @@ let AuthService = class AuthService {
             }
             if (vendor?.isApproved === false &&
                 vendor?.kycStatus === 'NOT_SUBMITTED') {
-                throw new common_1.UnauthorizedException('Complete your onboarding');
+                const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const refreshToken = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '14d' });
+                const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        refreshTokenHash,
+                        lastLogin: new Date(),
+                        isOnline: true,
+                    },
+                });
+                return (0, response_1.successResponse)({ user: this.sanitizeUser(user), token, refreshToken }, 'Complete your onboarding', 404);
             }
             if (vendor?.isApproved === true &&
                 vendor?.onboardingCompleted === false) {

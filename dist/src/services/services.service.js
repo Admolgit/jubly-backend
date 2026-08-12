@@ -17,38 +17,64 @@ let ServicesService = class ServicesService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async getAllServices(userId, page, limit, search) {
+    async getAllServices(userId, page, limit, search, isActive) {
         try {
-            const isActive = search === 'true' ? true : search === 'false' ? false : undefined;
-            const services = await this.prisma.service.findMany({
-                where: {
-                    userId,
-                    ...(isActive !== undefined && {
-                        active: isActive,
-                    }),
-                },
-                include: {
-                    _count: {
-                        select: {
-                            booking: true,
+            const currentPage = Math.max(1, Number(page));
+            const pageSize = Math.max(1, Number(limit));
+            const filters = {
+                userId,
+            };
+            if (search?.trim()) {
+                filters.name = {
+                    contains: search.trim(),
+                    mode: 'insensitive',
+                };
+            }
+            if (isActive !== 'ALL') {
+                filters.active = isActive === 'ACTIVE' ? true : false;
+            }
+            const [services, totalCount, all, active, inactive] = await Promise.all([
+                this.prisma.service.findMany({
+                    where: filters,
+                    include: {
+                        _count: {
+                            select: {
+                                booking: true,
+                            },
                         },
                     },
-                },
-                skip: (page - 1) * limit,
-                take: Number(limit),
-            });
-            const totalCount = await this.prisma.service.count({
-                where: {
-                    userId,
-                    ...(isActive !== undefined && {
-                        active: isActive,
-                    }),
-                },
-            });
+                    skip: (currentPage - 1) * pageSize,
+                    take: pageSize,
+                }),
+                this.prisma.service.count({
+                    where: filters,
+                }),
+                this.prisma.service.count({
+                    where: {
+                        userId,
+                    },
+                }),
+                this.prisma.service.count({
+                    where: {
+                        userId,
+                        active: true,
+                    },
+                }),
+                this.prisma.service.count({
+                    where: {
+                        userId,
+                        active: false,
+                    },
+                }),
+            ]);
             return (0, response_1.successResponse)(services, 'Services fetched successfully.', 200, {
                 totalCount,
-                page,
-                limit,
+                page: currentPage,
+                limit: pageSize,
+                totalPages: Math.ceil(totalCount / pageSize),
+                all,
+                active,
+                inactive,
             });
         }
         catch (error) {

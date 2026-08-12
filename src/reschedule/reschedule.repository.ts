@@ -69,6 +69,13 @@ export class RescheduleRepository {
     return this.prisma.booking.update({ where: { id: bookingId }, data });
   }
 
+  incrementVendorCancellationStrikes(vendorId: string) {
+    return this.prisma.vendor.update({
+      where: { id: vendorId },
+      data: { cancellationStrikes: { increment: 1 } },
+    });
+  }
+
   findConflictingBooking(
     vendorId: string,
     excludeBookingId: string,

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   HttpException,
@@ -17,42 +17,72 @@ export class ServicesService {
     page: number,
     limit: number,
     search?: string,
+    isActive?: string,
   ) {
     try {
-      const isActive =
-        search === 'true' ? true : search === 'false' ? false : undefined;
+      const currentPage = Math.max(1, Number(page));
+      const pageSize = Math.max(1, Number(limit));
 
-      const services = await this.prisma.service.findMany({
-        where: {
-          userId,
-          ...(isActive !== undefined && {
-            active: isActive,
-          }),
-        },
-        include: {
-          _count: {
-            select: {
-              booking: true,
+      const filters: any = {
+        userId,
+      };
+
+      if (search?.trim()) {
+        filters.name = {
+          contains: search.trim(),
+          mode: 'insensitive',
+        };
+      }
+
+      if (isActive !== 'ALL') {
+        filters.active = isActive === 'ACTIVE' ? true : false;
+      }
+
+      const [services, totalCount, all, active, inactive] = await Promise.all([
+        this.prisma.service.findMany({
+          where: filters,
+          include: {
+            _count: {
+              select: {
+                booking: true,
+              },
             },
           },
-        },
-        skip: (page - 1) * limit,
-        take: Number(limit),
-      });
+          skip: (currentPage - 1) * pageSize,
+          take: pageSize,
+        }),
 
-      const totalCount = await this.prisma.service.count({
-        where: {
-          userId,
-          ...(isActive !== undefined && {
-            active: isActive,
-          }),
-        },
-      });
+        this.prisma.service.count({
+          where: filters,
+        }),
+
+        this.prisma.service.count({
+          where: {
+            userId,
+          },
+        }),
+        this.prisma.service.count({
+          where: {
+            userId,
+            active: true,
+          },
+        }),
+        this.prisma.service.count({
+          where: {
+            userId,
+            active: false,
+          },
+        }),
+      ]);
 
       return successResponse(services, 'Services fetched successfully.', 200, {
         totalCount,
-        page,
-        limit,
+        page: currentPage,
+        limit: pageSize,
+        totalPages: Math.ceil(totalCount / pageSize),
+        all,
+        active,
+        inactive,
       });
     } catch (error: unknown) {
       if (error instanceof HttpException) {
