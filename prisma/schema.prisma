@@ -35,8 +35,6 @@ enum BookingStatus {
   CANCELLED_BY_VENDOR
 }
 
-// Only STANDARD exists today; this is the hook for a future
-// vendor-selectable Flexible/Standard/Strict cancellation policy.
 enum CancellationPolicyType {
   STANDARD
 }
@@ -109,8 +107,6 @@ model Vendor {
   paystackSubaccount String?
   vendorViews        Int?
 
-  // Number of bookings this vendor has cancelled (as opposed to the client) —
-  // vendor-initiated cancellations always fully refund the client.
   cancellationStrikes Int @default(0)
 
   bookings           Booking[]
@@ -132,10 +128,10 @@ model Service {
   id     String @id @default(auto()) @map("_id") @db.ObjectId
   userId String @db.ObjectId
 
-  name         String // "Bridal Makeup"
+  name         String
   description  String?
-  price        Int // ₦
-  durationMins Int? // 120
+  price        Int
+  durationMins Int?
 
   active Boolean @default(true)
 
@@ -150,9 +146,9 @@ model Service {
 
 model VendorAvailability {
   id        String @id @default(auto()) @map("_id") @db.ObjectId
-  dayOfWeek Int // 0 = Sunday, 6 = Saturday
-  startTime String // "09:00"
-  endTime   String // "18:00"
+  dayOfWeek Int
+  startTime String
+  endTime   String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -200,14 +196,12 @@ model Booking {
   cancelledAt        DateTime?
   cancellationReason String?
 
-  // Cancellation penalty outcome, computed from the applicable policy at cancellation time
   cancellationTier             String?
   refundPercentage             Float?
   vendorCompensationPercentage Float?
   refundAmount                 Float?
   vendorCompensationAmount     Float?
 
-  // A booking may only be rescheduled once unless an admin overrides it
   rescheduleCount Int @default(0)
 
   createdAt DateTime @default(now())
@@ -227,24 +221,19 @@ model RescheduleRequest {
   bookingId String  @db.ObjectId
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  // Who opened this request/counter-proposal
   initiatedBy     String   @db.ObjectId
   initiatedByRole UserRole
 
   proposedDate DateTime
 
-  // The previously proposed date this row counter-proposes against, if any
   previousProposedDate DateTime?
 
   reason String?
 
   status RescheduleStatus @default(PENDING)
 
-  // Booking.status at the moment this request was opened, so it can be
-  // restored if the request is rejected or otherwise closed without a date change
   bookingStatusBeforeRequest BookingStatus
 
-  // Who accepted/rejected/countered this request
   respondedBy    String?   @db.ObjectId
   respondedAt    DateTime?
   responseReason String?
