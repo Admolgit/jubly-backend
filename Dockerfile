@@ -36,7 +36,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Copy compiled application
-COPY --from=builder dist/src/main.js ./dist
+COPY --from=builder /src/dist ./dist
 
 # Copy Prisma generated client
 COPY --from=builder /src/node_modules/.prisma ./node_modules/.prisma
@@ -45,4 +45,4 @@ COPY --from=builder /src/node_modules/@prisma ./node_modules/@prisma
 # Expose port
 EXPOSE 5000
 
-CMD ["node", "--max-old-space-size=4096", "dist/main.js"]
+CMD ["node", "--max-old-space-size=4096", "dist/src/main.js"]
