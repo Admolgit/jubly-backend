@@ -36,7 +36,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Copy compiled application
-COPY --from=builder /src/dist ./dist
+COPY --from=builder dist/src/main.js ./dist
 
 # Copy Prisma generated client
 COPY --from=builder /src/node_modules/.prisma ./node_modules/.prisma
