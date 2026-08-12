@@ -14,21 +14,23 @@ import { Roles, RolesGuard } from 'src/auth/role.guard';
 
 @Controller('services')
 export class ServicesController {
-  constructor(private servicesService: ServicesService) {}
+  constructor(private readonly servicesService: ServicesService) {}
 
   @Get('')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   getAllServices(
     @Req() req: { user: { id: string } },
-    @Query() query: { page: number; limit: number; search?: string },
+    @Query()
+    query: { page: number; limit: number; search?: string; isActive?: string },
   ) {
-    const { page = 1, limit = 10, search } = query;
+    const { page = 1, limit = 10, search, isActive } = query;
     return this.servicesService.getAllServices(
       req.user.id,
       page,
       limit,
       search,
+      isActive,
     );
   }
 
