@@ -14,6 +14,8 @@ import {
 } from '@nestjs/common';
 import { BookingService, DateFilter } from './booking.service';
 import type { IBooking } from './dto/booking.dto';
+import { RejectCompletionDto } from './dto/booking.dto';
+
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { RolesGuard, Roles } from 'src/auth/role.guard';
 import { Public } from 'src/auth/public.decorator';
@@ -146,7 +148,6 @@ export class BookingController {
     @Query('dateFilter') dateFilter?: DateFilter,
     @Query('date') date?: string,
     @Query('status') status?: string,
-    @Query('email') email?: string,
   ) {
     return this.bookingService.getClientsBookings(
       req.user.id,
@@ -156,7 +157,6 @@ export class BookingController {
       dateFilter as DateFilter,
       date as any,
       status as string,
-      email,
     );
   }
 
@@ -183,7 +183,25 @@ export class BookingController {
     @Param('bookingId') bookingId: string,
     @Req() req: { user: { id: string } },
   ) {
-    return this.bookingService.markAsCmpleted(bookingId, req.user.id);
+    return this.bookingService.markAsCompleted(bookingId, req.user.id);
+  }
+
+  @Get('completion/review')
+  @Public()
+  getCompletionReview(@Query('token') token: string) {
+    return this.bookingService.getCompletionReview(token);
+  }
+
+  @Post('completion/approve')
+  @Public()
+  approveCompletion(@Body('token') token: string) {
+    return this.bookingService.approveCompletion(token);
+  }
+
+  @Post('completion/reject')
+  @Public()
+  rejectCompletion(@Body() dto: RejectCompletionDto) {
+    return this.bookingService.rejectCompletion(dto.token, dto.reason);
   }
 
   @Get('status/filter')

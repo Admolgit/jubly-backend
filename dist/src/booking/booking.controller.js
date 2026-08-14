@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BookingController = void 0;
 const common_1 = require("@nestjs/common");
 const booking_service_1 = require("./booking.service");
+const booking_dto_1 = require("./dto/booking.dto");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
 const role_guard_1 = require("../auth/role.guard");
 const public_decorator_1 = require("../auth/public.decorator");
@@ -64,8 +65,8 @@ let BookingController = class BookingController {
     async getBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
         return this.bookingService.getBookings(req.user.id, page, limit, search, dateFilter, date, status);
     }
-    getClientsBookings(req, page = '1', limit = '10', search, dateFilter, date, status, email) {
-        return this.bookingService.getClientsBookings(req.user.id, page, limit, search, dateFilter, date, status, email);
+    getClientsBookings(req, page = '1', limit = '10', search, dateFilter, date, status) {
+        return this.bookingService.getClientsBookings(req.user.id, page, limit, search, dateFilter, date, status);
     }
     getStats(req) {
         const userId = req.user.id;
@@ -76,7 +77,16 @@ let BookingController = class BookingController {
         return this.bookingService.getClientBookingsStats(userId);
     }
     markAsComplete(bookingId, req) {
-        return this.bookingService.markAsCmpleted(bookingId, req.user.id);
+        return this.bookingService.markAsCompleted(bookingId, req.user.id);
+    }
+    getCompletionReview(token) {
+        return this.bookingService.getCompletionReview(token);
+    }
+    approveCompletion(token) {
+        return this.bookingService.approveCompletion(token);
+    }
+    rejectCompletion(dto) {
+        return this.bookingService.rejectCompletion(dto.token, dto.reason);
     }
     async getBookingsStatusFilter(req) {
         return this.bookingService.getBookingsStatusFilter(req.user.id);
@@ -206,9 +216,8 @@ __decorate([
     __param(4, (0, common_1.Query)('dateFilter')),
     __param(5, (0, common_1.Query)('date')),
     __param(6, (0, common_1.Query)('status')),
-    __param(7, (0, common_1.Query)('email')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, String, String, String, String, String]),
+    __metadata("design:paramtypes", [Object, Object, Object, String, String, String, String]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getClientsBookings", null);
 __decorate([
@@ -239,6 +248,30 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "markAsComplete", null);
+__decorate([
+    (0, common_1.Get)('completion/review'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Query)('token')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getCompletionReview", null);
+__decorate([
+    (0, common_1.Post)('completion/approve'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Body)('token')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "approveCompletion", null);
+__decorate([
+    (0, common_1.Post)('completion/reject'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [booking_dto_1.RejectCompletionDto]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "rejectCompletion", null);
 __decorate([
     (0, common_1.Get)('status/filter'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),

@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BookingService = exports.DateFilter = void 0;
 const common_1 = require("@nestjs/common");
+const jwt_1 = require("@nestjs/jwt");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
@@ -32,13 +33,16 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
-    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService) {
+    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService, jwtService) {
         this.googleCalendarService = googleCalendarService;
         this.prisma = prisma;
         this.authService = authService;
         this.nodemailerService = nodemailerService;
         this.paystackService = paystackService;
         this.activityService = activityService;
+        this.jwtService = jwtService;
+        this.completionTokenPurpose = 'booking-completion-approval';
+        this.completionTokenTtl = '72h';
         this.bookingTimezone = 'Africa/Lagos';
     }
     parseDateInput(value, fieldName) {
@@ -750,8 +754,8 @@ let BookingService = class BookingService {
     }
     async getBookings(userId, page, limit, search, dateFilter, date, status) {
         try {
-            const pageNum = parseInt(page);
-            const limitNum = parseInt(limit);
+            const pageNum = Number(page);
+            const limitNum = Number(limit);
             const baseDate = date ? new Date(date) : new Date();
             const vendor = await this.prisma.vendor.findUnique({
                 where: { userId },
@@ -844,7 +848,7 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to fetch bookings.', error.message);
         }
     }
-    async getClientsBookings(userId, page, limit, search, dateFilter, date, status, email) {
+    async getClientsBookings(userId, page, limit, search, dateFilter, date, status) {
         try {
             const pageNum = Number(page);
             const limitNum = Number(limit);
@@ -1113,136 +1117,307 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to fetch bookings stats.', error.message);
         }
     }
-    async markAsCmpleted(bookingId, userId) {
+    async loadBookingForCompletion(bookingId) {
+        const booking = await this.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+                services: true,
+                vendor: { include: { user: true } },
+            },
+        });
+        if (!booking) {
+            throw new common_1.NotFoundException('Booking not found');
+        }
+        return booking;
+    }
+    signCompletionToken(bookingId) {
+        return this.jwtService.sign({ purpose: this.completionTokenPurpose, bookingId }, { expiresIn: this.completionTokenTtl });
+    }
+    verifyCompletionToken(token) {
+        try {
+            const payload = this.jwtService.verify(token);
+            if (payload.purpose !== this.completionTokenPurpose ||
+                !payload.bookingId) {
+                throw new common_1.BadRequestException('This approval link is invalid.');
+            }
+            return { bookingId: payload.bookingId };
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException)
+                throw error;
+            throw new common_1.BadRequestException('This approval link is invalid or has expired.');
+        }
+    }
+    async settleBookingPayment(booking) {
+        const existingSettlement = await this.prisma.settlement.findFirst({
+            where: {
+                bookingId: booking.id,
+                status: { in: ['PENDING', 'SUCCESS'] },
+            },
+        });
+        if (existingSettlement) {
+            const transaction = await this.prisma.transaction.findFirst({
+                where: { bookingId: booking.id },
+                orderBy: { createdAt: 'desc' },
+            });
+            return { transaction, settlement: existingSettlement };
+        }
+        const transaction = await this.prisma.transaction.findFirst({
+            where: { bookingId: booking.id, status: 'PENDING' },
+        });
+        if (!transaction) {
+            throw new common_1.BadRequestException('No pending payment found for this booking');
+        }
+        if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
+            throw new common_1.BadRequestException('Vendor has no settlement bank account');
+        }
+        const recipient = await this.paystackService.createTransferRecipient({
+            name: booking.vendor.businessName,
+            accountNumber: booking.vendor.bankAccountNumber,
+            bankCode: booking.vendor.bankCode,
+        });
+        const settlement = await this.prisma.settlement.create({
+            data: {
+                bookingId: booking.id,
+                amount: transaction.amount,
+                recipientCode: recipient.recipient_code,
+                status: 'PENDING',
+            },
+        });
+        let transfer;
+        try {
+            transfer = await this.paystackService.initiateTransfer({
+                amount: transaction.amount,
+                recipientCode: recipient.recipient_code,
+                reason: `Settlement for booking ${booking.id}`,
+                reference: `booking-${booking.id}-${Date.now()}`,
+            });
+        }
+        catch (error) {
+            await this.prisma.settlement.update({
+                where: { id: settlement.id },
+                data: { status: 'FAILED' },
+            });
+            throw error;
+        }
+        await this.prisma.settlement.update({
+            where: { id: settlement.id },
+            data: {
+                transferCode: transfer.transfer_code,
+                status: transfer.status?.toUpperCase() || 'PENDING',
+            },
+        });
+        await this.prisma.transaction.update({
+            where: { id: transaction.id },
+            data: { status: 'COMPLETED' },
+        });
+        return { transaction, settlement };
+    }
+    async completeBookingNow(booking, user) {
+        const { transaction } = await this.settleBookingPayment(booking);
+        const updatedBooking = await this.prisma.booking.update({
+            where: { id: booking.id },
+            data: { status: 'COMPLETED' },
+        });
+        await this.activityService.createLog({
+            vendorId: booking.vendorId,
+            userId: user.id,
+            action: 'SETTLEMENT_PAID',
+            description: `Settlement of ₦${transaction?.amount?.toLocaleString() ?? '0'} processed.`,
+            actor: 'System',
+            actorType: 'SYSTEM',
+            color: 'purple',
+        });
+        await this.nodemailerService.bookingCompletedMail({
+            recipientEmail: booking.clientEmail,
+            recipientName: booking.clientName ?? booking.clientEmail,
+            serviceName: booking.services.name,
+            vendorName: booking.vendor.businessName,
+        });
+        if (booking.vendor.user?.email) {
+            await this.nodemailerService.bookingCompletedMail({
+                recipientEmail: booking.vendor.user.email,
+                recipientName: booking.vendor.businessName,
+                serviceName: booking.services.name,
+                vendorName: booking.vendor.businessName,
+            });
+        }
+        return (0, response_1.successResponse)(updatedBooking, 'Booking marked as completed successfully');
+    }
+    async requestCompletionApproval(booking, user) {
+        const updatedBooking = await this.prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+                status: 'COMPLETION_PENDING_APPROVAL',
+                completionRequestedBy: user.id,
+                completionRequestedAt: new Date(),
+            },
+        });
+        await this.activityService.createLog({
+            vendorId: booking.vendorId,
+            userId: user.id,
+            action: 'BOOKING_COMPLETION_REQUESTED',
+            description: `Booking #${booking.id} completion requested by vendor, pending client approval.`,
+            actor: booking.vendor.businessName,
+            actorType: 'VENDOR',
+            color: 'yellow',
+        });
+        const token = this.signCompletionToken(booking.id);
+        const reviewUrl = `${process.env.FRONTEND_BASE_URL}/bookings/completion-review?token=${token}`;
+        await this.nodemailerService.bookingCompletionRequestMail({
+            recipientEmail: booking.clientEmail,
+            recipientName: booking.clientName ?? booking.clientEmail,
+            serviceName: booking.services.name,
+            vendorName: booking.vendor.businessName,
+            reviewUrl,
+        });
+        return (0, response_1.successResponse)(updatedBooking, 'Completion request sent to client for approval');
+    }
+    async markAsCompleted(bookingId, userId) {
         try {
             const user = await this.prisma.user.findUnique({
-                where: {
-                    id: userId,
-                },
+                where: { id: userId },
             });
             if (!user) {
                 throw new common_1.NotFoundException('User not found');
             }
-            const vendor = await this.prisma.vendor.findFirst({
-                where: { userId },
-            });
-            const booking = await this.prisma.booking.findUnique({
-                where: { id: bookingId },
-                include: {
-                    services: true,
-                    vendor: true,
-                },
-            });
-            if (!booking) {
-                throw new common_1.NotFoundException('Booking not found');
+            const booking = await this.loadBookingForCompletion(bookingId);
+            if (booking.status !== client_1.BookingStatus.CONFIRMED) {
+                throw new common_1.BadRequestException('Only confirmed bookings can be marked as completed');
             }
-            if (user.role !== client_1.UserRole.CLIENT || booking.clientEmail !== user.email) {
-                throw new common_1.ForbiddenException('Only the client who made this booking can mark it as completed');
+            const isClient = user.role === client_1.UserRole.CLIENT && booking.clientEmail === user.email;
+            const isVendor = user.role === client_1.UserRole.VENDOR && booking.vendor.userId === user.id;
+            if (isClient) {
+                return await this.completeBookingNow(booking, user);
             }
-            const existingSettlement = await this.prisma.settlement.findFirst({
-                where: {
-                    bookingId,
-                    status: {
-                        in: ['PENDING', 'SUCCESS'],
-                    },
-                },
-            });
-            const transaction = await this.prisma.transaction.findFirst({
-                where: {
-                    bookingId,
-                    status: 'PENDING',
-                },
-            });
-            if (!existingSettlement) {
-                if (!transaction) {
-                    throw new common_1.BadRequestException('No pending payment found for this booking');
-                }
-                if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
-                    throw new common_1.BadRequestException('Vendor has no settlement bank account');
-                }
-                const recipient = await this.paystackService.createTransferRecipient({
-                    name: booking.vendor.businessName,
-                    accountNumber: booking.vendor.bankAccountNumber,
-                    bankCode: booking.vendor.bankCode,
-                });
-                const settlement = await this.prisma.settlement.create({
-                    data: {
-                        bookingId,
-                        amount: transaction.amount,
-                        recipientCode: recipient.recipient_code,
-                        status: 'PENDING',
-                    },
-                });
-                let transfer;
-                try {
-                    transfer = await this.paystackService.initiateTransfer({
-                        amount: transaction.amount,
-                        recipientCode: recipient.recipient_code,
-                        reason: `Settlement for booking ${booking.id}`,
-                        reference: `booking-${booking.id}-${Date.now()}`,
-                    });
-                }
-                catch (error) {
-                    await this.prisma.settlement.update({
-                        where: {
-                            id: settlement.id,
-                        },
-                        data: {
-                            status: 'FAILED',
-                        },
-                    });
-                    throw error;
-                }
-                await this.prisma.settlement.update({
-                    where: {
-                        id: settlement.id,
-                    },
-                    data: {
-                        transferCode: transfer.transfer_code,
-                        status: transfer.status?.toUpperCase() || 'PENDING',
-                    },
-                });
-                await this.prisma.transaction.update({
-                    where: {
-                        id: transaction.id,
-                    },
-                    data: {
-                        status: 'COMPLETED',
-                    },
-                });
+            if (isVendor) {
+                return await this.requestCompletionApproval(booking, user);
             }
-            const updatedBooking = await this.prisma.booking.update({
-                where: { id: bookingId },
-                data: {
-                    status: 'COMPLETED',
-                },
-            });
-            await this.activityService.createLog({
-                vendorId: vendor ? vendor.id : booking.vendorId,
-                userId,
-                action: 'SETTLEMENT_PAID',
-                description: `Settlement of ₦${transaction?.amount?.toLocaleString()} processed.`,
-                actor: 'System',
-                actorType: 'SYSTEM',
-                color: 'purple',
-            });
-            await this.nodemailerService.bookingStatusChangeMail({
-                subject: 'Your Booking Has Been Mark As Completed',
-                name: booking.clientName,
-                role: user.role,
-                vendor: user.role === 'CLIENT' ? 'Client' : 'Vendor',
-                serviceName: booking.services.name,
-                vendorName: booking.vendor.businessName,
-                email: user.role === 'CLIENT' ? user.email : booking.clientEmail,
-                action: 'Mark As Completed',
-            });
-            return (0, response_1.successResponse)(updatedBooking, 'Booking mark as completed successfully');
+            throw new common_1.ForbiddenException('Not allowed to mark this booking as completed');
         }
         catch (error) {
             if (error instanceof common_1.HttpException) {
                 throw error;
             }
             throw new common_1.InternalServerErrorException('Failed to mark booking as completed.', error.message);
+        }
+    }
+    async approveCompletion(token) {
+        try {
+            const { bookingId } = this.verifyCompletionToken(token);
+            const booking = await this.loadBookingForCompletion(bookingId);
+            if (booking.status === client_1.BookingStatus.COMPLETED) {
+                return (0, response_1.successResponse)(booking, 'This booking has already been completed.');
+            }
+            if (booking.status !== client_1.BookingStatus.COMPLETION_PENDING_APPROVAL) {
+                return (0, response_1.successResponse)(booking, 'This completion request is no longer pending.');
+            }
+            const { transaction } = await this.settleBookingPayment(booking);
+            const updatedBooking = await this.prisma.booking.update({
+                where: { id: booking.id },
+                data: {
+                    status: 'COMPLETED',
+                    completionApprovedAt: new Date(),
+                },
+            });
+            await this.activityService.createLog({
+                vendorId: booking.vendorId,
+                userId: booking.clientId ?? undefined,
+                action: 'BOOKING_COMPLETION_APPROVED',
+                description: `Booking #${booking.id} completion approved by client. Settlement of ₦${transaction?.amount?.toLocaleString() ?? '0'} processed.`,
+                actor: booking.clientName ?? booking.clientEmail,
+                actorType: 'CLIENT',
+                color: 'purple',
+            });
+            await this.nodemailerService.bookingCompletedMail({
+                recipientEmail: booking.clientEmail,
+                recipientName: booking.clientName ?? booking.clientEmail,
+                serviceName: booking.services.name,
+                vendorName: booking.vendor.businessName,
+            });
+            if (booking.vendor.user?.email) {
+                await this.nodemailerService.bookingCompletedMail({
+                    recipientEmail: booking.vendor.user.email,
+                    recipientName: booking.vendor.businessName,
+                    serviceName: booking.services.name,
+                    vendorName: booking.vendor.businessName,
+                });
+            }
+            return (0, response_1.successResponse)(updatedBooking, 'Booking completion approved and payment released');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to approve booking completion.', error.message);
+        }
+    }
+    async rejectCompletion(token, reason) {
+        try {
+            const { bookingId } = this.verifyCompletionToken(token);
+            const booking = await this.loadBookingForCompletion(bookingId);
+            if (booking.status === client_1.BookingStatus.COMPLETED) {
+                return (0, response_1.successResponse)(booking, 'This booking has already been completed.');
+            }
+            if (booking.status !== client_1.BookingStatus.COMPLETION_PENDING_APPROVAL) {
+                return (0, response_1.successResponse)(booking, 'This completion request is no longer pending.');
+            }
+            const updatedBooking = await this.prisma.booking.update({
+                where: { id: booking.id },
+                data: {
+                    status: 'CONFIRMED',
+                    completionRejectedAt: new Date(),
+                    completionRejectionReason: reason,
+                },
+            });
+            await this.activityService.createLog({
+                vendorId: booking.vendorId,
+                userId: booking.clientId ?? undefined,
+                action: 'BOOKING_COMPLETION_REJECTED',
+                description: `Booking #${booking.id} completion request rejected by client.`,
+                actor: booking.clientName ?? booking.clientEmail,
+                actorType: 'CLIENT',
+                color: 'red',
+                metadata: { reason },
+            });
+            if (booking.vendor.user?.email) {
+                await this.nodemailerService.bookingCompletionRejectedMail({
+                    recipientEmail: booking.vendor.user.email,
+                    serviceName: booking.services.name,
+                    clientName: booking.clientName ?? booking.clientEmail,
+                    reason,
+                });
+            }
+            return (0, response_1.successResponse)(updatedBooking, 'Completion request rejected');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to reject booking completion.', error.message);
+        }
+    }
+    async getCompletionReview(token) {
+        try {
+            const { bookingId } = this.verifyCompletionToken(token);
+            const booking = await this.loadBookingForCompletion(bookingId);
+            return (0, response_1.successResponse)({
+                bookingId: booking.id,
+                status: booking.status,
+                serviceName: booking.services.name,
+                vendorName: booking.vendor.businessName,
+                clientName: booking.clientName,
+                date: booking.date,
+                startTime: booking.startTime,
+                endTime: booking.endTime,
+                canAct: booking.status === client_1.BookingStatus.COMPLETION_PENDING_APPROVAL,
+            }, 'Completion review details fetched');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to fetch completion review details.', error.message);
         }
     }
     async getBookingsStatusFilter(userId) {
@@ -1454,5 +1629,6 @@ exports.BookingService = BookingService = __decorate([
         auth_service_1.AuthService,
         nodemailer_service_1.NodemailerService,
         paystack_service_1.PaystackService,
-        activityLog_service_1.ActivityService])
+        activityLog_service_1.ActivityService,
+        jwt_1.JwtService])
 ], BookingService);

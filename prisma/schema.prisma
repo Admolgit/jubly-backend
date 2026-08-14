@@ -33,6 +33,7 @@ enum BookingStatus {
   RESCHEDULE_REQUESTED
   CANCELLED_BY_CLIENT
   CANCELLED_BY_VENDOR
+  COMPLETION_PENDING_APPROVAL
 }
 
 enum CancellationPolicyType {
@@ -222,6 +223,13 @@ model Booking {
   vendorCompensationPercentage Float?
   refundAmount                 Float?
   vendorCompensationAmount     Float?
+
+  // Vendor-initiated completion approval audit
+  completionRequestedBy     String? // userId of the vendor who requested completion
+  completionRequestedAt     DateTime?
+  completionApprovedAt      DateTime?
+  completionRejectedAt      DateTime?
+  completionRejectionReason String?
 
   rescheduleCount Int @default(0)
 

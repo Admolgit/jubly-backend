@@ -386,4 +386,95 @@ export class NodemailerService {
       `,
     });
   }
+
+  async bookingCompletionRequestMail(data: {
+    recipientEmail: string;
+    recipientName: string;
+    serviceName: string;
+    vendorName: string;
+    reviewUrl: string;
+  }) {
+    await this.mailerService.sendMail({
+      to: data.recipientEmail,
+      subject: `${data.vendorName} marked your ${data.serviceName} booking as completed`,
+      html: `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff;">
+            <h1 style="font-size: 20px; color: #111827; margin-bottom: 4px;">Hi ${data.recipientName},</h1>
+            <p style="font-size: 14px; color: #4b5563; margin-top: 0;">
+                ${data.vendorName} has marked your booking for <strong>${data.serviceName}</strong> as completed. Please review and approve or reject this before payment is released to the vendor.
+            </p>
+
+            <div style="text-align: center; margin: 28px 0;">
+                <a href="${data.reviewUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                    Review booking
+                </a>
+            </div>
+
+            <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                This link expires in 72 hours. If you don't act on it, the booking will remain pending until you do.
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 16px 0;" />
+
+            <p style="font-size:12px;color:#888">Powered by Jubly</p>
+        </div>
+        `,
+    });
+  }
+
+  async bookingCompletedMail(data: {
+    recipientEmail: string;
+    recipientName: string;
+    serviceName: string;
+    vendorName: string;
+  }) {
+    await this.mailerService.sendMail({
+      to: data.recipientEmail,
+      subject: `Your ${data.serviceName} booking has been completed`,
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+        <h2 style="color:#111;">This booking has been marked as completed.</h2>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+        </div>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+    });
+  }
+
+  async bookingCompletionRejectedMail(data: {
+    recipientEmail: string;
+    serviceName: string;
+    clientName: string;
+    reason?: string;
+  }) {
+    await this.mailerService.sendMail({
+      to: data.recipientEmail,
+      subject: `Your completion request for ${data.serviceName} was rejected`,
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+        <h2 style="color:#111;">Hi,</h2>
+        <h2 style="color:#111;">${data.clientName} rejected the completion request for this booking.</h2>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          ${data.reason ? `<p><strong>Reason:</strong> ${data.reason}</p>` : ''}
+        </div>
+
+        <p>The booking is back to confirmed. You can mark it as completed again once the issue is resolved.</p>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+    });
+  }
 }
