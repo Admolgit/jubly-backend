@@ -28,6 +28,7 @@ const users_module_1 = require("./users/users.module");
 const services_module_1 = require("./services/services.module");
 const activityLog_module_1 = require("./activity/activityLog.module");
 const reschedule_module_1 = require("./reschedule/reschedule.module");
+const cancellation_policy_module_1 = require("./cancellation-policy/cancellation-policy.module");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer
@@ -57,6 +58,7 @@ exports.AppModule = AppModule = __decorate([
             services_module_1.ServicesModule,
             activityLog_module_1.ActivityLogModule,
             reschedule_module_1.RescheduleModule,
+            cancellation_policy_module_1.CancellationPolicyModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

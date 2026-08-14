@@ -12,6 +12,11 @@ import { NodemailerService } from '../nodemailer/nodemailer.service';
 import { RescheduleService } from './reschedule.service';
 import { RescheduleRepository } from './reschedule.repository';
 import { RescheduleNotificationService } from './events/reschedule-notification.service';
+import { CancellationPolicyService } from '../cancellation-policy/cancellation-policy.service';
+import {
+  STANDARD_CANCELLATION_TIERS,
+  DEFAULT_NO_SHOW_POLICY,
+} from './cancellation-policy.util';
 
 const CLIENT_USER_ID = 'client-1';
 const VENDOR_USER_ID = 'vendor-1';
@@ -104,6 +109,7 @@ describe('RescheduleService', () => {
     rescheduleCounterProposedMail: jest.Mock;
     bookingCancelledMail: jest.Mock;
   };
+  let cancellationPolicyService: { getActiveTiers: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -130,6 +136,12 @@ describe('RescheduleService', () => {
       rescheduleCounterProposedMail: jest.fn().mockResolvedValue(undefined),
       bookingCancelledMail: jest.fn().mockResolvedValue(undefined),
     };
+    cancellationPolicyService = {
+      getActiveTiers: jest.fn().mockResolvedValue({
+        tiers: STANDARD_CANCELLATION_TIERS,
+        noShowPolicy: DEFAULT_NO_SHOW_POLICY,
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -140,6 +152,10 @@ describe('RescheduleService', () => {
         { provide: GoogleCalendarService, useValue: googleCalendarService },
         { provide: RescheduleNotificationService, useValue: notifications },
         { provide: NodemailerService, useValue: nodemailerService },
+        {
+          provide: CancellationPolicyService,
+          useValue: cancellationPolicyService,
+        },
       ],
     }).compile();
 

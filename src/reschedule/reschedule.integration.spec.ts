@@ -118,6 +118,8 @@ describe('Reschedule endpoints (integration)', () => {
       findMany: jest.Mock;
     };
     vendorCalendar: { findFirst: jest.Mock };
+    cancellationPolicySetting: { findFirst: jest.Mock };
+    vendor: { update: jest.Mock };
   };
 
   beforeEach(async () => {
@@ -135,6 +137,8 @@ describe('Reschedule endpoints (integration)', () => {
         findMany: jest.fn(),
       },
       vendorCalendar: { findFirst: jest.fn() },
+      cancellationPolicySetting: { findFirst: jest.fn().mockResolvedValue(null) },
+      vendor: { update: jest.fn() },
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({

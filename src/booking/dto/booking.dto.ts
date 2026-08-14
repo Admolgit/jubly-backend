@@ -1,3 +1,16 @@
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+
+export class RejectCompletionDto {
+  @IsNotEmpty()
+  @IsString()
+  token!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
 export interface IBooking {
   userId: string;
   clientId: string;

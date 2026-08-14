@@ -73,8 +73,6 @@ export class AvailabilityService {
     const todayDate = new Date(today);
     todayDate.setHours(0, 0, 0, 0);
 
-    console.log({ chosenDate, todayDate, isPast: chosenDate < todayDate });
-
     return chosenDate < todayDate;
   }
 
@@ -125,8 +123,6 @@ export class AvailabilityService {
       const now = new Date();
 
       const isToday = this.isSameDay(dateObj, now);
-
-      console.log({ date, dateObj, now, isToday, slots, bookings });
 
       if (this.isPastDay(date)) {
         throw new BadRequestException('No slots for past dates');

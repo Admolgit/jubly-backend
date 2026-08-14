@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, Max, Min } from 'class-validator';
 
 export interface IPaystackBank {
   id: number;
@@ -37,4 +37,11 @@ export class UpdateBankDetailsDto {
   @IsNotEmpty()
   @IsString()
   accountNumber: string;
+}
+
+export class UpdateSubAccountFeeDto {
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  percentageFee: number;
 }

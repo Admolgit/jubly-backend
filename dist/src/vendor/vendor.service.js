@@ -229,6 +229,20 @@ let VendorService = class VendorService {
             throw new common_1.InternalServerErrorException('Failed to update bank details', error.message);
         }
     }
+    async updateSubAccountFee(dto) {
+        try {
+            const updatedSubAccount = await this.prisma.subAccount.updateMany({
+                data: { percentageFee: dto.percentageFee },
+            });
+            return (0, response_1.successResponse)(updatedSubAccount, 'Subaccount fee updated successfully');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to update subaccount fee', error.message);
+        }
+    }
     async submitProfileImage(userId, file) {
         try {
             if (!file) {
