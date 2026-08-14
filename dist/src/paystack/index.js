@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpdateBankDetailsDto = exports.CreateSubaccountDto = void 0;
+exports.UpdateSubAccountFeeDto = exports.UpdateBankDetailsDto = exports.CreateSubaccountDto = void 0;
 const class_validator_1 = require("class-validator");
 class CreateSubaccountDto {
 }
@@ -42,3 +42,12 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateBankDetailsDto.prototype, "accountNumber", void 0);
+class UpdateSubAccountFeeDto {
+}
+exports.UpdateSubAccountFeeDto = UpdateSubAccountFeeDto;
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.Max)(1),
+    __metadata("design:type", Number)
+], UpdateSubAccountFeeDto.prototype, "percentageFee", void 0);

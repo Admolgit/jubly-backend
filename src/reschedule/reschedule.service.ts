@@ -29,6 +29,7 @@ import {
 } from './events/reschedule-notification.events';
 import { RescheduleNotificationService } from './events/reschedule-notification.service';
 import { computeCancellationOutcome } from './cancellation-policy.util';
+import { CancellationPolicyService } from 'src/cancellation-policy/cancellation-policy.service';
 
 const NON_ACTIONABLE_STATUSES: readonly BookingStatus[] = [
   BookingStatus.CANCELLED,
@@ -50,6 +51,7 @@ export class RescheduleService {
     private readonly googleCalendarService: GoogleCalendarService,
     private readonly notifications: RescheduleNotificationService,
     private readonly nodemailerService: NodemailerService,
+    private readonly cancellationPolicyService: CancellationPolicyService,
   ) {}
 
   private readonly bookingTimezone = 'Africa/Lagos';
@@ -657,12 +659,16 @@ export class RescheduleService {
       }
 
       const cancelledAt = new Date();
+      const { tiers, noShowPolicy } =
+        await this.cancellationPolicyService.getActiveTiers();
       const { tier, refundAmount, vendorCompensationAmount } =
         computeCancellationOutcome({
           amount: booking.services.price,
           appointmentStart: booking.startTime,
           cancelledAt,
           cancelledByRole: participant.role,
+          tiers,
+          noShowPolicy,
         });
 
       const updatedBooking = await this.repository.updateBooking(bookingId, {

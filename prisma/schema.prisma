@@ -159,6 +159,27 @@ model VendorAvailability {
   @@unique([vendorId, dayOfWeek])
 }
 
+type CancellationPolicyTierConfig {
+  label                        String
+  minHoursBeforeStart          Float
+  clientRefundPercentage       Float
+  vendorCompensationPercentage Float
+}
+
+type NoShowPolicyConfig {
+  clientRefundPercentage       Float
+  vendorCompensationPercentage Float
+}
+
+model CancellationPolicySetting {
+  id         String                         @id @default(auto()) @map("_id") @db.ObjectId
+  tiers      CancellationPolicyTierConfig[]
+  noShowTier NoShowPolicyConfig?
+  updatedBy  String?                        @db.ObjectId
+  createdAt  DateTime                       @default(now())
+  updatedAt  DateTime                       @updatedAt
+}
+
 model VendorBookingSettings {
   id       String @id @default(auto()) @map("_id") @db.ObjectId
   vendorId String @unique @db.ObjectId

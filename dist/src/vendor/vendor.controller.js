@@ -99,6 +99,9 @@ let VendorController = class VendorController {
     getPendingVendors() {
         return this.vendorService.getPendingVendors();
     }
+    updateSubAccountFee(dto) {
+        return this.vendorService.updateSubAccountFee(dto);
+    }
     getBookingPage(slug) {
         return this.vendorService.vendorBooking(slug);
     }
@@ -281,6 +284,15 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "getPendingVendors", null);
+__decorate([
+    (0, common_1.Patch)('admin/subaccount/fee'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [paystack_1.UpdateSubAccountFeeDto]),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "updateSubAccountFee", null);
 __decorate([
     (0, common_1.Get)('booking-vendor/:slug'),
     (0, public_decorator_1.Public)(),

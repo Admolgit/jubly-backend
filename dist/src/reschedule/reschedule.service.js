@@ -21,19 +21,21 @@ const reschedule_repository_1 = require("./reschedule.repository");
 const reschedule_notification_events_1 = require("./events/reschedule-notification.events");
 const reschedule_notification_service_1 = require("./events/reschedule-notification.service");
 const cancellation_policy_util_1 = require("./cancellation-policy.util");
+const cancellation_policy_service_1 = require("../cancellation-policy/cancellation-policy.service");
 const NON_ACTIONABLE_STATUSES = [
     client_1.BookingStatus.CANCELLED,
     client_1.BookingStatus.CANCELLED_BY_CLIENT,
     client_1.BookingStatus.CANCELLED_BY_VENDOR,
 ];
 let RescheduleService = class RescheduleService {
-    constructor(prisma, repository, activityService, googleCalendarService, notifications, nodemailerService) {
+    constructor(prisma, repository, activityService, googleCalendarService, notifications, nodemailerService, cancellationPolicyService) {
         this.prisma = prisma;
         this.repository = repository;
         this.activityService = activityService;
         this.googleCalendarService = googleCalendarService;
         this.notifications = notifications;
         this.nodemailerService = nodemailerService;
+        this.cancellationPolicyService = cancellationPolicyService;
         this.bookingTimezone = 'Africa/Lagos';
     }
     async loadUser(userId) {
@@ -456,11 +458,14 @@ let RescheduleService = class RescheduleService {
                 });
             }
             const cancelledAt = new Date();
+            const { tiers, noShowPolicy } = await this.cancellationPolicyService.getActiveTiers();
             const { tier, refundAmount, vendorCompensationAmount } = (0, cancellation_policy_util_1.computeCancellationOutcome)({
                 amount: booking.services.price,
                 appointmentStart: booking.startTime,
                 cancelledAt,
                 cancelledByRole: participant.role,
+                tiers,
+                noShowPolicy,
             });
             const updatedBooking = await this.repository.updateBooking(bookingId, {
                 status: newStatus,
@@ -584,5 +589,6 @@ exports.RescheduleService = RescheduleService = __decorate([
         activityLog_service_1.ActivityService,
         google_service_1.GoogleCalendarService,
         reschedule_notification_service_1.RescheduleNotificationService,
-        nodemailer_service_1.NodemailerService])
+        nodemailer_service_1.NodemailerService,
+        cancellation_policy_service_1.CancellationPolicyService])
 ], RescheduleService);

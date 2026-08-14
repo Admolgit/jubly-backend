@@ -14,6 +14,7 @@ import {
 import { TransactionService } from './transaction.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
+import { AdminTransactionsQueryDto } from './dto/admin-transaction-query.dto';
 
 @Controller('transactions')
 export class TransactionController {
@@ -25,6 +26,56 @@ export class TransactionController {
   async dashboardStats(@Req() req: { user: { id: string } }) {
     const userId = req.user.id;
     return this.transactionService.getDashboardStats(userId);
+  }
+
+  @Get('admin/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAdminTransactionStats() {
+    return this.transactionService.getAdminTransactionStats();
+  }
+
+  @Get('admin/platform-revenue')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getPlatformRevenue() {
+    return this.transactionService.getPlatformRevenue();
+  }
+
+  @Get('admin/analytics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAdminTransactionAnalytics(
+    @Query('view') view: 'day' | 'week' | 'month' | 'year',
+  ) {
+    return this.transactionService.getAdminTransactionAnalytics(view);
+  }
+
+  @Get('admin/export/csv')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async exportAdminTransactionsCSV(
+    @Query() query: AdminTransactionsQueryDto,
+    @Res() res: any,
+  ) {
+    const csv =
+      await this.transactionService.exportAdminTransactionsToCSV(query);
+
+    res.setHeader('Content-Type', 'text/csv');
+
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=admin-transactions-${Date.now()}.csv`,
+    );
+
+    return res.status(200).send(csv);
+  }
+
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAdminTransactions(@Query() query: AdminTransactionsQueryDto) {
+    return this.transactionService.getAdminTransactions(query);
   }
 
   @Get(':vendorId')

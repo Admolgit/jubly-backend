@@ -19,7 +19,11 @@ import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { Prisma } from '@prisma/client';
 import { generateSlug } from 'src/utils/generateSlug';
 import { PaystackService } from 'src/paystack/paystack.service';
-import { CreateSubaccountDto, UpdateBankDetailsDto } from 'src/paystack';
+import {
+  CreateSubaccountDto,
+  UpdateBankDetailsDto,
+  UpdateSubAccountFeeDto,
+} from 'src/paystack';
 import { BulkUpdateItemDto, ServiceItemDto } from './dto/services.dto';
 import { Parser } from 'json2csv';
 import dayjs from 'dayjs';
@@ -322,6 +326,29 @@ export class VendorService {
       );
     }
   }
+
+  async updateSubAccountFee(dto: UpdateSubAccountFeeDto) {
+    try {
+      const updatedSubAccount = await this.prisma.subAccount.updateMany({
+        data: { percentageFee: dto.percentageFee },
+      });
+
+      return successResponse(
+        updatedSubAccount,
+        'Subaccount fee updated successfully',
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to update subaccount fee',
+        error.message,
+      );
+    }
+  }
+
   async submitProfileImage(userId: string, file: Express.Multer.File) {
     try {
       if (!file) {

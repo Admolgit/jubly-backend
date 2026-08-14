@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VENDOR_CANCELLATION_TIER = exports.NO_SHOW_TIER = exports.STANDARD_CANCELLATION_TIERS = void 0;
+exports.VENDOR_CANCELLATION_TIER = exports.DEFAULT_NO_SHOW_POLICY = exports.NO_SHOW_TIER = exports.STANDARD_CANCELLATION_TIERS = void 0;
 exports.getClientCancellationTier = getClientCancellationTier;
 exports.computeCancellationOutcome = computeCancellationOutcome;
 exports.STANDARD_CANCELLATION_TIERS = [
@@ -41,20 +41,28 @@ exports.NO_SHOW_TIER = {
     clientRefundPercentage: 0,
     vendorCompensationPercentage: 1,
 };
+exports.DEFAULT_NO_SHOW_POLICY = {
+    clientRefundPercentage: exports.NO_SHOW_TIER.clientRefundPercentage,
+    vendorCompensationPercentage: exports.NO_SHOW_TIER.vendorCompensationPercentage,
+};
 exports.VENDOR_CANCELLATION_TIER = {
     label: 'Vendor cancellation',
     minHoursBeforeStart: -Infinity,
     clientRefundPercentage: 1,
     vendorCompensationPercentage: 0,
 };
-function getClientCancellationTier(hoursUntilStart) {
+function getClientCancellationTier(hoursUntilStart, tiers = exports.STANDARD_CANCELLATION_TIERS, noShowPolicy = exports.DEFAULT_NO_SHOW_POLICY) {
     if (hoursUntilStart <= 0) {
-        return exports.NO_SHOW_TIER;
+        return { ...exports.NO_SHOW_TIER, ...noShowPolicy };
     }
-    return (exports.STANDARD_CANCELLATION_TIERS.find((tier) => hoursUntilStart >= tier.minHoursBeforeStart) ?? exports.NO_SHOW_TIER);
+    const sorted = [...tiers].sort((a, b) => b.minHoursBeforeStart - a.minHoursBeforeStart);
+    return (sorted.find((tier) => hoursUntilStart >= tier.minHoursBeforeStart) ?? {
+        ...exports.NO_SHOW_TIER,
+        ...noShowPolicy,
+    });
 }
 function computeCancellationOutcome(params) {
-    const { amount, appointmentStart, cancelledAt, cancelledByRole } = params;
+    const { amount, appointmentStart, cancelledAt, cancelledByRole, tiers, noShowPolicy, } = params;
     if (cancelledByRole === 'VENDOR') {
         return {
             tier: exports.VENDOR_CANCELLATION_TIER,
@@ -63,7 +71,7 @@ function computeCancellationOutcome(params) {
         };
     }
     const hoursUntilStart = (appointmentStart.getTime() - cancelledAt.getTime()) / (60 * 60 * 1000);
-    const tier = getClientCancellationTier(hoursUntilStart);
+    const tier = getClientCancellationTier(hoursUntilStart, tiers, noShowPolicy);
     return {
         tier,
         refundAmount: Math.round(amount * tier.clientRefundPercentage),

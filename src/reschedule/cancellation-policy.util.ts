@@ -5,6 +5,11 @@ export interface CancellationTier {
   vendorCompensationPercentage: number;
 }
 
+export interface NoShowPolicy {
+  clientRefundPercentage: number;
+  vendorCompensationPercentage: number;
+}
+
 export const STANDARD_CANCELLATION_TIERS: CancellationTier[] = [
   {
     label: '24+ hours before',
@@ -45,6 +50,11 @@ export const NO_SHOW_TIER: CancellationTier = {
   vendorCompensationPercentage: 1,
 };
 
+export const DEFAULT_NO_SHOW_POLICY: NoShowPolicy = {
+  clientRefundPercentage: NO_SHOW_TIER.clientRefundPercentage,
+  vendorCompensationPercentage: NO_SHOW_TIER.vendorCompensationPercentage,
+};
+
 export const VENDOR_CANCELLATION_TIER: CancellationTier = {
   label: 'Vendor cancellation',
   minHoursBeforeStart: -Infinity,
@@ -52,17 +62,25 @@ export const VENDOR_CANCELLATION_TIER: CancellationTier = {
   vendorCompensationPercentage: 0,
 };
 
+// Not being used anymore
 export function getClientCancellationTier(
   hoursUntilStart: number,
+  tiers: CancellationTier[] = STANDARD_CANCELLATION_TIERS,
+  noShowPolicy: NoShowPolicy = DEFAULT_NO_SHOW_POLICY,
 ): CancellationTier {
   if (hoursUntilStart <= 0) {
-    return NO_SHOW_TIER;
+    return { ...NO_SHOW_TIER, ...noShowPolicy };
   }
 
+  const sorted = [...tiers].sort(
+    (a, b) => b.minHoursBeforeStart - a.minHoursBeforeStart,
+  );
+
   return (
-    STANDARD_CANCELLATION_TIERS.find(
-      (tier) => hoursUntilStart >= tier.minHoursBeforeStart,
-    ) ?? NO_SHOW_TIER
+    sorted.find((tier) => hoursUntilStart >= tier.minHoursBeforeStart) ?? {
+      ...NO_SHOW_TIER,
+      ...noShowPolicy,
+    }
   );
 }
 
@@ -77,8 +95,17 @@ export function computeCancellationOutcome(params: {
   appointmentStart: Date;
   cancelledAt: Date;
   cancelledByRole: 'CLIENT' | 'VENDOR';
+  tiers?: CancellationTier[];
+  noShowPolicy?: NoShowPolicy;
 }): CancellationOutcome {
-  const { amount, appointmentStart, cancelledAt, cancelledByRole } = params;
+  const {
+    amount,
+    appointmentStart,
+    cancelledAt,
+    cancelledByRole,
+    tiers,
+    noShowPolicy,
+  } = params;
 
   if (cancelledByRole === 'VENDOR') {
     return {
@@ -92,7 +119,7 @@ export function computeCancellationOutcome(params: {
 
   const hoursUntilStart =
     (appointmentStart.getTime() - cancelledAt.getTime()) / (60 * 60 * 1000);
-  const tier = getClientCancellationTier(hoursUntilStart);
+  const tier = getClientCancellationTier(hoursUntilStart, tiers, noShowPolicy);
 
   return {
     tier,

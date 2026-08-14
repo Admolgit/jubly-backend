@@ -32,7 +32,11 @@ import {
   FilesInterceptor,
 } from '@nestjs/platform-express';
 import { cloudinaryMulterOptions } from 'src/middlewares/cloudinary.middleware';
-import { CreateSubaccountDto, UpdateBankDetailsDto } from 'src/paystack';
+import {
+  CreateSubaccountDto,
+  UpdateBankDetailsDto,
+  UpdateSubAccountFeeDto,
+} from 'src/paystack';
 import { BulkUpdateItemDto } from './dto/services.dto';
 
 @Controller('vendor')
@@ -234,6 +238,13 @@ export class VendorController {
   @Roles('ADMIN')
   getPendingVendors() {
     return this.vendorService.getPendingVendors();
+  }
+
+  @Patch('admin/subaccount/fee')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  updateSubAccountFee(@Body() dto: UpdateSubAccountFeeDto) {
+    return this.vendorService.updateSubAccountFee(dto);
   }
 
   @Get('booking-vendor/:slug')
