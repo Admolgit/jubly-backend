@@ -10,17 +10,33 @@ export class NodemailerService {
       to: email,
       subject: 'Your OTP Code',
       html: `
-      <h1>Thanks for registering for Jubly. </h1>
-      <h2>Your OTP Code</h2>
-      <p>Your verification code is:</p>
-      <h1>${otp}</h1>
-      <p>This code expires in 5 minutes.</p>
+      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff;">
+        <h1>Thanks for registering for Jubly. </h1>
+        <h2>Your OTP Code</h2>
+
+        <div style="background-color: #f3f4f6; border-radius: 8px; padding: 16px 20px; margin: 24px 0; text-align: center;">
+          <p>Your verification code is:</p>
+          <h1 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0; letter-spacing: 2px;">${otp}</h1>
+        </div>
+        
+        <p>This code expires in 5 minutes.</p>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 16px 0;" />
+
+        <p style="font-size: 12px; color: #9ca3af; margin: 0;">
+          Sent by Jubly. Please do not reply to this email.
+        </p>
+
+        <p style="font-size:12px;color:#888">
+          Powered by Jubly
+        </p>
+      </div>
     `,
     });
   }
 
   async sendTempPassword(email: string, password: string) {
-    const loginUrl = process.env.FRONTEND_URL + '/login';
+    const loginUrl = process.env.FRONTEND_BASE_URL + '/login';
 
     await this.mailerService.sendMail({
       to: email,
