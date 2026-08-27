@@ -46,7 +46,10 @@ async function bootstrap() {
       const allowedOrigins = [
         'https://jubly-frontend.vercel.app',
         'http://localhost:5173',
-        'https://jubly.com.ng/',
+        'https://jubly.com.ng',
+        'https://www.jubly.com.ng',
+        'http://jubly.com.ng',
+        'http://www.jubly.com.ng',
         'http://localhost:5174',
         'http://localhost:8081',
         'exp://192.168.100.6:8081',
