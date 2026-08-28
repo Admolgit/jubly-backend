@@ -75,6 +75,13 @@ let PlatformSettingsService = class PlatformSettingsService {
         }
         return this.subscriptionService.isVendorSubscribed(vendorId);
     }
+    async getSubscriptionPricing() {
+        const settings = await this.getOrCreateSettings();
+        return {
+            priceNaira: settings.subscriptionPriceNaira,
+            durationDays: settings.subscriptionDurationDays,
+        };
+    }
 };
 exports.PlatformSettingsService = PlatformSettingsService;
 exports.PlatformSettingsService = PlatformSettingsService = __decorate([

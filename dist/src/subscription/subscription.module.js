@@ -9,13 +9,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionModule = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const paystack_service_1 = require("../paystack/paystack.service");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const subscription_controller_1 = require("./subscription.controller");
 const subscription_service_1 = require("./subscription.service");
 let SubscriptionModule = class SubscriptionModule {
 };
 exports.SubscriptionModule = SubscriptionModule;
 exports.SubscriptionModule = SubscriptionModule = __decorate([
     (0, common_1.Module)({
-        providers: [prisma_service_1.PrismaService, subscription_service_1.SubscriptionService],
+        controllers: [subscription_controller_1.SubscriptionController],
+        providers: [
+            prisma_service_1.PrismaService,
+            subscription_service_1.SubscriptionService,
+            paystack_service_1.PaystackService,
+            platform_settings_service_1.PlatformSettingsService,
+        ],
         exports: [subscription_service_1.SubscriptionService],
     })
 ], SubscriptionModule);

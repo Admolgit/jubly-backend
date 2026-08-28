@@ -1,4 +1,11 @@
-import { IsBoolean, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class UpdatePlatformSettingsDto {
   @IsOptional()
@@ -24,4 +31,14 @@ export class UpdatePlatformSettingsDto {
   @IsOptional()
   @IsBoolean()
   paidByHandEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  subscriptionPriceNaira?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  subscriptionDurationDays?: number;
 }

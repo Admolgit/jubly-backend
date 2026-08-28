@@ -29,6 +29,9 @@ import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Public } from 'src/auth/public.decorator';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { successResponse } from 'src/utils/response';
+import { ActivityService } from 'src/activity/activityLog.service';
+import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
+import { SubscriptionService } from 'src/subscription/subscription.service';
 
 @Controller('paystack')
 export class PaystackController {
@@ -38,6 +41,9 @@ export class PaystackController {
     private readonly transactionsService: TransactionService,
     private readonly mailService: NodemailerService,
     private readonly bookingService: BookingService,
+    private readonly activityService: ActivityService,
+    private readonly platformSettingsService: PlatformSettingsService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   @Get('/resolve-bank/:accountNumber/:bankCode')
@@ -234,6 +240,36 @@ export class PaystackController {
       const accountName = auth?.account_name || null;
       const accountNumber = auth?.account_number || null;
 
+      // Subscription upgrades never create a Transaction row (kept out of
+      // booking/revenue analytics entirely — see SubscriptionService), so
+      // they're handled up front, before the Transaction-based lookup below.
+      if (event.data.metadata?.type === 'SUBSCRIPTION_UPGRADE') {
+        const { vendorId, plan, durationDays } = event.data.metadata;
+
+        if (!vendorId) {
+          throw new BadRequestException('Incomplete subscription metadata');
+        }
+
+        await this.subscriptionService.activateSubscription({
+          vendorId,
+          plan: plan || 'PREMIUM',
+          durationDays: Number(durationDays) || 30,
+          reference: event.data.reference,
+          amount: event.data.amount / 100,
+        });
+
+        await this.activityService.createLog({
+          vendorId,
+          action: 'SUBSCRIPTION_ACTIVATED',
+          description: `Subscription payment of ₦${(event.data.amount / 100).toLocaleString()} confirmed.`,
+          actor: 'System',
+          actorType: 'SYSTEM',
+          color: 'green',
+        });
+
+        return { status: true };
+      }
+
       const transactionExists = await this.prisma.transaction.findUnique({
         where: {
           providerRef: event.data.reference,
@@ -245,6 +281,110 @@ export class PaystackController {
       }
 
       if (transactionExists.bookingId) {
+        return { status: true };
+      }
+
+      if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
+        const { bookingId, percentageFee, clientName, clientEmail, title } =
+          event.data.metadata;
+
+        if (!bookingId) {
+          throw new BadRequestException('Incomplete booking metadata');
+        }
+
+        const booking = await this.prisma.booking.findUnique({
+          where: { id: bookingId },
+        });
+
+        if (!booking) {
+          throw new BadRequestException(
+            'Vendor-created booking was not found',
+          );
+        }
+
+        const updatedBooking = await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: 'CONFIRMED',
+            paymentVerification: 'PAYSTACK_VERIFIED',
+            paymentExpiresAt: null,
+          },
+        });
+
+        const senderDetails = await this.prisma.senderDetails.create({
+          data: {
+            vendorId: booking.vendorId,
+            email: clientEmail,
+            senderName: accountName ?? clientName,
+            senderAccountNumber: accountNumber,
+            senderBankName: bank,
+            senderDescription: 'Payment via Paystack (vendor-created link)',
+          },
+        });
+
+        await this.prisma.transaction.update({
+          where: { providerRef: event.data.reference },
+          data: {
+            bookingId: updatedBooking.id,
+            status: 'COMPLETED',
+            paidAt: new Date(),
+            percentageFee: percentageFee ?? 0.05,
+            paymentMethod: paymentChannel,
+            senderDetailsId: senderDetails.id,
+          },
+        });
+
+        await this.activityService.createLog({
+          vendorId: booking.vendorId,
+          action: 'PAYMENT_RECEIVED',
+          description: `Payment of ₦${booking.amount?.toLocaleString() ?? ''} received for booking #${booking.id}.`,
+          actor: 'System',
+          actorType: 'SYSTEM',
+          color: 'yellow',
+        });
+
+        const bookingVendor = await this.prisma.vendor.findUnique({
+          where: { id: booking.vendorId },
+        });
+        const vendorUser = bookingVendor
+          ? await this.prisma.user.findUnique({
+              where: { id: bookingVendor.userId },
+            })
+          : null;
+
+        setImmediate(() => {
+          void (async () => {
+            try {
+              await this.mailService.sendClientBookingMail({
+                clientEmail: booking.clientEmail,
+                clientName: booking.clientName ?? clientName,
+                serviceName: title,
+                date: updatedBooking.startTime.toDateString(),
+                time: updatedBooking.startTime.toLocaleTimeString(),
+                endTime: updatedBooking.endTime.toLocaleTimeString(),
+                durationMins: '',
+                businessName: '',
+                address: '',
+              });
+              if (vendorUser?.email) {
+                await this.mailService.sendVendorBookingMail({
+                  vendorEmail: vendorUser.email,
+                  clientName: booking.clientName ?? clientName,
+                  clientEmail: booking.clientEmail,
+                  serviceName: title,
+                  date: updatedBooking.startTime.toDateString(),
+                  time: updatedBooking.startTime.toLocaleTimeString(),
+                  endTime: updatedBooking.endTime.toLocaleTimeString(),
+                  phone: booking.clientPhone ?? '',
+                  durationMins: '',
+                });
+              }
+            } catch (err) {
+              console.error(err);
+            }
+          })();
+        });
+
         return { status: true };
       }
 
@@ -314,13 +454,18 @@ export class PaystackController {
           },
         });
 
+        const percentageFee =
+          await this.platformSettingsService.resolvePlatformPercentage(
+            vendorId,
+          );
+
         const dto = {
           amount: event.data.amount,
           senderDetailsId: senderDetails.id,
           status: 'PENDING',
           providerRef: event.data.reference,
           paidAt: event.data.paid_at,
-          percentageFee: 0.05,
+          percentageFee,
           bookingId: book.id,
           vendorId,
           slug,

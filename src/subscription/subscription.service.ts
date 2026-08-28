@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
+import { successResponse } from 'src/utils/response';
 
 @Injectable()
 export class SubscriptionService {
@@ -19,5 +20,82 @@ export class SubscriptionService {
     }
 
     return true;
+  }
+
+  async getStatus(vendorId: string) {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { vendorId },
+    });
+
+    const isActive = await this.isVendorSubscribed(vendorId);
+
+    return successResponse(
+      {
+        isActive,
+        plan: subscription?.plan ?? null,
+        status: subscription?.status ?? null,
+        expiresAt: subscription?.expiresAt ?? null,
+      },
+      'Subscription status fetched successfully',
+    );
+  }
+
+  /**
+   * Activates (or renews) a vendor's subscription after a Paystack payment
+   * is confirmed by the webhook. Idempotent: a webhook redelivered with the
+   * same `reference` is a no-op. A renewal made while the vendor's current
+   * subscription is still active extends from its existing expiry instead
+   * of resetting from "now", so paying early never costs the vendor time.
+   */
+  async activateSubscription(params: {
+    vendorId: string;
+    plan: string;
+    durationDays: number;
+    reference: string;
+    amount: number;
+  }) {
+    const { vendorId, plan, durationDays, reference, amount } = params;
+
+    const existing = await this.prisma.subscription.findUnique({
+      where: { vendorId },
+    });
+
+    if (existing?.lastPaymentReference === reference) {
+      return existing;
+    }
+
+    const now = new Date();
+    const stillActive =
+      existing?.status === 'ACTIVE' &&
+      existing.expiresAt &&
+      existing.expiresAt > now;
+
+    const startPoint = stillActive ? existing!.expiresAt! : now;
+    const expiresAt = new Date(
+      startPoint.getTime() + durationDays * 24 * 60 * 60 * 1000,
+    );
+
+    return this.prisma.subscription.upsert({
+      where: { vendorId },
+      update: {
+        plan,
+        status: 'ACTIVE',
+        expiresAt,
+        cancelledAt: null,
+        lastPaymentReference: reference,
+        lastPaymentAmount: amount,
+        lastPaidAt: now,
+      },
+      create: {
+        vendorId,
+        plan,
+        status: 'ACTIVE',
+        startedAt: now,
+        expiresAt,
+        lastPaymentReference: reference,
+        lastPaymentAmount: amount,
+        lastPaidAt: now,
+      },
+    });
   }
 }

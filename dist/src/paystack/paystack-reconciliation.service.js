@@ -17,17 +17,19 @@ const paystack_service_1 = require("./paystack.service");
 const booking_service_1 = require("../booking/booking.service");
 const transaction_service_1 = require("../transaction/transaction.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const PENDING_TRANSACTION_STALE_AFTER_MS = 20 * 60 * 1000;
 const PENDING_TRANSACTION_ABANDON_AFTER_MS = 48 * 60 * 60 * 1000;
 const SETTLEMENT_RETRY_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 25;
 let PaystackReconciliationService = class PaystackReconciliationService {
-    constructor(prisma, paystackService, bookingService, transactionsService, mailService) {
+    constructor(prisma, paystackService, bookingService, transactionsService, mailService, platformSettingsService) {
         this.prisma = prisma;
         this.paystackService = paystackService;
         this.bookingService = bookingService;
         this.transactionsService = transactionsService;
         this.mailService = mailService;
+        this.platformSettingsService = platformSettingsService;
     }
     onModuleInit() {
         new cron_1.CronJob('*/10 * * * *', () => {
@@ -38,6 +40,9 @@ let PaystackReconciliationService = class PaystackReconciliationService {
         }, null, true, 'Africa/Lagos');
         new cron_1.CronJob('*/15 * * * *', () => {
             void this.cleanupExpiredSlotLocks();
+        }, null, true, 'Africa/Lagos');
+        new cron_1.CronJob('*/15 * * * *', () => {
+            void this.expireAbandonedVendorBookingLinks();
         }, null, true, 'Africa/Lagos');
     }
     async reconcilePendingTransactions() {
@@ -124,13 +129,14 @@ let PaystackReconciliationService = class PaystackReconciliationService {
                 senderDescription: 'Payment via Paystack (reconciled)',
             },
         });
+        const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendorId);
         await this.transactionsService.updateTransaction(userId, {
             amount: chargeData.amount,
             senderDetailsId: senderDetails.id,
             status: 'PENDING',
             providerRef: chargeData.reference,
             paidAt: chargeData.paid_at,
-            percentageFee: 0.05,
+            percentageFee,
             bookingId: book.id,
             vendorId,
             slug,
@@ -220,6 +226,25 @@ let PaystackReconciliationService = class PaystackReconciliationService {
             console.error('[PaystackReconciliation] Failed to clean up expired slot locks:', error instanceof Error ? error.message : error);
         }
     }
+    async expireAbandonedVendorBookingLinks() {
+        try {
+            await this.prisma.booking.updateMany({
+                where: {
+                    status: 'PENDING',
+                    source: 'VENDOR_CREATED',
+                    paymentMethod: 'PAY_BY_LINK',
+                    paymentExpiresAt: { lt: new Date() },
+                },
+                data: {
+                    status: 'CANCELLED',
+                    paymentVerification: 'UNVERIFIED',
+                },
+            });
+        }
+        catch (error) {
+            console.error('[PaystackReconciliation] Failed to expire abandoned vendor booking links:', error instanceof Error ? error.message : error);
+        }
+    }
 };
 exports.PaystackReconciliationService = PaystackReconciliationService;
 exports.PaystackReconciliationService = PaystackReconciliationService = __decorate([
@@ -228,5 +253,6 @@ exports.PaystackReconciliationService = PaystackReconciliationService = __decora
         paystack_service_1.PaystackService,
         booking_service_1.BookingService,
         transaction_service_1.TransactionService,
-        nodemailer_service_1.NodemailerService])
+        nodemailer_service_1.NodemailerService,
+        platform_settings_service_1.PlatformSettingsService])
 ], PaystackReconciliationService);

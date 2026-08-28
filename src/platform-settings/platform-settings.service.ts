@@ -92,4 +92,21 @@ export class PlatformSettingsService {
 
     return this.subscriptionService.isVendorSubscribed(vendorId);
   }
+
+  /**
+   * Admin-configured price/duration for a subscription upgrade. Never
+   * trust a price or duration supplied by the frontend for this — always
+   * resolve it from here.
+   */
+  async getSubscriptionPricing(): Promise<{
+    priceNaira: number;
+    durationDays: number;
+  }> {
+    const settings = await this.getOrCreateSettings();
+
+    return {
+      priceNaira: settings.subscriptionPriceNaira,
+      durationDays: settings.subscriptionDurationDays,
+    };
+  }
 }
