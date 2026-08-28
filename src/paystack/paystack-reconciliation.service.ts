@@ -9,6 +9,7 @@ import { PaystackService } from './paystack.service';
 import { BookingService } from 'src/booking/booking.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
+import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 
 const PENDING_TRANSACTION_STALE_AFTER_MS = 20 * 60 * 1000;
 const PENDING_TRANSACTION_ABANDON_AFTER_MS = 48 * 60 * 60 * 1000;
@@ -23,6 +24,7 @@ export class PaystackReconciliationService implements OnModuleInit {
     private readonly bookingService: BookingService,
     private readonly transactionsService: TransactionService,
     private readonly mailService: NodemailerService,
+    private readonly platformSettingsService: PlatformSettingsService,
   ) {}
 
   onModuleInit() {
@@ -50,6 +52,16 @@ export class PaystackReconciliationService implements OnModuleInit {
       '*/15 * * * *',
       () => {
         void this.cleanupExpiredSlotLocks();
+      },
+      null,
+      true,
+      'Africa/Lagos',
+    );
+
+    new CronJob(
+      '*/15 * * * *',
+      () => {
+        void this.expireAbandonedVendorBookingLinks();
       },
       null,
       true,
@@ -189,13 +201,16 @@ export class PaystackReconciliationService implements OnModuleInit {
       },
     });
 
+    const percentageFee =
+      await this.platformSettingsService.resolvePlatformPercentage(vendorId);
+
     await this.transactionsService.updateTransaction(userId, {
       amount: chargeData.amount,
       senderDetailsId: senderDetails.id,
       status: 'PENDING',
       providerRef: chargeData.reference,
       paidAt: chargeData.paid_at,
-      percentageFee: 0.05,
+      percentageFee,
       bookingId: book.id,
       vendorId,
       slug,
@@ -296,6 +311,28 @@ export class PaystackReconciliationService implements OnModuleInit {
     } catch (error) {
       console.error(
         '[PaystackReconciliation] Failed to clean up expired slot locks:',
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
+  async expireAbandonedVendorBookingLinks() {
+    try {
+      await this.prisma.booking.updateMany({
+        where: {
+          status: 'PENDING',
+          source: 'VENDOR_CREATED',
+          paymentMethod: 'PAY_BY_LINK',
+          paymentExpiresAt: { lt: new Date() },
+        },
+        data: {
+          status: 'CANCELLED',
+          paymentVerification: 'UNVERIFIED',
+        },
+      });
+    } catch (error) {
+      console.error(
+        '[PaystackReconciliation] Failed to expire abandoned vendor booking links:',
         error instanceof Error ? error.message : error,
       );
     }

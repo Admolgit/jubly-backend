@@ -99,6 +99,34 @@ export class PaystackService {
     }
   }
 
+  async initializeTransaction(
+    email: string,
+    amountNaira: number,
+    metadata: Record<string, any>,
+  ) {
+    const response: any = await axios.post(
+      `${this.baseUrl}/transaction/initialize`,
+      {
+        email,
+        amount: Math.round(amountNaira * 100),
+        metadata,
+      },
+      { headers: this.getAuthHeaders() },
+    );
+
+    if (!response.data?.status || !response.data?.data?.reference) {
+      throw new HttpException(
+        'Failed to initialize Paystack transaction',
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    return {
+      authorizationUrl: response.data.data.authorization_url as string,
+      reference: response.data.data.reference as string,
+    };
+  }
+
   async verifyTransaction(reference: string) {
     try {
       const response: any = await axios.get(
