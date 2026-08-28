@@ -138,26 +138,45 @@ let AuthService = class AuthService {
                 where: { email: dto.email },
             });
             if (existingUser) {
-                throw new common_1.BadRequestException('Email already in use');
+                return (0, response_1.successResponse)({ client: this.sanitizeUser(existingUser) }, 'Client already registered.', 200);
             }
             const generatedPassword = (0, generateTempPassword_1.generateTempPassword)();
             const hashed = await (0, hash_1.hashPassword)(generatedPassword);
-            const client = await this.prisma.user.create({
-                data: {
-                    email: dto.email,
-                    password: hashed,
-                    firstName: dto.clientName,
-                    phone: dto.phone,
-                    role: client_1.UserRole.CLIENT,
-                    isVerified: true,
-                    clientVendorId: dto.clientVendorId,
-                },
-            });
-            await this.nodemailService.sendTempPassword(dto.email, generatedPassword);
+            let client;
+            try {
+                client = await this.prisma.user.create({
+                    data: {
+                        email: dto.email,
+                        password: hashed,
+                        firstName: dto.clientName,
+                        phone: dto.phone,
+                        role: client_1.UserRole.CLIENT,
+                        isVerified: true,
+                        clientVendorId: dto.clientVendorId,
+                    },
+                });
+            }
+            catch (createError) {
+                if (createError?.code === 'P2002') {
+                    const raceWinner = await this.prisma.user.findUnique({
+                        where: { email: dto.email },
+                    });
+                    if (raceWinner) {
+                        return (0, response_1.successResponse)({ client: this.sanitizeUser(raceWinner) }, 'Client already registered.', 200);
+                    }
+                }
+                throw createError;
+            }
+            try {
+                await this.nodemailService.sendTempPassword(dto.email, generatedPassword);
+            }
+            catch (mailError) {
+                console.error('Failed to send temp password email:', mailError?.message);
+            }
             return (0, response_1.successResponse)({ client: this.sanitizeUser(client) }, 'Client is registered successfully.', 201);
         }
         catch (error) {
-            if (error instanceof common_1.UnauthorizedException) {
+            if (error instanceof common_1.HttpException) {
                 throw error;
             }
             throw new common_1.InternalServerErrorException('Registration failed', error.message);

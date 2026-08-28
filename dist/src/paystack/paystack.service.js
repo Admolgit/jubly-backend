@@ -64,6 +64,20 @@ class PaystackService {
             console.error('Error fetching banks:', error);
         }
     }
+    async initializeTransaction(email, amountNaira, metadata) {
+        const response = await axios_1.default.post(`${this.baseUrl}/transaction/initialize`, {
+            email,
+            amount: Math.round(amountNaira * 100),
+            metadata,
+        }, { headers: this.getAuthHeaders() });
+        if (!response.data?.status || !response.data?.data?.reference) {
+            throw new common_1.HttpException('Failed to initialize Paystack transaction', common_1.HttpStatus.BAD_GATEWAY);
+        }
+        return {
+            authorizationUrl: response.data.data.authorization_url,
+            reference: response.data.data.reference,
+        };
+    }
     async verifyTransaction(reference) {
         try {
             const response = await axios_1.default.get(`${process.env.PAYSTACK_BASE_URL}/transaction/verify/${reference}`, {

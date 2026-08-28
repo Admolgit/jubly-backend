@@ -57,13 +57,19 @@ const jwt_authGuard_1 = require("../auth/jwt.authGuard");
 const public_decorator_1 = require("../auth/public.decorator");
 const role_guard_1 = require("../auth/role.guard");
 const response_1 = require("../utils/response");
+const activityLog_service_1 = require("../activity/activityLog.service");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const subscription_service_1 = require("../subscription/subscription.service");
 let PaystackController = class PaystackController {
-    constructor(paystackService, prisma, transactionsService, mailService, bookingService) {
+    constructor(paystackService, prisma, transactionsService, mailService, bookingService, activityService, platformSettingsService, subscriptionService) {
         this.paystackService = paystackService;
         this.prisma = prisma;
         this.transactionsService = transactionsService;
         this.mailService = mailService;
         this.bookingService = bookingService;
+        this.activityService = activityService;
+        this.platformSettingsService = platformSettingsService;
+        this.subscriptionService = subscriptionService;
     }
     resolveBankAccount(dto) {
         return this.paystackService.resolveBankAccount(dto.accountNumber, dto.bankCode);
@@ -181,6 +187,28 @@ let PaystackController = class PaystackController {
             const bank = auth?.bank || null;
             const accountName = auth?.account_name || null;
             const accountNumber = auth?.account_number || null;
+            if (event.data.metadata?.type === 'SUBSCRIPTION_UPGRADE') {
+                const { vendorId, plan, durationDays } = event.data.metadata;
+                if (!vendorId) {
+                    throw new common_1.BadRequestException('Incomplete subscription metadata');
+                }
+                await this.subscriptionService.activateSubscription({
+                    vendorId,
+                    plan: plan || 'PREMIUM',
+                    durationDays: Number(durationDays) || 30,
+                    reference: event.data.reference,
+                    amount: event.data.amount / 100,
+                });
+                await this.activityService.createLog({
+                    vendorId,
+                    action: 'SUBSCRIPTION_ACTIVATED',
+                    description: `Subscription payment of ₦${(event.data.amount / 100).toLocaleString()} confirmed.`,
+                    actor: 'System',
+                    actorType: 'SYSTEM',
+                    color: 'green',
+                });
+                return { status: true };
+            }
             const transactionExists = await this.prisma.transaction.findUnique({
                 where: {
                     providerRef: event.data.reference,
@@ -190,6 +218,97 @@ let PaystackController = class PaystackController {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
             if (transactionExists.bookingId) {
+                return { status: true };
+            }
+            if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
+                const { bookingId, percentageFee, clientName, clientEmail, title } = event.data.metadata;
+                if (!bookingId) {
+                    throw new common_1.BadRequestException('Incomplete booking metadata');
+                }
+                const booking = await this.prisma.booking.findUnique({
+                    where: { id: bookingId },
+                });
+                if (!booking) {
+                    throw new common_1.BadRequestException('Vendor-created booking was not found');
+                }
+                const updatedBooking = await this.prisma.booking.update({
+                    where: { id: bookingId },
+                    data: {
+                        status: 'CONFIRMED',
+                        paymentVerification: 'PAYSTACK_VERIFIED',
+                        paymentExpiresAt: null,
+                    },
+                });
+                const senderDetails = await this.prisma.senderDetails.create({
+                    data: {
+                        vendorId: booking.vendorId,
+                        email: clientEmail,
+                        senderName: accountName ?? clientName,
+                        senderAccountNumber: accountNumber,
+                        senderBankName: bank,
+                        senderDescription: 'Payment via Paystack (vendor-created link)',
+                    },
+                });
+                await this.prisma.transaction.update({
+                    where: { providerRef: event.data.reference },
+                    data: {
+                        bookingId: updatedBooking.id,
+                        status: 'COMPLETED',
+                        paidAt: new Date(),
+                        percentageFee: percentageFee ?? 0.05,
+                        paymentMethod: paymentChannel,
+                        senderDetailsId: senderDetails.id,
+                    },
+                });
+                await this.activityService.createLog({
+                    vendorId: booking.vendorId,
+                    action: 'PAYMENT_RECEIVED',
+                    description: `Payment of ₦${booking.amount?.toLocaleString() ?? ''} received for booking #${booking.id}.`,
+                    actor: 'System',
+                    actorType: 'SYSTEM',
+                    color: 'yellow',
+                });
+                const bookingVendor = await this.prisma.vendor.findUnique({
+                    where: { id: booking.vendorId },
+                });
+                const vendorUser = bookingVendor
+                    ? await this.prisma.user.findUnique({
+                        where: { id: bookingVendor.userId },
+                    })
+                    : null;
+                setImmediate(() => {
+                    void (async () => {
+                        try {
+                            await this.mailService.sendClientBookingMail({
+                                clientEmail: booking.clientEmail,
+                                clientName: booking.clientName ?? clientName,
+                                serviceName: title,
+                                date: updatedBooking.startTime.toDateString(),
+                                time: updatedBooking.startTime.toLocaleTimeString(),
+                                endTime: updatedBooking.endTime.toLocaleTimeString(),
+                                durationMins: '',
+                                businessName: '',
+                                address: '',
+                            });
+                            if (vendorUser?.email) {
+                                await this.mailService.sendVendorBookingMail({
+                                    vendorEmail: vendorUser.email,
+                                    clientName: booking.clientName ?? clientName,
+                                    clientEmail: booking.clientEmail,
+                                    serviceName: title,
+                                    date: updatedBooking.startTime.toDateString(),
+                                    time: updatedBooking.startTime.toLocaleTimeString(),
+                                    endTime: updatedBooking.endTime.toLocaleTimeString(),
+                                    phone: booking.clientPhone ?? '',
+                                    durationMins: '',
+                                });
+                            }
+                        }
+                        catch (err) {
+                            console.error(err);
+                        }
+                    })();
+                });
                 return { status: true };
             }
             {
@@ -230,13 +349,14 @@ let PaystackController = class PaystackController {
                         senderDescription: 'Payment via Paystack',
                     },
                 });
+                const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendorId);
                 const dto = {
                     amount: event.data.amount,
                     senderDetailsId: senderDetails.id,
                     status: 'PENDING',
                     providerRef: event.data.reference,
                     paidAt: event.data.paid_at,
-                    percentageFee: 0.05,
+                    percentageFee,
                     bookingId: book.id,
                     vendorId,
                     slug,
@@ -348,5 +468,8 @@ exports.PaystackController = PaystackController = __decorate([
         prisma_service_1.PrismaService,
         transaction_service_1.TransactionService,
         nodemailer_service_1.NodemailerService,
-        booking_service_1.BookingService])
+        booking_service_1.BookingService,
+        activityLog_service_1.ActivityService,
+        platform_settings_service_1.PlatformSettingsService,
+        subscription_service_1.SubscriptionService])
 ], PaystackController);

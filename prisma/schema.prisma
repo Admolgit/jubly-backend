@@ -40,6 +40,32 @@ enum CancellationPolicyType {
   STANDARD
 }
 
+enum BookingSource {
+  MARKETPLACE
+  VENDOR_CREATED
+  BOOKING_LINK
+}
+
+enum BookingPaymentMethod {
+  PAYSTACK
+  PAY_BY_LINK
+  PAID_BY_HAND
+}
+
+enum PaymentVerification {
+  PAYSTACK_VERIFIED
+  VENDOR_REPORTED
+  UNVERIFIED
+  PENDING
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PAST_DUE
+}
+
 enum RescheduleStatus {
   PENDING
   ACCEPTED
@@ -233,6 +259,14 @@ model Booking {
 
   rescheduleCount Int @default(0)
 
+  // Vendor-created booking support
+  source              BookingSource?
+  paymentMethod       BookingPaymentMethod?
+  paymentVerification PaymentVerification?
+  clientPhone         String?
+  amount              Float?
+  paymentExpiresAt    DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -420,4 +454,33 @@ enum ActivityActorType {
   CLIENT
   VENDOR
   ADMIN
+}
+
+model PlatformSettings {
+  id                           String   @id @default(auto()) @map("_id") @db.ObjectId
+  subscriptionsEnabled         Boolean  @default(false)
+  defaultPlatformPercentage    Float    @default(0.05)
+  subscriberPlatformPercentage Float    @default(0.05)
+  manualBookingEnabled         Boolean  @default(true)
+  paidByHandEnabled            Boolean  @default(true)
+  subscriptionPriceNaira       Float    @default(3000)
+  subscriptionDurationDays     Int      @default(30)
+  updatedBy                    String?  @db.ObjectId
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+model Subscription {
+  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId             String             @unique @db.ObjectId
+  plan                 String
+  status               SubscriptionStatus @default(EXPIRED)
+  startedAt            DateTime           @default(now())
+  expiresAt            DateTime?
+  cancelledAt          DateTime?
+  lastPaymentReference String?
+  lastPaymentAmount    Float?
+  lastPaidAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 }

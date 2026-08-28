@@ -16,6 +16,7 @@ exports.BookingController = void 0;
 const common_1 = require("@nestjs/common");
 const booking_service_1 = require("./booking.service");
 const booking_dto_1 = require("./dto/booking.dto");
+const vendor_booking_dto_1 = require("./dto/vendor-booking.dto");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
 const role_guard_1 = require("../auth/role.guard");
 const public_decorator_1 = require("../auth/public.decorator");
@@ -26,6 +27,9 @@ let BookingController = class BookingController {
     createBooking(req, dto) {
         const userId = req.user.id;
         return this.bookingService.createBooking(userId, dto);
+    }
+    createVendorBooking(req, dto) {
+        return this.bookingService.createVendorBooking(req.user.id, dto);
     }
     paymentInitialize(dto) {
         return this.bookingService.initializeBookingPayment(dto.bookingId, dto);
@@ -112,6 +116,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "createBooking", null);
+__decorate([
+    (0, common_1.Post)('vendor-create'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, vendor_booking_dto_1.CreateVendorBookingDto]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "createVendorBooking", null);
 __decorate([
     (0, common_1.Post)('initialize-payment'),
     (0, public_decorator_1.Public)(),

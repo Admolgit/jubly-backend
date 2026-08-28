@@ -11,6 +11,8 @@ import { GoogleCalendarService } from 'src/google/google.service';
 import { AuthService } from 'src/auth/auth.service';
 import { ConfigService } from '@nestjs/config';
 import { ActivityService } from 'src/activity/activityLog.service';
+import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
+import { SubscriptionService } from 'src/subscription/subscription.service';
 
 @Module({
   providers: [
@@ -24,6 +26,8 @@ import { ActivityService } from 'src/activity/activityLog.service';
     AuthService,
     ConfigService,
     ActivityService,
+    PlatformSettingsService,
+    SubscriptionService,
   ],
   exports: [PaystackService],
   controllers: [PaystackController],

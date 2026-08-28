@@ -15,6 +15,7 @@ import {
 import { BookingService, DateFilter } from './booking.service';
 import type { IBooking } from './dto/booking.dto';
 import { RejectCompletionDto } from './dto/booking.dto';
+import { CreateVendorBookingDto } from './dto/vendor-booking.dto';
 
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { RolesGuard, Roles } from 'src/auth/role.guard';
@@ -30,6 +31,16 @@ export class BookingController {
   createBooking(@Req() req: { user: { id: string } }, @Body() dto: IBooking) {
     const userId = req.user.id;
     return this.bookingService.createBooking(userId, dto);
+  }
+
+  @Post('vendor-create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  createVendorBooking(
+    @Req() req: { user: { id: string } },
+    @Body() dto: CreateVendorBookingDto,
+  ) {
+    return this.bookingService.createVendorBooking(req.user.id, dto);
   }
 
   @Post('initialize-payment')

@@ -19,6 +19,8 @@ const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
 const config_1 = require("@nestjs/config");
 const activityLog_service_1 = require("../activity/activityLog.service");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const subscription_service_1 = require("../subscription/subscription.service");
 let PaystackModule = class PaystackModule {
 };
 exports.PaystackModule = PaystackModule;
@@ -35,6 +37,8 @@ exports.PaystackModule = PaystackModule = __decorate([
             auth_service_1.AuthService,
             config_1.ConfigService,
             activityLog_service_1.ActivityService,
+            platform_settings_service_1.PlatformSettingsService,
+            subscription_service_1.SubscriptionService,
         ],
         exports: [paystack_service_1.PaystackService],
         controllers: [paystack_controller_1.PaystackController],

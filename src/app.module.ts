@@ -20,6 +20,8 @@ import { ServicesModule } from './services/services.module';
 import { ActivityLogModule } from './activity/activityLog.module';
 import { RescheduleModule } from './reschedule/reschedule.module';
 import { CancellationPolicyModule } from './cancellation-policy/cancellation-policy.module';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { CancellationPolicyModule } from './cancellation-policy/cancellation-pol
     ActivityLogModule,
     RescheduleModule,
     CancellationPolicyModule,
+    PlatformSettingsModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [
