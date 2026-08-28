@@ -18,7 +18,6 @@ import { IBooking } from './dto/booking.dto';
 import { CreateVendorBookingDto } from './dto/vendor-booking.dto';
 import { AuthService } from 'src/auth/auth.service';
 import { successResponse } from 'src/utils/response';
-import axios from 'axios';
 import {
   startOfWeek,
   endOfWeek,
@@ -550,9 +549,14 @@ export class BookingService {
           color: 'green',
         });
 
-        this.sendVendorCreatedBookingEmails(userId, vendor, service, booking, dto).catch(
-          (err: any) =>
-            console.error('Vendor-created booking email failed:', err?.message),
+        this.sendVendorCreatedBookingEmails(
+          userId,
+          vendor,
+          service,
+          booking,
+          dto,
+        ).catch((err: any) =>
+          console.error('Vendor-created booking email failed:', err?.message),
         );
 
         return { booking };
@@ -583,9 +587,7 @@ export class BookingService {
       });
 
       const percentageFee =
-        await this.platformSettingsService.resolvePlatformPercentage(
-          vendor.id,
-        );
+        await this.platformSettingsService.resolvePlatformPercentage(vendor.id);
 
       const vendorUser = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -645,7 +647,13 @@ export class BookingService {
 
   private async sendVendorCreatedBookingEmails(
     userId: string,
-    vendor: { id: string; businessName: string; city: string; state: string; country: string | null },
+    vendor: {
+      id: string;
+      businessName: string;
+      city: string;
+      state: string;
+      country: string | null;
+    },
     service: { name: string; durationMins: number | null },
     booking: { startTime: Date; endTime: Date },
     dto: CreateVendorBookingDto,

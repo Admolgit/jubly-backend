@@ -297,9 +297,7 @@ export class PaystackController {
         });
 
         if (!booking) {
-          throw new BadRequestException(
-            'Vendor-created booking was not found',
-          );
+          throw new BadRequestException('Vendor-created booking was not found');
         }
 
         const updatedBooking = await this.prisma.booking.update({

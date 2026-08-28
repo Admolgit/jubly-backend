@@ -40,13 +40,6 @@ export class SubscriptionService {
     );
   }
 
-  /**
-   * Activates (or renews) a vendor's subscription after a Paystack payment
-   * is confirmed by the webhook. Idempotent: a webhook redelivered with the
-   * same `reference` is a no-op. A renewal made while the vendor's current
-   * subscription is still active extends from its existing expiry instead
-   * of resetting from "now", so paying early never costs the vendor time.
-   */
   async activateSubscription(params: {
     vendorId: string;
     plan: string;

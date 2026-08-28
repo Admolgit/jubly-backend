@@ -463,7 +463,7 @@ model PlatformSettings {
   subscriberPlatformPercentage Float    @default(0.05)
   manualBookingEnabled         Boolean  @default(true)
   paidByHandEnabled            Boolean  @default(true)
-  subscriptionPriceNaira       Float    @default(5000)
+  subscriptionPriceNaira       Float    @default(3000)
   subscriptionDurationDays     Int      @default(30)
   updatedBy                    String?  @db.ObjectId
   createdAt                    DateTime @default(now())
@@ -474,7 +474,7 @@ model Subscription {
   id                   String             @id @default(auto()) @map("_id") @db.ObjectId
   vendorId             String             @unique @db.ObjectId
   plan                 String
-  status               SubscriptionStatus
+  status               SubscriptionStatus @default(EXPIRED)
   startedAt            DateTime           @default(now())
   expiresAt            DateTime?
   cancelledAt          DateTime?
