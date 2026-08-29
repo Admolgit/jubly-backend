@@ -291,7 +291,7 @@ export class PaystackController {
           event.data.metadata;
 
         if (!bookingId) {
-          throw new BadRequestException('Incomplete booking metadata');
+          throw new BadRequestException('Incomplete booking metadata for link');
         }
 
         const booking = await this.prisma.booking.findUnique({
@@ -464,6 +464,8 @@ export class PaystackController {
           vendorUserId,
           phone,
         } = event.data.metadata;
+
+        JSON.stringify(event.data.metadata);
 
         if (
           !vendorId ||
