@@ -341,7 +341,7 @@ let PaystackController = class PaystackController {
                     !dayOfWeek ||
                     !startTime ||
                     !endTime) {
-                    throw new common_1.BadRequestException('Incomplete booking metadata');
+                    throw new common_1.BadRequestException('Incomplete booking metadata in marketplace');
                 }
                 const book = await this.bookingService.createBooking(vendorUserId, {
                     userId: vendorUserId,
