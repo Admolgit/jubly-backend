@@ -280,6 +280,7 @@ let PaystackReconciliationService = class PaystackReconciliationService {
                 clientEmail: booking.clientEmail,
                 clientName: booking.clientName ?? clientName,
                 serviceName: title,
+                vendorName: bookingVendor?.businessName || '',
                 date: (0, dateAndTimeConverter_1.dateConverter)(updatedBooking.startTime),
                 time: (0, dateAndTimeConverter_1.timeConverter)(updatedBooking.startTime),
                 endTime: (0, dateAndTimeConverter_1.timeConverter)(updatedBooking.endTime),

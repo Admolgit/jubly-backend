@@ -436,6 +436,7 @@ export class PaystackReconciliationService implements OnModuleInit {
         clientEmail: booking.clientEmail,
         clientName: booking.clientName ?? clientName,
         serviceName: title,
+        vendorName: bookingVendor?.businessName || '',
         date: dateConverter(updatedBooking.startTime),
         time: timeConverter(updatedBooking.startTime),
         endTime: timeConverter(updatedBooking.endTime),
