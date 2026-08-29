@@ -465,7 +465,6 @@ let BookingService = class BookingService {
             await this.prisma.transaction.create({
                 data: {
                     vendorId: vendor.id,
-                    bookingId: booking.id,
                     amount,
                     currency: 'NGN',
                     providerRef: reference,
