@@ -183,7 +183,7 @@ let PaystackController = class PaystackController {
             if (event.event !== 'charge.success') {
                 return { status: true };
             }
-            JSON.stringify(event.data.metadata);
+            console.log(JSON.stringify(event.data.metadata));
             const paymentChannel = event.data.channel || event.data.authorization?.channel || 'unknown';
             const auth = event.data.authorization;
             const bank = auth?.bank || null;
