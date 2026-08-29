@@ -23,6 +23,7 @@ const paystack_service_1 = require("../paystack/paystack.service");
 const activityLog_service_1 = require("../activity/activityLog.service");
 const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const subscription_service_1 = require("../subscription/subscription.service");
+const dateAndTimeConverter_1 = require("../utils/dateAndTimeConverter");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -274,15 +275,16 @@ let BookingService = class BookingService {
                 clientAddress: dto.clientAddress,
                 email: dto.clientEmail,
                 vendorEmail: vendorUser?.email,
-                businessName: dto.businessName,
+                businessName: vendor.businessName,
+                city: vendor.city,
+                state: vendor.state,
+                country: vendor.country,
+                durationMins: services.durationMins,
                 dayOfWeek: dto.dayOfWeek,
                 startTime: dto.startTime,
                 phone: dto.phone,
                 endTime: dto.endTime,
                 type: 'JUBLY_BOOKING',
-                city: dto.city,
-                state: dto.state,
-                country: dto.country,
                 vendorUserId: vendorUser?.id,
                 userId: vendorUser?.id,
             });
@@ -455,12 +457,15 @@ let BookingService = class BookingService {
                 bookingId: booking.id,
                 vendorId: vendor.id,
                 serviceId: dto.serviceId,
+                clientAddress: dto.clientAddress,
                 title: service.name,
                 clientName: dto.clientName,
                 clientEmail: dto.clientEmail,
                 clientPhone: dto.clientPhone,
                 vendorEmail: vendorUser?.email,
                 percentageFee,
+                businessName: vendor.businessName,
+                slug: vendorUser?.slug,
             });
             await this.prisma.transaction.create({
                 data: {
@@ -496,18 +501,19 @@ let BookingService = class BookingService {
         if (!vendorUser?.email) {
             return;
         }
-        const dateLabel = booking.startTime.toDateString();
-        const timeLabel = booking.startTime.toLocaleTimeString();
-        const endTimeLabel = booking.endTime.toLocaleTimeString();
+        const dateLabel = (0, dateAndTimeConverter_1.dateConverter)(booking.startTime);
+        const timeLabel = (0, dateAndTimeConverter_1.timeConverter)(booking.startTime);
+        const endTimeLabel = (0, dateAndTimeConverter_1.timeConverter)(booking.endTime);
         await this.nodemailerService.sendClientBookingMail({
             clientEmail: dto.clientEmail,
             clientName: dto.clientName,
             serviceName: service.name,
             vendorName: vendor.businessName,
+            phone: vendorUser.phone || '',
             date: dateLabel,
             time: timeLabel,
             endTime: endTimeLabel,
-            durationMins: String(service.durationMins ?? 60),
+            durationMins: Number(service.durationMins ?? 60),
             businessName: vendor.businessName,
             address: `${vendor.city} ${vendor.state} ${vendor.country ?? ''}`.trim(),
         });
@@ -520,7 +526,7 @@ let BookingService = class BookingService {
             time: timeLabel,
             endTime: endTimeLabel,
             phone: dto.clientPhone ?? '',
-            durationMins: String(service.durationMins ?? 60),
+            durationMins: Number(service.durationMins ?? 60),
         });
     }
     async dashboardStats(userId, vendorId) {

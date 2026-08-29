@@ -60,6 +60,7 @@ const response_1 = require("../utils/response");
 const activityLog_service_1 = require("../activity/activityLog.service");
 const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const subscription_service_1 = require("../subscription/subscription.service");
+const dateAndTimeConverter_1 = require("../utils/dateAndTimeConverter");
 let PaystackController = class PaystackController {
     constructor(paystackService, prisma, transactionsService, mailService, bookingService, activityService, platformSettingsService, subscriptionService) {
         this.paystackService = paystackService;
@@ -227,6 +228,9 @@ let PaystackController = class PaystackController {
                 }
                 const booking = await this.prisma.booking.findUnique({
                     where: { id: bookingId },
+                    include: {
+                        services: true,
+                    },
                 });
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
@@ -290,12 +294,14 @@ let PaystackController = class PaystackController {
                                 clientEmail: booking.clientEmail,
                                 clientName: booking.clientName ?? clientName,
                                 serviceName: title,
-                                date: updatedBooking.startTime.toDateString(),
-                                time: updatedBooking.startTime.toLocaleTimeString(),
-                                endTime: updatedBooking.endTime.toLocaleTimeString(),
-                                durationMins: '',
-                                businessName: '',
-                                address: '',
+                                date: (0, dateAndTimeConverter_1.dateConverter)(updatedBooking.startTime),
+                                time: (0, dateAndTimeConverter_1.timeConverter)(updatedBooking.startTime),
+                                endTime: (0, dateAndTimeConverter_1.timeConverter)(updatedBooking.endTime),
+                                durationMins: Number(booking.services.durationMins ?? 60),
+                                businessName: bookingVendor?.businessName || '',
+                                phone: vendorUser?.phone || '',
+                                address: `${bookingVendor?.city} ${bookingVendor?.state} ${bookingVendor?.country}`,
+                                transactionRef: event.data.reference,
                             });
                         }
                         catch (err) {
@@ -308,52 +314,17 @@ let PaystackController = class PaystackController {
                                     clientName: booking.clientName ?? clientName,
                                     clientEmail: booking.clientEmail,
                                     serviceName: title,
-                                    date: updatedBooking.startTime.toDateString(),
-                                    time: updatedBooking.startTime.toLocaleTimeString(),
-                                    endTime: updatedBooking.endTime.toLocaleTimeString(),
+                                    date: (0, dateAndTimeConverter_1.dateConverter)(updatedBooking.startTime),
+                                    time: (0, dateAndTimeConverter_1.timeConverter)(updatedBooking.startTime),
+                                    endTime: (0, dateAndTimeConverter_1.timeConverter)(updatedBooking.endTime),
                                     phone: booking.clientPhone ?? '',
-                                    durationMins: '',
+                                    durationMins: Number(booking.services.durationMins ?? 60),
+                                    transactionRef: event.data.reference,
                                 });
                             }
                             catch (err) {
                                 console.error('sendVendorBookingMail failed:', err);
                             }
-                            try {
-                                await this.mailService.sendVendorReceiptMail({
-                                    vendorEmail: vendorUser.email,
-                                    bookingName: booking.name,
-                                    clientName: booking.clientName ?? clientName,
-                                    clientAddress: booking.clientAddress ?? undefined,
-                                    clientPhone: booking.clientPhone ?? undefined,
-                                    serviceName: title,
-                                    date: updatedBooking.startTime.toDateString(),
-                                    startTime: updatedBooking.startTime.toLocaleTimeString(),
-                                    endTime: updatedBooking.endTime.toLocaleTimeString(),
-                                    transactionRef: event.data.reference,
-                                });
-                            }
-                            catch (err) {
-                                console.error('sendVendorReceiptMail failed:', err);
-                            }
-                        }
-                        try {
-                            await this.mailService.sendClientReceiptMail({
-                                clientEmail: booking.clientEmail,
-                                bookingName: booking.name,
-                                vendorName: bookingVendor?.businessName ?? '',
-                                vendorAddress: bookingVendor
-                                    ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
-                                    : undefined,
-                                vendorPhone: vendorUser?.phone ?? undefined,
-                                serviceName: title,
-                                date: updatedBooking.startTime.toDateString(),
-                                startTime: updatedBooking.startTime.toLocaleTimeString(),
-                                endTime: updatedBooking.endTime.toLocaleTimeString(),
-                                transactionRef: event.data.reference,
-                            });
-                        }
-                        catch (err) {
-                            console.error('sendClientReceiptMail failed:', err);
                         }
                     })();
                 });
@@ -428,13 +399,16 @@ let PaystackController = class PaystackController {
                             await this.mailService.sendClientBookingMail({
                                 clientEmail: email,
                                 serviceName: title,
-                                date: dayOfWeek,
-                                time: startTime,
-                                endTime: endTime,
+                                vendorName: businessName,
+                                date: (0, dateAndTimeConverter_1.dateConverter)(startTime),
+                                time: (0, dateAndTimeConverter_1.timeConverter)(startTime),
+                                endTime: (0, dateAndTimeConverter_1.timeConverter)(endTime),
                                 clientName: clientName,
                                 durationMins: durationMins,
+                                phone: vendorUserRecord?.phone || '',
                                 businessName: businessName,
                                 address: `${city} ${state} ${country}`,
+                                transactionRef: event.data.reference,
                             });
                         }
                         catch (err) {
@@ -446,51 +420,16 @@ let PaystackController = class PaystackController {
                                 clientName: clientName,
                                 clientEmail: email,
                                 serviceName: title,
-                                date: dayOfWeek,
-                                time: startTime,
-                                endTime: endTime,
+                                date: (0, dateAndTimeConverter_1.dateConverter)(startTime),
+                                time: (0, dateAndTimeConverter_1.timeConverter)(startTime),
+                                endTime: (0, dateAndTimeConverter_1.timeConverter)(endTime),
                                 durationMins: durationMins,
                                 phone,
-                            });
-                        }
-                        catch (err) {
-                            console.error('sendVendorBookingMail failed:', err);
-                        }
-                        try {
-                            await this.mailService.sendClientReceiptMail({
-                                clientEmail: email,
-                                bookingName: book.name,
-                                vendorName: businessName,
-                                vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
-                                vendorPhone: vendorUserRecord?.phone ?? undefined,
-                                serviceName: title,
-                                date: dayOfWeek,
-                                startTime: startTime,
-                                endTime: endTime,
                                 transactionRef: event.data.reference,
                             });
                         }
                         catch (err) {
-                            console.error('sendClientReceiptMail failed:', err);
-                        }
-                        if (vendorEmail) {
-                            try {
-                                await this.mailService.sendVendorReceiptMail({
-                                    vendorEmail,
-                                    bookingName: book.name,
-                                    clientName,
-                                    clientAddress,
-                                    clientPhone: phone,
-                                    serviceName: title,
-                                    date: dayOfWeek,
-                                    startTime: startTime,
-                                    endTime: endTime,
-                                    transactionRef: event.data.reference,
-                                });
-                            }
-                            catch (err) {
-                                console.error('sendVendorReceiptMail failed:', err);
-                            }
+                            console.error('sendVendorBookingMail failed:', err);
                         }
                     })();
                 });

@@ -123,10 +123,12 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
         <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
           <p><strong>Service:</strong> ${data.serviceName}</p>
           <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          ${data.phone ? `<p><strong>Client Call Number:</strong> ${data.phone}</p>` : ''}
           <p><strong>Date:</strong> ${data.date}</p>
           <p><strong>Start Time:</strong> ${data.time}</p>
           <p><strong>End Time:</strong> ${data.endTime}</p>
-          <p><strong>Session Duration:</strong> ${data.durationMins}</p>
+          <p><strong>Session Duration:</strong> ${data.durationMins} minutes</p>
+          ${data.transactionRef ? `<p><strong>Transaction Ref:</strong> ${data.transactionRef}</p>` : ''}
         </div>
 
         <p>Vendor address below:</p>
@@ -159,12 +161,13 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
         <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
           <p><strong>Client:</strong> ${data.clientName}</p>
           <p><strong>Email:</strong> ${data.clientEmail}</p>
-          <p><strong>Client Call Number:</strong> ${data.phone}</p>
+          ${data.phone ? `<p><strong>Client Call Number:</strong> ${data.phone}</p>` : ''}
           <p><strong>Service:</strong> ${data.serviceName}</p>
           <p><strong>Date:</strong> ${data.date}</p>
           <p><strong>Start Time:</strong> ${data.time}</p>
           <p><strong>End Time:</strong> ${data.endTime}</p>
-          <p><strong>Session Duration:</strong> ${data.durationMins}</p>
+          <p><strong>Session Duration:</strong> ${data.durationMins} minutes</p>
+          ${data.transactionRef ? `<p><strong>Transaction Ref:</strong> ${data.transactionRef}</p>` : ''}
         </div>
 
         <p>Please prepare for the appointment.</p>
