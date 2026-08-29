@@ -25,6 +25,10 @@ export class CreateVendorBookingDto {
   @IsString()
   clientPhone?: string;
 
+  @IsOptional()
+  @IsString()
+  clientAddress?: string;
+
   @IsNotEmpty()
   @IsString()
   startTime!: string;

@@ -31,6 +31,7 @@ import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { ActivityService } from 'src/activity/activityLog.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
+import { SubscriptionService } from 'src/subscription/subscription.service';
 
 export enum DateFilter {
   DAY = 'day',
@@ -50,6 +51,7 @@ export class BookingService {
     private readonly activityService: ActivityService,
     private readonly jwtService: JwtService,
     private readonly platformSettingsService: PlatformSettingsService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   private readonly completionTokenPurpose = 'booking-completion-approval';
@@ -390,10 +392,20 @@ export class BookingService {
 
   async createVendorBooking(userId: string, dto: CreateVendorBookingDto) {
     try {
-      const platformSettings =
-        await this.platformSettingsService.getOrCreateSettings();
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
 
-      if (!platformSettings.manualBookingEnabled) {
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+
+      // Vendor-level override (if any) takes precedence over the global
+      // manualBookingEnabled setting for this vendor.
+      const isManualBookingEnabled =
+        await this.platformSettingsService.isManualBookingEnabled(vendor.id);
+
+      if (!isManualBookingEnabled) {
         throw new ForbiddenException(
           'Vendor-created bookings are currently disabled.',
         );
@@ -419,14 +431,6 @@ export class BookingService {
 
       if (startTime < new Date()) {
         throw new BadRequestException('Cannot book a past date or time');
-      }
-
-      const vendor = await this.prisma.vendor.findFirst({
-        where: { userId },
-      });
-
-      if (!vendor) {
-        throw new NotFoundException('Vendor not found');
       }
 
       if (service.userId !== userId) {
@@ -514,6 +518,7 @@ export class BookingService {
             clientName: dto.clientName,
             clientEmail: dto.clientEmail,
             clientPhone: dto.clientPhone,
+            clientAddress: dto.clientAddress,
             userId: existingClient?.id,
             amount,
             status: 'CONFIRMED',

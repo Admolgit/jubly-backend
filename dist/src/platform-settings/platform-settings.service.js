@@ -14,6 +14,15 @@ const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const response_1 = require("../utils/response");
 const subscription_service_1 = require("../subscription/subscription.service");
+const OVERRIDABLE_FIELDS = [
+    'subscriptionsEnabled',
+    'defaultPlatformPercentage',
+    'subscriberPlatformPercentage',
+    'manualBookingEnabled',
+    'paidByHandEnabled',
+    'subscriptionPriceNaira',
+    'subscriptionDurationDays',
+];
 let PlatformSettingsService = class PlatformSettingsService {
     constructor(prisma, subscriptionService) {
         this.prisma = prisma;
@@ -55,8 +64,28 @@ let PlatformSettingsService = class PlatformSettingsService {
             throw new common_1.InternalServerErrorException('Failed to update platform settings.', error.message);
         }
     }
+    async getEffectiveSettings(vendorId) {
+        const global = await this.getOrCreateSettings();
+        if (!vendorId) {
+            return global;
+        }
+        const override = await this.prisma.vendorPlatformSettings.findUnique({
+            where: { vendorId },
+        });
+        if (!override) {
+            return global;
+        }
+        const effective = { ...global };
+        for (const field of OVERRIDABLE_FIELDS) {
+            const overrideValue = override[field];
+            if (overrideValue !== null && overrideValue !== undefined) {
+                effective[field] = overrideValue;
+            }
+        }
+        return effective;
+    }
     async resolvePlatformPercentage(vendorId) {
-        const settings = await this.getOrCreateSettings();
+        const settings = await this.getEffectiveSettings(vendorId);
         if (!settings.subscriptionsEnabled) {
             return settings.defaultPlatformPercentage;
         }
@@ -66,7 +95,7 @@ let PlatformSettingsService = class PlatformSettingsService {
             : settings.defaultPlatformPercentage;
     }
     async canUsePaidByHand(vendorId) {
-        const settings = await this.getOrCreateSettings();
+        const settings = await this.getEffectiveSettings(vendorId);
         if (!settings.paidByHandEnabled) {
             return false;
         }
@@ -75,12 +104,62 @@ let PlatformSettingsService = class PlatformSettingsService {
         }
         return this.subscriptionService.isVendorSubscribed(vendorId);
     }
-    async getSubscriptionPricing() {
-        const settings = await this.getOrCreateSettings();
+    async isManualBookingEnabled(vendorId) {
+        const settings = await this.getEffectiveSettings(vendorId);
+        return settings.manualBookingEnabled;
+    }
+    async isSubscriptionsEnabled(vendorId) {
+        const settings = await this.getEffectiveSettings(vendorId);
+        return settings.subscriptionsEnabled;
+    }
+    async getSubscriptionPricing(vendorId) {
+        const settings = await this.getEffectiveSettings(vendorId);
         return {
             priceNaira: settings.subscriptionPriceNaira,
             durationDays: settings.subscriptionDurationDays,
         };
+    }
+    async getVendorOverride(vendorId) {
+        try {
+            const override = await this.prisma.vendorPlatformSettings.findUnique({
+                where: { vendorId },
+            });
+            const effective = await this.getEffectiveSettings(vendorId);
+            return (0, response_1.successResponse)({ override, effective }, 'Vendor platform settings fetched successfully');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException)
+                throw error;
+            throw new common_1.InternalServerErrorException('Failed to fetch vendor platform settings.', error.message);
+        }
+    }
+    async updateVendorOverride(vendorId, dto, adminUserId) {
+        try {
+            const updated = await this.prisma.vendorPlatformSettings.upsert({
+                where: { vendorId },
+                update: { ...dto, updatedBy: adminUserId },
+                create: { vendorId, ...dto, updatedBy: adminUserId },
+            });
+            return (0, response_1.successResponse)(updated, 'Vendor platform settings updated successfully');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException)
+                throw error;
+            throw new common_1.InternalServerErrorException('Failed to update vendor platform settings.', error.message);
+        }
+    }
+    async clearVendorOverride(vendorId) {
+        try {
+            await this.prisma.vendorPlatformSettings.deleteMany({
+                where: { vendorId },
+            });
+            return (0, response_1.successResponse)(null, 'Vendor platform settings override removed — global settings now apply.');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException)
+                throw error;
+            throw new common_1.InternalServerErrorException('Failed to clear vendor platform settings.', error.message);
+        }
     }
 };
 exports.PlatformSettingsService = PlatformSettingsService;
