@@ -16,6 +16,7 @@ const timeConverter = (time) => {
         timeZone: 'Africa/Lagos',
         hour: '2-digit',
         minute: '2-digit',
+        hour12: true,
     });
 };
 exports.timeConverter = timeConverter;
