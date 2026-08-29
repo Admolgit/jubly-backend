@@ -493,7 +493,7 @@ export class PaystackController {
           startTime: new Date(startTime),
           endTime: new Date(endTime),
           status: 'CONFIRMED',
-          clientPhone: phone || '',
+          phone: phone || '',
         });
 
         await this.prisma.transaction.update({
