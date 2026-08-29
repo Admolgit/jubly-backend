@@ -308,8 +308,14 @@ let BookingService = class BookingService {
     }
     async createVendorBooking(userId, dto) {
         try {
-            const platformSettings = await this.platformSettingsService.getOrCreateSettings();
-            if (!platformSettings.manualBookingEnabled) {
+            const vendor = await this.prisma.vendor.findFirst({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const isManualBookingEnabled = await this.platformSettingsService.isManualBookingEnabled(vendor.id);
+            if (!isManualBookingEnabled) {
                 throw new common_1.ForbiddenException('Vendor-created bookings are currently disabled.');
             }
             const startTime = this.parseDateInput(dto.startTime, 'startTime');
@@ -327,12 +333,6 @@ let BookingService = class BookingService {
             }
             if (startTime < new Date()) {
                 throw new common_1.BadRequestException('Cannot book a past date or time');
-            }
-            const vendor = await this.prisma.vendor.findFirst({
-                where: { userId },
-            });
-            if (!vendor) {
-                throw new common_1.NotFoundException('Vendor not found');
             }
             if (service.userId !== userId) {
                 throw new common_1.ForbiddenException('You can only create bookings for your own services');
@@ -390,6 +390,7 @@ let BookingService = class BookingService {
                         clientName: dto.clientName,
                         clientEmail: dto.clientEmail,
                         clientPhone: dto.clientPhone,
+                        clientAddress: dto.clientAddress,
                         userId: existingClient?.id,
                         amount,
                         status: 'CONFIRMED',

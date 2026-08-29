@@ -46,10 +46,10 @@ export class SubscriptionController {
       throw new NotFoundException('Vendor not found');
     }
 
-    const platformSettings =
-      await this.platformSettingsService.getOrCreateSettings();
+    const subscriptionsEnabled =
+      await this.platformSettingsService.isSubscriptionsEnabled(vendor.id);
 
-    if (!platformSettings.subscriptionsEnabled) {
+    if (!subscriptionsEnabled) {
       throw new BadRequestException(
         'Subscriptions are not required while Jubly is free — there is nothing to upgrade to right now.',
       );
@@ -59,10 +59,11 @@ export class SubscriptionController {
       where: { id: req.user.id },
     });
 
-    // Price and duration always come from admin-managed platform settings —
-    // never from the frontend.
+    // Price and duration always come from admin-managed platform settings
+    // (global, or this vendor's override if one exists) — never from the
+    // frontend.
     const { priceNaira, durationDays } =
-      await this.platformSettingsService.getSubscriptionPricing();
+      await this.platformSettingsService.getSubscriptionPricing(vendor.id);
 
     const { authorizationUrl, reference } =
       await this.paystackService.initializeTransaction(

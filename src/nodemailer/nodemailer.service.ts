@@ -58,7 +58,7 @@ export class NodemailerService {
             </div>
 
             <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
-                Ypu can log in using this temporary password, if you need to manage your bookings.
+                You can log in using this temporary password, if you need to manage your bookings.
             </p>
 
             <div style="text-align: center; margin: 28px 0;">
@@ -170,6 +170,96 @@ export class NodemailerService {
 
         <p style="font-size:12px;color:#888">
           Jubly Vendor Dashboard
+        </p>
+
+      </div>
+    `,
+    });
+  }
+
+  async sendVendorReceiptMail(data: {
+    vendorEmail: string;
+    bookingName: string;
+    clientName: string;
+    clientAddress?: string;
+    clientPhone?: string;
+    serviceName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    transactionRef: string;
+  }) {
+    await this.mailerService.sendMail({
+      to: data.vendorEmail,
+      subject: `Payment receipt — ${data.bookingName}`,
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+
+        <h2 style="color:#111;">Payment Receipt 🧾</h2>
+
+        <p>Payment has been confirmed for the booking below.</p>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Booking:</strong> ${data.bookingName}</p>
+          <p><strong>Client:</strong> ${data.clientName}</p>
+          <p><strong>Client Address:</strong> ${data.clientAddress ?? '-'}</p>
+          <p><strong>Client Phone:</strong> ${data.clientPhone ?? '-'}</p>
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Date:</strong> ${data.date}</p>
+          <p><strong>Start Time:</strong> ${data.startTime}</p>
+          <p><strong>End Time:</strong> ${data.endTime}</p>
+          <p><strong>Transaction Ref:</strong> ${data.transactionRef}</p>
+        </div>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">
+          Jubly Vendor Dashboard
+        </p>
+
+      </div>
+    `,
+    });
+  }
+
+  async sendClientReceiptMail(data: {
+    clientEmail: string;
+    bookingName: string;
+    vendorName: string;
+    vendorAddress?: string;
+    vendorPhone?: string;
+    serviceName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    transactionRef: string;
+  }) {
+    await this.mailerService.sendMail({
+      to: data.clientEmail,
+      subject: `Payment receipt — ${data.bookingName}`,
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto">
+
+        <h2 style="color:#111;">Payment Receipt 🧾</h2>
+
+        <p>Thank you — here is your receipt for this booking.</p>
+
+        <div style="background:#f5f5f5;padding:15px;border-radius:8px;margin:20px 0">
+          <p><strong>Booking:</strong> ${data.bookingName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          <p><strong>Vendor Address:</strong> ${data.vendorAddress ?? '-'}</p>
+          <p><strong>Vendor Phone:</strong> ${data.vendorPhone ?? '-'}</p>
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Date:</strong> ${data.date}</p>
+          <p><strong>Start Time:</strong> ${data.startTime}</p>
+          <p><strong>End Time:</strong> ${data.endTime}</p>
+          <p><strong>Transaction Ref:</strong> ${data.transactionRef}</p>
+        </div>
+
+        <hr/>
+
+        <p style="font-size:12px;color:#888">
+          Powered by Jubly
         </p>
 
       </div>

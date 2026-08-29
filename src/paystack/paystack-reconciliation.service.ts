@@ -10,6 +10,7 @@ import { BookingService } from 'src/booking/booking.service';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
+import type { User } from '@prisma/client';
 
 const PENDING_TRANSACTION_STALE_AFTER_MS = 20 * 60 * 1000;
 const PENDING_TRANSACTION_ABANDON_AFTER_MS = 48 * 60 * 60 * 1000;
@@ -219,6 +220,18 @@ export class PaystackReconciliationService implements OnModuleInit {
       description: 'Payment via Paystack (reconciled)',
     });
 
+    let vendorUserRecord: User | null = null;
+    try {
+      vendorUserRecord = await this.prisma.user.findUnique({
+        where: { id: vendorUserId },
+      });
+    } catch (err) {
+      console.error(
+        '[PaystackReconciliation] Failed to load vendor for receipt emails:',
+        err,
+      );
+    }
+
     try {
       await this.mailService.sendClientBookingMail({
         clientEmail: email,
@@ -231,6 +244,14 @@ export class PaystackReconciliationService implements OnModuleInit {
         businessName,
         address: `${city} ${state} ${country}`,
       });
+    } catch (err) {
+      console.error(
+        '[PaystackReconciliation] sendClientBookingMail failed:',
+        err,
+      );
+    }
+
+    try {
       await this.mailService.sendVendorBookingMail({
         vendorEmail,
         clientName,
@@ -244,9 +265,51 @@ export class PaystackReconciliationService implements OnModuleInit {
       });
     } catch (err) {
       console.error(
-        '[PaystackReconciliation] Booking confirmation email failed:',
+        '[PaystackReconciliation] sendVendorBookingMail failed:',
         err,
       );
+    }
+
+    try {
+      await this.mailService.sendClientReceiptMail({
+        clientEmail: email,
+        bookingName: book.name,
+        vendorName: businessName,
+        vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
+        vendorPhone: vendorUserRecord?.phone ?? undefined,
+        serviceName: title,
+        date: dayOfWeek,
+        startTime,
+        endTime,
+        transactionRef: chargeData.reference,
+      });
+    } catch (err) {
+      console.error(
+        '[PaystackReconciliation] sendClientReceiptMail failed:',
+        err,
+      );
+    }
+
+    if (vendorEmail) {
+      try {
+        await this.mailService.sendVendorReceiptMail({
+          vendorEmail,
+          bookingName: book.name,
+          clientName,
+          clientAddress,
+          clientPhone: phone,
+          serviceName: title,
+          date: dayOfWeek,
+          startTime,
+          endTime,
+          transactionRef: chargeData.reference,
+        });
+      } catch (err) {
+        console.error(
+          '[PaystackReconciliation] sendVendorReceiptMail failed:',
+          err,
+        );
+      }
     }
   }
 
