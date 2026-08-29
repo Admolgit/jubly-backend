@@ -33,6 +33,7 @@ import { ActivityService } from 'src/activity/activityLog.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 import { SubscriptionService } from 'src/subscription/subscription.service';
 import type { User, Vendor } from '@prisma/client';
+import { dateConverter, timeConverter } from 'src/utils/dateAndTimeConverter';
 
 @Controller('paystack')
 export class PaystackController {
@@ -295,6 +296,9 @@ export class PaystackController {
 
         const booking = await this.prisma.booking.findUnique({
           where: { id: bookingId },
+          include: {
+            services: true,
+          },
         });
 
         if (!booking) {
@@ -325,11 +329,6 @@ export class PaystackController {
           where: { providerRef: event.data.reference },
           data: {
             bookingId: updatedBooking.id,
-            // Stays 'PENDING' — this tracks vendor payout status, not
-            // client payment status. settleBookingPayment() looks for
-            // 'PENDING' to know a real Paystack transfer to the vendor is
-            // still owed, and flips it to 'COMPLETED' only once that
-            // transfer actually succeeds (see booking.service.ts).
             status: 'PENDING',
             paidAt: new Date(),
             percentageFee: percentageFee ?? 0.05,
@@ -369,12 +368,14 @@ export class PaystackController {
                 clientEmail: booking.clientEmail,
                 clientName: booking.clientName ?? clientName,
                 serviceName: title,
-                date: updatedBooking.startTime.toDateString(),
-                time: updatedBooking.startTime.toLocaleTimeString(),
-                endTime: updatedBooking.endTime.toLocaleTimeString(),
-                durationMins: '',
-                businessName: '',
-                address: '',
+                date: dateConverter(updatedBooking.startTime),
+                time: timeConverter(updatedBooking.startTime),
+                endTime: timeConverter(updatedBooking.endTime),
+                durationMins: Number(booking.services.durationMins ?? 60),
+                businessName: bookingVendor?.businessName || '',
+                phone: vendorUser?.phone || '',
+                address: `${bookingVendor?.city} ${bookingVendor?.state} ${bookingVendor?.country}`,
+                transactionRef: event.data.reference,
               });
             } catch (err) {
               console.error('sendClientBookingMail failed:', err);
@@ -387,52 +388,53 @@ export class PaystackController {
                   clientName: booking.clientName ?? clientName,
                   clientEmail: booking.clientEmail,
                   serviceName: title,
-                  date: updatedBooking.startTime.toDateString(),
-                  time: updatedBooking.startTime.toLocaleTimeString(),
-                  endTime: updatedBooking.endTime.toLocaleTimeString(),
+                  date: dateConverter(updatedBooking.startTime),
+                  time: timeConverter(updatedBooking.startTime),
+                  endTime: timeConverter(updatedBooking.endTime),
                   phone: booking.clientPhone ?? '',
-                  durationMins: '',
+                  durationMins: Number(booking.services.durationMins ?? 60),
+                  transactionRef: event.data.reference,
                 });
               } catch (err) {
                 console.error('sendVendorBookingMail failed:', err);
               }
 
-              try {
-                await this.mailService.sendVendorReceiptMail({
-                  vendorEmail: vendorUser.email,
-                  bookingName: booking.name,
-                  clientName: booking.clientName ?? clientName,
-                  clientAddress: booking.clientAddress ?? undefined,
-                  clientPhone: booking.clientPhone ?? undefined,
-                  serviceName: title,
-                  date: updatedBooking.startTime.toDateString(),
-                  startTime: updatedBooking.startTime.toLocaleTimeString(),
-                  endTime: updatedBooking.endTime.toLocaleTimeString(),
-                  transactionRef: event.data.reference,
-                });
-              } catch (err) {
-                console.error('sendVendorReceiptMail failed:', err);
-              }
+              // try {
+              //   await this.mailService.sendVendorReceiptMail({
+              //     vendorEmail: vendorUser.email,
+              //     bookingName: booking.name,
+              //     clientName: booking.clientName ?? clientName,
+              //     clientAddress: booking.clientAddress ?? undefined,
+              //     clientPhone: booking.clientPhone ?? undefined,
+              //     serviceName: title,
+              //     date: updatedBooking.startTime.toDateString(),
+              //     startTime: updatedBooking.startTime.toLocaleTimeString(),
+              //     endTime: updatedBooking.endTime.toLocaleTimeString(),
+              //     transactionRef: event.data.reference,
+              //   });
+              // } catch (err) {
+              //   console.error('sendVendorReceiptMail failed:', err);
+              // }
             }
 
-            try {
-              await this.mailService.sendClientReceiptMail({
-                clientEmail: booking.clientEmail,
-                bookingName: booking.name,
-                vendorName: bookingVendor?.businessName ?? '',
-                vendorAddress: bookingVendor
-                  ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
-                  : undefined,
-                vendorPhone: vendorUser?.phone ?? undefined,
-                serviceName: title,
-                date: updatedBooking.startTime.toDateString(),
-                startTime: updatedBooking.startTime.toLocaleTimeString(),
-                endTime: updatedBooking.endTime.toLocaleTimeString(),
-                transactionRef: event.data.reference,
-              });
-            } catch (err) {
-              console.error('sendClientReceiptMail failed:', err);
-            }
+            // try {
+            //   await this.mailService.sendClientReceiptMail({
+            //     clientEmail: booking.clientEmail,
+            //     bookingName: booking.name,
+            //     vendorName: bookingVendor?.businessName ?? '',
+            //     vendorAddress: bookingVendor
+            //       ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
+            //       : undefined,
+            //     vendorPhone: vendorUser?.phone ?? undefined,
+            //     serviceName: title,
+            //     date: updatedBooking.startTime.toDateString(),
+            //     startTime: updatedBooking.startTime.toLocaleTimeString(),
+            //     endTime: updatedBooking.endTime.toLocaleTimeString(),
+            //     transactionRef: event.data.reference,
+            //   });
+            // } catch (err) {
+            //   console.error('sendClientReceiptMail failed:', err);
+            // }
           })();
         });
 
@@ -542,13 +544,16 @@ export class PaystackController {
               await this.mailService.sendClientBookingMail({
                 clientEmail: email,
                 serviceName: title,
-                date: dayOfWeek,
-                time: startTime,
-                endTime: endTime,
+                vendorName: businessName,
+                date: dateConverter(startTime),
+                time: timeConverter(startTime),
+                endTime: timeConverter(endTime),
                 clientName: clientName,
                 durationMins: durationMins,
+                phone: vendorUserRecord?.phone || '',
                 businessName: businessName,
                 address: `${city} ${state} ${country}`,
+                transactionRef: event.data.reference,
               });
             } catch (err) {
               console.error('sendClientBookingMail failed:', err);
@@ -560,51 +565,52 @@ export class PaystackController {
                 clientName: clientName,
                 clientEmail: email,
                 serviceName: title,
-                date: dayOfWeek,
-                time: startTime,
-                endTime: endTime,
+                date: dateConverter(startTime),
+                time: timeConverter(startTime),
+                endTime: timeConverter(endTime),
                 durationMins: durationMins,
                 phone,
+                transactionRef: event.data.reference,
               });
             } catch (err) {
               console.error('sendVendorBookingMail failed:', err);
             }
 
-            try {
-              await this.mailService.sendClientReceiptMail({
-                clientEmail: email,
-                bookingName: book.name,
-                vendorName: businessName,
-                vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
-                vendorPhone: vendorUserRecord?.phone ?? undefined,
-                serviceName: title,
-                date: dayOfWeek,
-                startTime: startTime,
-                endTime: endTime,
-                transactionRef: event.data.reference,
-              });
-            } catch (err) {
-              console.error('sendClientReceiptMail failed:', err);
-            }
+            // try {
+            //   await this.mailService.sendClientReceiptMail({
+            //     clientEmail: email,
+            //     bookingName: book.name,
+            //     vendorName: businessName,
+            //     vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
+            //     vendorPhone: vendorUserRecord?.phone ?? undefined,
+            //     serviceName: title,
+            //     date: new Date(startTime),
+            //     startTime: new Date(startTime),
+            //     endTime: new Date(endTime),
+            //     transactionRef: event.data.reference,
+            //   });
+            // } catch (err) {
+            //   console.error('sendClientReceiptMail failed:', err);
+            // }
 
-            if (vendorEmail) {
-              try {
-                await this.mailService.sendVendorReceiptMail({
-                  vendorEmail,
-                  bookingName: book.name,
-                  clientName,
-                  clientAddress,
-                  clientPhone: phone,
-                  serviceName: title,
-                  date: dayOfWeek,
-                  startTime: startTime,
-                  endTime: endTime,
-                  transactionRef: event.data.reference,
-                });
-              } catch (err) {
-                console.error('sendVendorReceiptMail failed:', err);
-              }
-            }
+            // if (vendorEmail) {
+            //   try {
+            //     await this.mailService.sendVendorReceiptMail({
+            //       vendorEmail,
+            //       bookingName: book.name,
+            //       clientName,
+            //       clientAddress,
+            //       clientPhone: phone,
+            //       serviceName: title,
+            //       date: new Date(startTime).toDateString(),
+            //       startTime: new Date(startTime).toDateString(),
+            //       endTime: new Date(endTime).toDateString(),
+            //       transactionRef: event.data.reference,
+            //     });
+            //   } catch (err) {
+            //     console.error('sendVendorReceiptMail failed:', err);
+            //   }
+            // }
           })();
         });
       }

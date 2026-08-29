@@ -32,6 +32,7 @@ import { PaystackService } from 'src/paystack/paystack.service';
 import { ActivityService } from 'src/activity/activityLog.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 import { SubscriptionService } from 'src/subscription/subscription.service';
+import { dateConverter, timeConverter } from 'src/utils/dateAndTimeConverter';
 
 export enum DateFilter {
   DAY = 'day',
@@ -347,15 +348,19 @@ export class BookingService {
             clientAddress: dto.clientAddress,
             email: dto.clientEmail,
             vendorEmail: vendorUser?.email,
-            businessName: dto.businessName,
+            // Sourced from the vendor's own record rather than trusted from
+            // the frontend request — that field was never reliably sent,
+            // leaving these "undefined" in booking/receipt emails.
+            businessName: vendor.businessName,
+            city: vendor.city,
+            state: vendor.state,
+            country: vendor.country,
+            durationMins: services.durationMins,
             dayOfWeek: dto.dayOfWeek,
             startTime: dto.startTime,
             phone: dto.phone,
             endTime: dto.endTime,
             type: 'JUBLY_BOOKING',
-            city: dto.city,
-            state: dto.state,
-            country: dto.country,
             vendorUserId: vendorUser?.id,
             userId: vendorUser?.id,
           },
@@ -607,12 +612,15 @@ export class BookingService {
             bookingId: booking.id,
             vendorId: vendor.id,
             serviceId: dto.serviceId,
+            clientAddress: dto.clientAddress,
             title: service.name,
             clientName: dto.clientName,
             clientEmail: dto.clientEmail,
             clientPhone: dto.clientPhone,
             vendorEmail: vendorUser?.email,
             percentageFee,
+            businessName: vendor.businessName,
+            slug: vendorUser?.slug,
           },
         );
 
@@ -676,19 +684,20 @@ export class BookingService {
       return;
     }
 
-    const dateLabel = booking.startTime.toDateString();
-    const timeLabel = booking.startTime.toLocaleTimeString();
-    const endTimeLabel = booking.endTime.toLocaleTimeString();
+    const dateLabel = dateConverter(booking.startTime);
+    const timeLabel = timeConverter(booking.startTime);
+    const endTimeLabel = timeConverter(booking.endTime);
 
     await this.nodemailerService.sendClientBookingMail({
       clientEmail: dto.clientEmail,
       clientName: dto.clientName,
       serviceName: service.name,
       vendorName: vendor.businessName,
+      phone: vendorUser.phone || '',
       date: dateLabel,
       time: timeLabel,
       endTime: endTimeLabel,
-      durationMins: String(service.durationMins ?? 60),
+      durationMins: Number(service.durationMins ?? 60),
       businessName: vendor.businessName,
       address: `${vendor.city} ${vendor.state} ${vendor.country ?? ''}`.trim(),
     });
@@ -702,7 +711,7 @@ export class BookingService {
       time: timeLabel,
       endTime: endTimeLabel,
       phone: dto.clientPhone ?? '',
-      durationMins: String(service.durationMins ?? 60),
+      durationMins: Number(service.durationMins ?? 60),
     });
   }
 

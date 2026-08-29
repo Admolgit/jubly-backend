@@ -12,6 +12,7 @@ import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 import { ActivityService } from 'src/activity/activityLog.service';
 import type { User, Vendor } from '@prisma/client';
+import { dateConverter, timeConverter } from 'src/utils/dateAndTimeConverter';
 
 const PENDING_TRANSACTION_STALE_AFTER_MS = 20 * 60 * 1000;
 const PENDING_TRANSACTION_ABANDON_AFTER_MS = 48 * 60 * 60 * 1000;
@@ -242,13 +243,16 @@ export class PaystackReconciliationService implements OnModuleInit {
       await this.mailService.sendClientBookingMail({
         clientEmail: email,
         serviceName: title,
-        date: dayOfWeek,
+        vendorName: businessName,
+        date: new Date(startTime).toDateString(),
         time: startTime,
         endTime,
         clientName,
         durationMins,
         businessName,
+        phone: vendorUserRecord?.phone || '',
         address: `${city} ${state} ${country}`,
+        transactionRef: chargeData.reference || '',
       });
     } catch (err) {
       console.error(
@@ -263,11 +267,12 @@ export class PaystackReconciliationService implements OnModuleInit {
         clientName,
         clientEmail: email,
         serviceName: title,
-        date: dayOfWeek,
+        date: new Date(startTime).toDateString(),
         time: startTime,
         endTime,
         durationMins,
         phone,
+        transactionRef: chargeData.reference,
       });
     } catch (err) {
       console.error(
@@ -276,47 +281,47 @@ export class PaystackReconciliationService implements OnModuleInit {
       );
     }
 
-    try {
-      await this.mailService.sendClientReceiptMail({
-        clientEmail: email,
-        bookingName: book.name,
-        vendorName: businessName,
-        vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
-        vendorPhone: vendorUserRecord?.phone ?? undefined,
-        serviceName: title,
-        date: dayOfWeek,
-        startTime,
-        endTime,
-        transactionRef: chargeData.reference,
-      });
-    } catch (err) {
-      console.error(
-        '[PaystackReconciliation] sendClientReceiptMail failed:',
-        err,
-      );
-    }
+    // try {
+    //   await this.mailService.sendClientReceiptMail({
+    //     clientEmail: email,
+    //     bookingName: book.name,
+    //     vendorName: businessName,
+    //     vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
+    //     vendorPhone: vendorUserRecord?.phone ?? undefined,
+    //     serviceName: title,
+    //     date: new Date(startTime).toDateString(),
+    //     startTime,
+    //     endTime,
+    //     transactionRef: chargeData.reference,
+    //   });
+    // } catch (err) {
+    //   console.error(
+    //     '[PaystackReconciliation] sendClientReceiptMail failed:',
+    //     err,
+    //   );
+    // }
 
-    if (vendorEmail) {
-      try {
-        await this.mailService.sendVendorReceiptMail({
-          vendorEmail,
-          bookingName: book.name,
-          clientName,
-          clientAddress,
-          clientPhone: phone,
-          serviceName: title,
-          date: dayOfWeek,
-          startTime,
-          endTime,
-          transactionRef: chargeData.reference,
-        });
-      } catch (err) {
-        console.error(
-          '[PaystackReconciliation] sendVendorReceiptMail failed:',
-          err,
-        );
-      }
-    }
+    // if (vendorEmail) {
+    //   try {
+    //     await this.mailService.sendVendorReceiptMail({
+    //       vendorEmail,
+    //       bookingName: book.name,
+    //       clientName,
+    //       clientAddress,
+    //       clientPhone: phone,
+    //       serviceName: title,
+    //       date: new Date(startTime).toDateString(),
+    //       startTime,
+    //       endTime,
+    //       transactionRef: chargeData.reference,
+    //     });
+    //   } catch (err) {
+    //     console.error(
+    //       '[PaystackReconciliation] sendVendorReceiptMail failed:',
+    //       err,
+    //     );
+    //   }
+    // }
   }
 
   // Fallback path for vendor-created PAY_BY_LINK bookings whose payment
@@ -338,6 +343,9 @@ export class PaystackReconciliationService implements OnModuleInit {
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
+      include: {
+        services: true,
+      },
     });
 
     if (!booking) {
@@ -374,7 +382,8 @@ export class PaystackReconciliationService implements OnModuleInit {
         senderName: accountName ?? clientName,
         senderAccountNumber: accountNumber,
         senderBankName: bank,
-        senderDescription: 'Payment via Paystack (vendor-created link, reconciled)',
+        senderDescription:
+          'Payment via Paystack (vendor-created link, reconciled)',
       },
     });
 
@@ -406,6 +415,9 @@ export class PaystackReconciliationService implements OnModuleInit {
     try {
       bookingVendor = await this.prisma.vendor.findUnique({
         where: { id: booking.vendorId },
+        include: {
+          services: true,
+        },
       });
       vendorUser = bookingVendor
         ? await this.prisma.user.findUnique({
@@ -424,12 +436,13 @@ export class PaystackReconciliationService implements OnModuleInit {
         clientEmail: booking.clientEmail,
         clientName: booking.clientName ?? clientName,
         serviceName: title,
-        date: updatedBooking.startTime.toDateString(),
-        time: updatedBooking.startTime.toLocaleTimeString(),
-        endTime: updatedBooking.endTime.toLocaleTimeString(),
-        durationMins: '',
-        businessName: '',
-        address: '',
+        date: dateConverter(updatedBooking.startTime),
+        time: timeConverter(updatedBooking.startTime),
+        endTime: timeConverter(updatedBooking.endTime),
+        durationMins: Number(booking.services.durationMins),
+        businessName: bookingVendor?.businessName || '',
+        address: `${bookingVendor?.city} ${bookingVendor?.state} ${bookingVendor?.country}`,
+        transactionRef: chargeData.reference,
       });
     } catch (err) {
       console.error(
@@ -445,11 +458,12 @@ export class PaystackReconciliationService implements OnModuleInit {
           clientName: booking.clientName ?? clientName,
           clientEmail: booking.clientEmail,
           serviceName: title,
-          date: updatedBooking.startTime.toDateString(),
-          time: updatedBooking.startTime.toLocaleTimeString(),
-          endTime: updatedBooking.endTime.toLocaleTimeString(),
+          date: dateConverter(updatedBooking.startTime),
+          time: timeConverter(updatedBooking.startTime),
+          endTime: timeConverter(updatedBooking.endTime),
           phone: booking.clientPhone ?? '',
-          durationMins: '',
+          durationMins: Number(booking.services.durationMins),
+          transactionRef: chargeData.reference,
         });
       } catch (err) {
         console.error(
@@ -458,48 +472,48 @@ export class PaystackReconciliationService implements OnModuleInit {
         );
       }
 
-      try {
-        await this.mailService.sendVendorReceiptMail({
-          vendorEmail: vendorUser.email,
-          bookingName: booking.name,
-          clientName: booking.clientName ?? clientName,
-          clientAddress: booking.clientAddress ?? undefined,
-          clientPhone: booking.clientPhone ?? undefined,
-          serviceName: title,
-          date: updatedBooking.startTime.toDateString(),
-          startTime: updatedBooking.startTime.toLocaleTimeString(),
-          endTime: updatedBooking.endTime.toLocaleTimeString(),
-          transactionRef: chargeData.reference,
-        });
-      } catch (err) {
-        console.error(
-          '[PaystackReconciliation] sendVendorReceiptMail failed:',
-          err,
-        );
-      }
+      // try {
+      //   await this.mailService.sendVendorReceiptMail({
+      //     vendorEmail: vendorUser.email,
+      //     bookingName: booking.name,
+      //     clientName: booking.clientName ?? clientName,
+      //     clientAddress: booking.clientAddress ?? undefined,
+      //     clientPhone: booking.clientPhone ?? undefined,
+      //     serviceName: title,
+      //     date: updatedBooking.startTime.toDateString(),
+      //     startTime: updatedBooking.startTime.toLocaleTimeString(),
+      //     endTime: updatedBooking.endTime.toLocaleTimeString(),
+      //     transactionRef: chargeData.reference,
+      //   });
+      // } catch (err) {
+      //   console.error(
+      //     '[PaystackReconciliation] sendVendorReceiptMail failed:',
+      //     err,
+      //   );
+      // }
     }
 
-    try {
-      await this.mailService.sendClientReceiptMail({
-        clientEmail: booking.clientEmail,
-        bookingName: booking.name,
-        vendorName: bookingVendor?.businessName ?? '',
-        vendorAddress: bookingVendor
-          ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
-          : undefined,
-        vendorPhone: vendorUser?.phone ?? undefined,
-        serviceName: title,
-        date: updatedBooking.startTime.toDateString(),
-        startTime: updatedBooking.startTime.toLocaleTimeString(),
-        endTime: updatedBooking.endTime.toLocaleTimeString(),
-        transactionRef: chargeData.reference,
-      });
-    } catch (err) {
-      console.error(
-        '[PaystackReconciliation] sendClientReceiptMail failed:',
-        err,
-      );
-    }
+    // try {
+    //   await this.mailService.sendClientReceiptMail({
+    //     clientEmail: booking.clientEmail,
+    //     bookingName: booking.name,
+    //     vendorName: bookingVendor?.businessName ?? '',
+    //     vendorAddress: bookingVendor
+    //       ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
+    //       : undefined,
+    //     vendorPhone: vendorUser?.phone ?? undefined,
+    //     serviceName: title,
+    //     date: updatedBooking.startTime.toDateString(),
+    //     startTime: updatedBooking.startTime.toLocaleTimeString(),
+    //     endTime: updatedBooking.endTime.toLocaleTimeString(),
+    //     transactionRef: chargeData.reference,
+    //   });
+    // } catch (err) {
+    //   console.error(
+    //     '[PaystackReconciliation] sendClientReceiptMail failed:',
+    //     err,
+    //   );
+    // }
   }
 
   async retryFailedSettlements() {
