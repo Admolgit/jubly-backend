@@ -477,7 +477,9 @@ export class PaystackController {
           !startTime ||
           !endTime
         ) {
-          throw new BadRequestException('Incomplete booking metadata in marketplace');
+          throw new BadRequestException(
+            'Incomplete booking metadata in marketplace',
+          );
         }
 
         const book = await this.bookingService.createBooking(vendorUserId, {
