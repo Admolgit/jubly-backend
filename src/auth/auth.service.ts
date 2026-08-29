@@ -140,27 +140,67 @@ export class AuthService {
         where: { email: dto.email },
       });
 
+      // Email is already registered — skip registration and continue with
+      // the existing account rather than failing the caller's flow.
       if (existingUser) {
-        throw new BadRequestException('Email already in use');
+        return successResponse(
+          { client: this.sanitizeUser(existingUser) },
+          'Client already registered.',
+          200,
+        );
       }
 
       const generatedPassword = generateTempPassword();
-
       const hashed = await hashPassword(generatedPassword);
 
-      const client = await this.prisma.user.create({
-        data: {
-          email: dto.email,
-          password: hashed,
-          firstName: dto.clientName,
-          phone: dto.phone,
-          role: UserRole.CLIENT,
-          isVerified: true,
-          clientVendorId: dto.clientVendorId,
-        },
-      });
+      let client;
+      try {
+        client = await this.prisma.user.create({
+          data: {
+            email: dto.email,
+            password: hashed,
+            firstName: dto.clientName,
+            phone: dto.phone,
+            role: UserRole.CLIENT,
+            isVerified: true,
+            clientVendorId: dto.clientVendorId,
+          },
+        });
+      } catch (createError: any) {
+        // Two concurrent requests raced to register the same email — the
+        // loser hits the unique index. Treat that the same as "already
+        // registered" and continue with the winner's account instead of
+        // failing the request.
+        if (createError?.code === 'P2002') {
+          const raceWinner = await this.prisma.user.findUnique({
+            where: { email: dto.email },
+          });
 
-      await this.nodemailService.sendTempPassword(dto.email, generatedPassword);
+          if (raceWinner) {
+            return successResponse(
+              { client: this.sanitizeUser(raceWinner) },
+              'Client already registered.',
+              200,
+            );
+          }
+        }
+
+        throw createError;
+      }
+
+      // Registration itself already succeeded at this point — a flaky
+      // temp-password email must not be reported as a registration failure.
+      try {
+        await this.nodemailService.sendTempPassword(
+          dto.email,
+          generatedPassword,
+        );
+      } catch (mailError: any) {
+        console.error(
+          'Failed to send temp password email:',
+          mailError?.message,
+        );
+      }
 
       return successResponse(
         { client: this.sanitizeUser(client) },
@@ -168,7 +208,7 @@ export class AuthService {
         201,
       );
     } catch (error: any) {
-      if (error instanceof UnauthorizedException) {
+      if (error instanceof HttpException) {
         throw error;
       }
 

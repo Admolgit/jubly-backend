@@ -8,9 +8,6 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BookingService = exports.DateFilter = void 0;
 const common_1 = require("@nestjs/common");
@@ -19,12 +16,13 @@ const prisma_service_1 = require("../../prisma/prisma.service");
 const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
 const response_1 = require("../utils/response");
-const axios_1 = __importDefault(require("axios"));
 const date_fns_1 = require("date-fns");
 const client_1 = require("@prisma/client");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const paystack_service_1 = require("../paystack/paystack.service");
 const activityLog_service_1 = require("../activity/activityLog.service");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const subscription_service_1 = require("../subscription/subscription.service");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -33,7 +31,7 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
-    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService, jwtService) {
+    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService, jwtService, platformSettingsService, subscriptionService) {
         this.googleCalendarService = googleCalendarService;
         this.prisma = prisma;
         this.authService = authService;
@@ -41,9 +39,12 @@ let BookingService = class BookingService {
         this.paystackService = paystackService;
         this.activityService = activityService;
         this.jwtService = jwtService;
+        this.platformSettingsService = platformSettingsService;
+        this.subscriptionService = subscriptionService;
         this.completionTokenPurpose = 'booking-completion-approval';
         this.completionTokenTtl = '72h';
         this.bookingTimezone = 'Africa/Lagos';
+        this.vendorBookingPaymentExpiryMs = 30 * 60 * 1000;
     }
     parseDateInput(value, fieldName) {
         const parsed = new Date(value);
@@ -263,48 +264,39 @@ let BookingService = class BookingService {
                 savedClientId = saved.data.client.id;
             }
             const amount = services.price;
-            const response = await axios_1.default.post(`${process.env.PAYSTACK_BASE_URL}/transaction/initialize`, {
+            const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, amount, {
+                slug: vendorUser?.slug,
+                vendorId: vendor.id,
+                clientId: savedClientId,
+                serviceId: dto.serviceId,
+                title: services.name,
+                clientName: dto.clientName,
+                clientAddress: dto.clientAddress,
                 email: dto.clientEmail,
-                amount: amount * 100,
-                metadata: {
-                    slug: vendorUser?.slug,
-                    vendorId: vendor.id,
-                    clientId: savedClientId,
-                    serviceId: dto.serviceId,
-                    title: services.name,
-                    clientName: dto.clientName,
-                    clientAddress: dto.clientAddress,
-                    email: dto.clientEmail,
-                    vendorEmail: vendorUser?.email,
-                    businessName: dto.businessName,
-                    dayOfWeek: dto.dayOfWeek,
-                    startTime: dto.startTime,
-                    phone: dto.phone,
-                    endTime: dto.endTime,
-                    type: 'JUBLY_BOOKING',
-                    city: dto.city,
-                    state: dto.state,
-                    country: dto.country,
-                    vendorUserId: vendorUser?.id,
-                    userId: vendorUser?.id,
-                },
-            }, {
-                headers: {
-                    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-                    'Content-Type': 'application/json',
-                },
+                vendorEmail: vendorUser?.email,
+                businessName: dto.businessName,
+                dayOfWeek: dto.dayOfWeek,
+                startTime: dto.startTime,
+                phone: dto.phone,
+                endTime: dto.endTime,
+                type: 'JUBLY_BOOKING',
+                city: dto.city,
+                state: dto.state,
+                country: dto.country,
+                vendorUserId: vendorUser?.id,
+                userId: vendorUser?.id,
             });
             await this.prisma.transaction.create({
                 data: {
                     vendorId: vendor.id,
                     amount,
-                    providerRef: response.data.data.reference,
+                    providerRef: reference,
                     status: 'PENDING',
                 },
             });
             return (0, response_1.successResponse)({
-                authorizationUrl: response.data.data.authorization_url,
-                reference: response.data.data.reference,
+                authorizationUrl,
+                reference,
             }, 'Successful', 201);
         }
         catch (error) {
@@ -313,6 +305,223 @@ let BookingService = class BookingService {
             }
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
         }
+    }
+    async createVendorBooking(userId, dto) {
+        try {
+            const vendor = await this.prisma.vendor.findFirst({
+                where: { userId },
+            });
+            if (!vendor) {
+                throw new common_1.NotFoundException('Vendor not found');
+            }
+            const isManualBookingEnabled = await this.platformSettingsService.isManualBookingEnabled(vendor.id);
+            if (!isManualBookingEnabled) {
+                throw new common_1.ForbiddenException('Vendor-created bookings are currently disabled.');
+            }
+            const startTime = this.parseDateInput(dto.startTime, 'startTime');
+            const service = await this.prisma.service.findFirst({
+                where: { id: dto.serviceId },
+            });
+            if (!service) {
+                throw new common_1.NotFoundException('Service not found');
+            }
+            const endTime = dto.endTime
+                ? this.parseDateInput(dto.endTime, 'endTime')
+                : new Date(startTime.getTime() + (service.durationMins || 60) * 60000);
+            if (endTime <= startTime) {
+                throw new common_1.BadRequestException('endTime must be later than startTime');
+            }
+            if (startTime < new Date()) {
+                throw new common_1.BadRequestException('Cannot book a past date or time');
+            }
+            if (service.userId !== userId) {
+                throw new common_1.ForbiddenException('You can only create bookings for your own services');
+            }
+            const bookingDate = this.toBookingDate(startTime);
+            const dayOfWeek = startTime.getDay();
+            const availability = await this.prisma.vendorAvailability.findUnique({
+                where: {
+                    vendorId_dayOfWeek: { vendorId: vendor.id, dayOfWeek },
+                },
+            });
+            if (!availability) {
+                throw new common_1.BadRequestException('Vendor is not available on this day');
+            }
+            const windowStart = new Date(`${startTime.toDateString()} ${availability.startTime}`);
+            const windowEnd = new Date(`${startTime.toDateString()} ${availability.endTime}`);
+            if (startTime < windowStart || endTime > windowEnd) {
+                throw new common_1.BadRequestException('Requested time is outside vendor availability hours');
+            }
+            const bookingSettings = await this.prisma.vendorBookingSettings.findUnique({
+                where: { vendorId: vendor.id },
+            });
+            const bufferMs = (bookingSettings?.bufferTime || 0) * 60000;
+            const existingBookings = await this.prisma.booking.findMany({
+                where: {
+                    vendorId: vendor.id,
+                    date: bookingDate,
+                    status: {
+                        notIn: ['CANCELLED', 'CANCELLED_BY_CLIENT', 'CANCELLED_BY_VENDOR'],
+                    },
+                },
+            });
+            const hasOverlap = existingBookings.some((b) => startTime.getTime() - bufferMs < new Date(b.endTime).getTime() &&
+                endTime.getTime() + bufferMs > new Date(b.startTime).getTime());
+            if (hasOverlap) {
+                throw new common_1.ConflictException('This time slot is already booked');
+            }
+            const amount = service.price;
+            const existingClient = await this.prisma.user.findFirst({
+                where: { email: dto.clientEmail },
+            });
+            if (dto.paymentOption === 'PAID_BY_HAND') {
+                const canUsePaidByHand = await this.platformSettingsService.canUsePaidByHand(vendor.id);
+                if (!canUsePaidByHand) {
+                    throw new common_1.ForbiddenException('An active Jubly subscription is required to record externally paid bookings.');
+                }
+                const booking = await this.prisma.booking.create({
+                    data: {
+                        vendorId: vendor.id,
+                        serviceId: dto.serviceId,
+                        date: bookingDate,
+                        startTime,
+                        endTime,
+                        name: service.name,
+                        clientName: dto.clientName,
+                        clientEmail: dto.clientEmail,
+                        clientPhone: dto.clientPhone,
+                        clientAddress: dto.clientAddress,
+                        userId: existingClient?.id,
+                        amount,
+                        status: 'CONFIRMED',
+                        source: 'VENDOR_CREATED',
+                        paymentMethod: 'PAID_BY_HAND',
+                        paymentVerification: 'VENDOR_REPORTED',
+                    },
+                });
+                await this.prisma.transaction.create({
+                    data: {
+                        vendorId: vendor.id,
+                        bookingId: booking.id,
+                        amount,
+                        currency: 'NGN',
+                        providerRef: `MANUAL-${booking.id}`,
+                        paymentMethod: 'PAID_BY_HAND',
+                        status: 'COMPLETED',
+                        percentageFee: 0,
+                        title: service.name,
+                        category: 'VENDOR_REPORTED',
+                        paidAt: new Date(),
+                    },
+                });
+                await this.activityService.createLog({
+                    vendorId: vendor.id,
+                    userId,
+                    action: 'MANUAL_PAYMENT_RECORDED',
+                    description: `Booking #${booking.id} was recorded as paid by hand.`,
+                    actor: dto.clientName,
+                    actorType: 'VENDOR',
+                    color: 'green',
+                });
+                this.sendVendorCreatedBookingEmails(userId, vendor, service, booking, dto).catch((err) => console.error('Vendor-created booking email failed:', err?.message));
+                return { booking };
+            }
+            const booking = await this.prisma.booking.create({
+                data: {
+                    vendorId: vendor.id,
+                    serviceId: dto.serviceId,
+                    date: bookingDate,
+                    startTime,
+                    endTime,
+                    name: service.name,
+                    clientName: dto.clientName,
+                    clientEmail: dto.clientEmail,
+                    clientPhone: dto.clientPhone,
+                    userId: existingClient?.id,
+                    amount,
+                    status: 'PENDING',
+                    source: 'VENDOR_CREATED',
+                    paymentMethod: 'PAY_BY_LINK',
+                    paymentVerification: 'PENDING',
+                    paymentExpiresAt: new Date(Date.now() + this.vendorBookingPaymentExpiryMs),
+                },
+            });
+            const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendor.id);
+            const vendorUser = await this.prisma.user.findUnique({
+                where: { id: userId },
+            });
+            const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, amount, {
+                type: 'VENDOR_CREATED_BOOKING_LINK',
+                bookingId: booking.id,
+                vendorId: vendor.id,
+                serviceId: dto.serviceId,
+                title: service.name,
+                clientName: dto.clientName,
+                clientEmail: dto.clientEmail,
+                clientPhone: dto.clientPhone,
+                vendorEmail: vendorUser?.email,
+                percentageFee,
+            });
+            await this.prisma.transaction.create({
+                data: {
+                    vendorId: vendor.id,
+                    amount,
+                    currency: 'NGN',
+                    providerRef: reference,
+                    status: 'PENDING',
+                },
+            });
+            await this.activityService.createLog({
+                vendorId: vendor.id,
+                userId,
+                action: 'BOOKING_CREATED',
+                description: `Booking #${booking.id} was created and awaits payment.`,
+                actor: dto.clientName,
+                actorType: 'VENDOR',
+                color: 'blue',
+            });
+            return { booking, paymentUrl: authorizationUrl, reference };
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Internal server error', error.message);
+        }
+    }
+    async sendVendorCreatedBookingEmails(userId, vendor, service, booking, dto) {
+        const vendorUser = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+        if (!vendorUser?.email) {
+            return;
+        }
+        const dateLabel = booking.startTime.toDateString();
+        const timeLabel = booking.startTime.toLocaleTimeString();
+        const endTimeLabel = booking.endTime.toLocaleTimeString();
+        await this.nodemailerService.sendClientBookingMail({
+            clientEmail: dto.clientEmail,
+            clientName: dto.clientName,
+            serviceName: service.name,
+            vendorName: vendor.businessName,
+            date: dateLabel,
+            time: timeLabel,
+            endTime: endTimeLabel,
+            durationMins: String(service.durationMins ?? 60),
+            businessName: vendor.businessName,
+            address: `${vendor.city} ${vendor.state} ${vendor.country ?? ''}`.trim(),
+        });
+        await this.nodemailerService.sendVendorBookingMail({
+            vendorEmail: vendorUser.email,
+            clientName: dto.clientName,
+            clientEmail: dto.clientEmail,
+            serviceName: service.name,
+            date: dateLabel,
+            time: timeLabel,
+            endTime: endTimeLabel,
+            phone: dto.clientPhone ?? '',
+            durationMins: String(service.durationMins ?? 60),
+        });
     }
     async dashboardStats(userId, vendorId) {
         try {
@@ -1162,6 +1371,13 @@ let BookingService = class BookingService {
             });
             return { transaction, settlement: existingSettlement };
         }
+        if (booking.paymentMethod === 'PAID_BY_HAND') {
+            const transaction = await this.prisma.transaction.findFirst({
+                where: { bookingId: booking.id },
+                orderBy: { createdAt: 'desc' },
+            });
+            return { transaction, settlement: null };
+        }
         const transaction = await this.prisma.transaction.findFirst({
             where: { bookingId: booking.id, status: 'PENDING' },
         });
@@ -1171,6 +1387,8 @@ let BookingService = class BookingService {
         if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
             throw new common_1.BadRequestException('Vendor has no settlement bank account');
         }
+        const percentageFee = transaction.percentageFee ?? 0;
+        const vendorAmount = Math.round(transaction.amount * (1 - percentageFee) * 100) / 100;
         const recipient = await this.paystackService.createTransferRecipient({
             name: booking.vendor.businessName,
             accountNumber: booking.vendor.bankAccountNumber,
@@ -1179,7 +1397,7 @@ let BookingService = class BookingService {
         const settlement = await this.prisma.settlement.create({
             data: {
                 bookingId: booking.id,
-                amount: transaction.amount,
+                amount: vendorAmount,
                 recipientCode: recipient.recipient_code,
                 status: 'PENDING',
             },
@@ -1187,7 +1405,7 @@ let BookingService = class BookingService {
         let transfer;
         try {
             transfer = await this.paystackService.initiateTransfer({
-                amount: transaction.amount,
+                amount: vendorAmount,
                 recipientCode: recipient.recipient_code,
                 reason: `Settlement for booking ${booking.id}`,
                 reference: `booking-${booking.id}-${Date.now()}`,
@@ -1214,7 +1432,8 @@ let BookingService = class BookingService {
         return { transaction, settlement };
     }
     async completeBookingNow(booking, user) {
-        const { transaction } = await this.settleBookingPayment(booking);
+        const { transaction, settlement } = await this.settleBookingPayment(booking);
+        const payoutAmount = settlement?.amount ?? transaction?.amount;
         const updatedBooking = await this.prisma.booking.update({
             where: { id: booking.id },
             data: { status: 'COMPLETED' },
@@ -1223,7 +1442,7 @@ let BookingService = class BookingService {
             vendorId: booking.vendorId,
             userId: user.id,
             action: 'SETTLEMENT_PAID',
-            description: `Settlement of ₦${transaction?.amount?.toLocaleString() ?? '0'} processed.`,
+            description: `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} processed.`,
             actor: 'System',
             actorType: 'SYSTEM',
             color: 'purple',
@@ -1312,7 +1531,8 @@ let BookingService = class BookingService {
             if (booking.status !== client_1.BookingStatus.COMPLETION_PENDING_APPROVAL) {
                 return (0, response_1.successResponse)(booking, 'This completion request is no longer pending.');
             }
-            const { transaction } = await this.settleBookingPayment(booking);
+            const { transaction, settlement } = await this.settleBookingPayment(booking);
+            const payoutAmount = settlement?.amount ?? transaction?.amount;
             const updatedBooking = await this.prisma.booking.update({
                 where: { id: booking.id },
                 data: {
@@ -1324,7 +1544,7 @@ let BookingService = class BookingService {
                 vendorId: booking.vendorId,
                 userId: booking.clientId ?? undefined,
                 action: 'BOOKING_COMPLETION_APPROVED',
-                description: `Booking #${booking.id} completion approved by client. Settlement of ₦${transaction?.amount?.toLocaleString() ?? '0'} processed.`,
+                description: `Booking #${booking.id} completion approved by client. Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} processed.`,
                 actor: booking.clientName ?? booking.clientEmail,
                 actorType: 'CLIENT',
                 color: 'purple',
@@ -1630,5 +1850,7 @@ exports.BookingService = BookingService = __decorate([
         nodemailer_service_1.NodemailerService,
         paystack_service_1.PaystackService,
         activityLog_service_1.ActivityService,
-        jwt_1.JwtService])
+        jwt_1.JwtService,
+        platform_settings_service_1.PlatformSettingsService,
+        subscription_service_1.SubscriptionService])
 ], BookingService);

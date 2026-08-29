@@ -29,6 +29,10 @@ import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Public } from 'src/auth/public.decorator';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { successResponse } from 'src/utils/response';
+import { ActivityService } from 'src/activity/activityLog.service';
+import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
+import { SubscriptionService } from 'src/subscription/subscription.service';
+import type { User, Vendor } from '@prisma/client';
 
 @Controller('paystack')
 export class PaystackController {
@@ -38,6 +42,9 @@ export class PaystackController {
     private readonly transactionsService: TransactionService,
     private readonly mailService: NodemailerService,
     private readonly bookingService: BookingService,
+    private readonly activityService: ActivityService,
+    private readonly platformSettingsService: PlatformSettingsService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   @Get('/resolve-bank/:accountNumber/:bankCode')
@@ -234,6 +241,33 @@ export class PaystackController {
       const accountName = auth?.account_name || null;
       const accountNumber = auth?.account_number || null;
 
+      if (event.data.metadata?.type === 'SUBSCRIPTION_UPGRADE') {
+        const { vendorId, plan, durationDays } = event.data.metadata;
+
+        if (!vendorId) {
+          throw new BadRequestException('Incomplete subscription metadata');
+        }
+
+        await this.subscriptionService.activateSubscription({
+          vendorId,
+          plan: plan || 'PREMIUM',
+          durationDays: Number(durationDays) || 30,
+          reference: event.data.reference,
+          amount: event.data.amount / 100,
+        });
+
+        await this.activityService.createLog({
+          vendorId,
+          action: 'SUBSCRIPTION_ACTIVATED',
+          description: `Subscription payment of ₦${(event.data.amount / 100).toLocaleString()} confirmed.`,
+          actor: 'System',
+          actorType: 'SYSTEM',
+          color: 'green',
+        });
+
+        return { status: true };
+      }
+
       const transactionExists = await this.prisma.transaction.findUnique({
         where: {
           providerRef: event.data.reference,
@@ -244,7 +278,164 @@ export class PaystackController {
         throw new BadRequestException('Transaction was not initialized');
       }
 
+      // Shared idempotency guard for both flows below: bookingId is only
+      // ever set once a charge has actually been confirmed (by this webhook
+      // or by the reconciliation cron), so a redelivered webhook is a no-op.
       if (transactionExists.bookingId) {
+        return { status: true };
+      }
+
+      if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
+        const { bookingId, percentageFee, clientName, clientEmail, title } =
+          event.data.metadata;
+
+        if (!bookingId) {
+          throw new BadRequestException('Incomplete booking metadata');
+        }
+
+        const booking = await this.prisma.booking.findUnique({
+          where: { id: bookingId },
+        });
+
+        if (!booking) {
+          throw new BadRequestException('Vendor-created booking was not found');
+        }
+
+        const updatedBooking = await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: 'CONFIRMED',
+            paymentVerification: 'PAYSTACK_VERIFIED',
+            paymentExpiresAt: null,
+          },
+        });
+
+        const senderDetails = await this.prisma.senderDetails.create({
+          data: {
+            vendorId: booking.vendorId,
+            email: clientEmail,
+            senderName: accountName ?? clientName,
+            senderAccountNumber: accountNumber,
+            senderBankName: bank,
+            senderDescription: 'Payment via Paystack (vendor-created link)',
+          },
+        });
+
+        await this.prisma.transaction.update({
+          where: { providerRef: event.data.reference },
+          data: {
+            bookingId: updatedBooking.id,
+            // Stays 'PENDING' — this tracks vendor payout status, not
+            // client payment status. settleBookingPayment() looks for
+            // 'PENDING' to know a real Paystack transfer to the vendor is
+            // still owed, and flips it to 'COMPLETED' only once that
+            // transfer actually succeeds (see booking.service.ts).
+            status: 'PENDING',
+            paidAt: new Date(),
+            percentageFee: percentageFee ?? 0.05,
+            paymentMethod: paymentChannel,
+            senderDetailsId: senderDetails.id,
+          },
+        });
+
+        await this.activityService.createLog({
+          vendorId: booking.vendorId,
+          action: 'PAYMENT_RECEIVED',
+          description: `Payment of ₦${booking.amount?.toLocaleString() ?? ''} received for booking #${booking.id}.`,
+          actor: 'System',
+          actorType: 'SYSTEM',
+          color: 'yellow',
+        });
+
+        let bookingVendor: Vendor | null = null;
+        let vendorUser: User | null = null;
+        try {
+          bookingVendor = await this.prisma.vendor.findUnique({
+            where: { id: booking.vendorId },
+          });
+          vendorUser = bookingVendor
+            ? await this.prisma.user.findUnique({
+                where: { id: bookingVendor.userId },
+              })
+            : null;
+        } catch (err) {
+          console.error('Failed to load vendor for receipt emails:', err);
+        }
+
+        setImmediate(() => {
+          void (async () => {
+            try {
+              await this.mailService.sendClientBookingMail({
+                clientEmail: booking.clientEmail,
+                clientName: booking.clientName ?? clientName,
+                serviceName: title,
+                date: updatedBooking.startTime.toDateString(),
+                time: updatedBooking.startTime.toLocaleTimeString(),
+                endTime: updatedBooking.endTime.toLocaleTimeString(),
+                durationMins: '',
+                businessName: '',
+                address: '',
+              });
+            } catch (err) {
+              console.error('sendClientBookingMail failed:', err);
+            }
+
+            if (vendorUser?.email) {
+              try {
+                await this.mailService.sendVendorBookingMail({
+                  vendorEmail: vendorUser.email,
+                  clientName: booking.clientName ?? clientName,
+                  clientEmail: booking.clientEmail,
+                  serviceName: title,
+                  date: updatedBooking.startTime.toDateString(),
+                  time: updatedBooking.startTime.toLocaleTimeString(),
+                  endTime: updatedBooking.endTime.toLocaleTimeString(),
+                  phone: booking.clientPhone ?? '',
+                  durationMins: '',
+                });
+              } catch (err) {
+                console.error('sendVendorBookingMail failed:', err);
+              }
+
+              try {
+                await this.mailService.sendVendorReceiptMail({
+                  vendorEmail: vendorUser.email,
+                  bookingName: booking.name,
+                  clientName: booking.clientName ?? clientName,
+                  clientAddress: booking.clientAddress ?? undefined,
+                  clientPhone: booking.clientPhone ?? undefined,
+                  serviceName: title,
+                  date: updatedBooking.startTime.toDateString(),
+                  startTime: updatedBooking.startTime.toLocaleTimeString(),
+                  endTime: updatedBooking.endTime.toLocaleTimeString(),
+                  transactionRef: event.data.reference,
+                });
+              } catch (err) {
+                console.error('sendVendorReceiptMail failed:', err);
+              }
+            }
+
+            try {
+              await this.mailService.sendClientReceiptMail({
+                clientEmail: booking.clientEmail,
+                bookingName: booking.name,
+                vendorName: bookingVendor?.businessName ?? '',
+                vendorAddress: bookingVendor
+                  ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
+                  : undefined,
+                vendorPhone: vendorUser?.phone ?? undefined,
+                serviceName: title,
+                date: updatedBooking.startTime.toDateString(),
+                startTime: updatedBooking.startTime.toLocaleTimeString(),
+                endTime: updatedBooking.endTime.toLocaleTimeString(),
+                transactionRef: event.data.reference,
+              });
+            } catch (err) {
+              console.error('sendClientReceiptMail failed:', err);
+            }
+          })();
+        });
+
         return { status: true };
       }
 
@@ -314,13 +505,18 @@ export class PaystackController {
           },
         });
 
+        const percentageFee =
+          await this.platformSettingsService.resolvePlatformPercentage(
+            vendorId,
+          );
+
         const dto = {
           amount: event.data.amount,
           senderDetailsId: senderDetails.id,
           status: 'PENDING',
           providerRef: event.data.reference,
           paidAt: event.data.paid_at,
-          percentageFee: 0.05,
+          percentageFee,
           bookingId: book.id,
           vendorId,
           slug,
@@ -330,6 +526,15 @@ export class PaystackController {
         };
 
         await this.transactionsService.updateTransaction(userId, dto);
+
+        let vendorUserRecord: User | null = null;
+        try {
+          vendorUserRecord = await this.prisma.user.findUnique({
+            where: { id: vendorUserId },
+          });
+        } catch (err) {
+          console.error('Failed to load vendor for receipt emails:', err);
+        }
 
         setImmediate(() => {
           void (async () => {
@@ -345,6 +550,11 @@ export class PaystackController {
                 businessName: businessName,
                 address: `${city} ${state} ${country}`,
               });
+            } catch (err) {
+              console.error('sendClientBookingMail failed:', err);
+            }
+
+            try {
               await this.mailService.sendVendorBookingMail({
                 vendorEmail: vendorEmail,
                 clientName: clientName,
@@ -357,7 +567,43 @@ export class PaystackController {
                 phone,
               });
             } catch (err) {
-              console.error(err);
+              console.error('sendVendorBookingMail failed:', err);
+            }
+
+            try {
+              await this.mailService.sendClientReceiptMail({
+                clientEmail: email,
+                bookingName: book.name,
+                vendorName: businessName,
+                vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
+                vendorPhone: vendorUserRecord?.phone ?? undefined,
+                serviceName: title,
+                date: dayOfWeek,
+                startTime: startTime,
+                endTime: endTime,
+                transactionRef: event.data.reference,
+              });
+            } catch (err) {
+              console.error('sendClientReceiptMail failed:', err);
+            }
+
+            if (vendorEmail) {
+              try {
+                await this.mailService.sendVendorReceiptMail({
+                  vendorEmail,
+                  bookingName: book.name,
+                  clientName,
+                  clientAddress,
+                  clientPhone: phone,
+                  serviceName: title,
+                  date: dayOfWeek,
+                  startTime: startTime,
+                  endTime: endTime,
+                  transactionRef: event.data.reference,
+                });
+              } catch (err) {
+                console.error('sendVendorReceiptMail failed:', err);
+              }
             }
           })();
         });
