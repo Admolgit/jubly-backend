@@ -13,5 +13,6 @@ export const timeConverter = (time: string | Date) => {
     timeZone: 'Africa/Lagos',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
   });
 };
