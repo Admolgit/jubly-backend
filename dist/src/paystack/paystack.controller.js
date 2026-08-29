@@ -338,7 +338,7 @@ let PaystackController = class PaystackController {
                     !serviceId ||
                     !clientId ||
                     !email ||
-                    !dayOfWeek ||
+                    dayOfWeek == null ||
                     !startTime ||
                     !endTime) {
                     throw new common_1.BadRequestException('Incomplete booking metadata in marketplace');
