@@ -1,12 +1,48 @@
-import { MailerService } from '@nestjs-modules/mailer';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Resend } from 'resend';
 
 @Injectable()
 export class NodemailerService {
-  constructor(private readonly mailerService: MailerService) {}
+  private readonly logger = new Logger(NodemailerService.name);
+
+  // All transactional email is sent via Resend's HTTP API — every method
+  // below keeps its exact existing signature; only the delivery mechanism
+  // changed.
+  private readonly resend = new Resend(process.env.RESEND_API_KEY);
+  private readonly fromAddress =
+    process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
+  private async sendMail(params: {
+    to?: string;
+    subject: string;
+    html: string;
+    text?: string;
+  }) {
+    if (!params.to) {
+      this.logger.warn(
+        `Skipped sending "${params.subject}" — no recipient email provided.`,
+      );
+      return;
+    }
+
+    const { error } = await this.resend.emails.send({
+      from: this.fromAddress,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+    });
+
+    if (error) {
+      this.logger.error(
+        `Failed to send email to ${params.to} (${params.subject}): ${error.message}`,
+      );
+      throw new Error(error.message);
+    }
+  }
 
   async sendOTP(email: string, otp: string) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: email,
       subject: 'Your OTP Code',
       html: `
@@ -38,7 +74,7 @@ export class NodemailerService {
   async sendTempPassword(email: string, password: string) {
     const loginUrl = process.env.FRONTEND_BASE_URL + '/login';
 
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: email,
       subject: 'Your Jubly Temporary Password',
       html: `
@@ -94,7 +130,7 @@ export class NodemailerService {
     endTime?: string;
     durationMins: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.clientEmail,
       subject: `Your booking with ${data.businessName} is confirmed`,
       html: `
@@ -143,7 +179,7 @@ export class NodemailerService {
     phone: string;
     durationMins: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.vendorEmail,
       subject: 'You have a new booking 🎉',
       html: `
@@ -189,7 +225,7 @@ export class NodemailerService {
     endTime: string;
     transactionRef: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.vendorEmail,
       subject: `Payment receipt — ${data.bookingName}`,
       html: `
@@ -234,7 +270,7 @@ export class NodemailerService {
     endTime: string;
     transactionRef: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.clientEmail,
       subject: `Payment receipt — ${data.bookingName}`,
       html: `
@@ -279,7 +315,7 @@ export class NodemailerService {
     proposedDate: Date;
     reason?: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `Reschedule requested for your ${data.serviceName} appointment`,
       html: `
@@ -315,7 +351,7 @@ export class NodemailerService {
     newStart: Date;
     newEnd: Date;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `Your reschedule request for ${data.serviceName} was accepted`,
       html: `
@@ -346,7 +382,7 @@ export class NodemailerService {
     vendorName: string;
     reason?: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `Your reschedule request for ${data.serviceName} was rejected`,
       html: `
@@ -378,7 +414,7 @@ export class NodemailerService {
     proposedDate: Date;
     reason?: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `A new time was proposed for your ${data.serviceName} appointment`,
       html: `
@@ -419,7 +455,7 @@ export class NodemailerService {
       typeof data.refundAmount === 'number' &&
       typeof data.refundPercentage === 'number';
 
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `Your ${data.serviceName} booking has been cancelled`,
       html: `
@@ -465,7 +501,7 @@ export class NodemailerService {
     email?: string;
     action?: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data?.email,
       subject: `${data?.subject}`,
       html: `
@@ -500,7 +536,7 @@ export class NodemailerService {
     vendorName: string;
     reviewUrl: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `${data.vendorName} marked your ${data.serviceName} booking as completed`,
       html: `
@@ -534,7 +570,7 @@ export class NodemailerService {
     serviceName: string;
     vendorName: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `Your ${data.serviceName} booking has been completed`,
       html: `
@@ -561,7 +597,7 @@ export class NodemailerService {
     clientName: string;
     reason?: string;
   }) {
-    await this.mailerService.sendMail({
+    await this.sendMail({
       to: data.recipientEmail,
       subject: `Your completion request for ${data.serviceName} was rejected`,
       html: `

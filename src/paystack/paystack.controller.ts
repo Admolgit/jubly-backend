@@ -240,7 +240,7 @@ export class PaystackController {
       const bank = auth?.bank || null;
       const accountName = auth?.account_name || null;
       const accountNumber = auth?.account_number || null;
-      
+
       if (event.data.metadata?.type === 'SUBSCRIPTION_UPGRADE') {
         const { vendorId, plan, durationDays } = event.data.metadata;
 
@@ -278,6 +278,13 @@ export class PaystackController {
         throw new BadRequestException('Transaction was not initialized');
       }
 
+      // Shared idempotency guard for both flows below: bookingId is only
+      // ever set once a charge has actually been confirmed (by this webhook
+      // or by the reconciliation cron), so a redelivered webhook is a no-op.
+      if (transactionExists.bookingId) {
+        return { status: true };
+      }
+
       if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
         const { bookingId, percentageFee, clientName, clientEmail, title } =
           event.data.metadata;
@@ -292,15 +299,6 @@ export class PaystackController {
 
         if (!booking) {
           throw new BadRequestException('Vendor-created booking was not found');
-        }
-
-        // Idempotency: a redelivered webhook for a booking already confirmed
-        // by an earlier delivery is a no-op. (Transaction.status can't be
-        // used here — it deliberately stays 'PENDING' after this branch runs,
-        // same as the marketplace flow, so settleBookingPayment can later
-        // find it and pay the vendor out.)
-        if (booking.paymentVerification === 'PAYSTACK_VERIFIED') {
-          return { status: true };
         }
 
         const updatedBooking = await this.prisma.booking.update({
@@ -438,10 +436,6 @@ export class PaystackController {
           })();
         });
 
-        return { status: true };
-      }
-
-      if (transactionExists.bookingId) {
         return { status: true };
       }
 
