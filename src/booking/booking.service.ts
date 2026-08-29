@@ -223,6 +223,7 @@ export class BookingService {
           startTime,
           endTime,
           status: 'CONFIRMED',
+          clientPhone: dto.phone,
         },
       });
 

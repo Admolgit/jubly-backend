@@ -22,6 +22,7 @@ export interface IBooking {
   endTime: Date;
   date: string;
   status: string;
+  phone: string;
 }
 
 export enum BookingFilter {
