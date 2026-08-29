@@ -5,19 +5,36 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
+var NodemailerService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NodemailerService = void 0;
-const mailer_1 = require("@nestjs-modules/mailer");
 const common_1 = require("@nestjs/common");
-let NodemailerService = class NodemailerService {
-    constructor(mailerService) {
-        this.mailerService = mailerService;
+const resend_1 = require("resend");
+let NodemailerService = NodemailerService_1 = class NodemailerService {
+    constructor() {
+        this.logger = new common_1.Logger(NodemailerService_1.name);
+        this.resend = new resend_1.Resend(process.env.RESEND_API_KEY);
+        this.fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    }
+    async sendMail(params) {
+        if (!params.to) {
+            this.logger.warn(`Skipped sending "${params.subject}" — no recipient email provided.`);
+            return;
+        }
+        const { error } = await this.resend.emails.send({
+            from: this.fromAddress,
+            to: params.to,
+            subject: params.subject,
+            html: params.html,
+            text: params.text,
+        });
+        if (error) {
+            this.logger.error(`Failed to send email to ${params.to} (${params.subject}): ${error.message}`);
+            throw new Error(error.message);
+        }
     }
     async sendOTP(email, otp) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: email,
             subject: 'Your OTP Code',
             html: `
@@ -47,7 +64,7 @@ let NodemailerService = class NodemailerService {
     }
     async sendTempPassword(email, password) {
         const loginUrl = process.env.FRONTEND_BASE_URL + '/login';
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: email,
             subject: 'Your Jubly Temporary Password',
             html: `
@@ -91,7 +108,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async sendClientBookingMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.clientEmail,
             subject: `Your booking with ${data.businessName} is confirmed`,
             html: `
@@ -129,7 +146,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async sendVendorBookingMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.vendorEmail,
             subject: 'You have a new booking 🎉',
             html: `
@@ -163,7 +180,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async sendVendorReceiptMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.vendorEmail,
             subject: `Payment receipt — ${data.bookingName}`,
             html: `
@@ -196,7 +213,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async sendClientReceiptMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.clientEmail,
             subject: `Payment receipt — ${data.bookingName}`,
             html: `
@@ -229,7 +246,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async rescheduleRequestedMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `Reschedule requested for your ${data.serviceName} appointment`,
             html: `
@@ -257,7 +274,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async rescheduleAcceptedMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `Your reschedule request for ${data.serviceName} was accepted`,
             html: `
@@ -281,7 +298,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async rescheduleRejectedMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `Your reschedule request for ${data.serviceName} was rejected`,
             html: `
@@ -305,7 +322,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async rescheduleCounterProposedMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `A new time was proposed for your ${data.serviceName} appointment`,
             html: `
@@ -332,7 +349,7 @@ let NodemailerService = class NodemailerService {
     async bookingCancelledMail(data) {
         const hasRefundInfo = typeof data.refundAmount === 'number' &&
             typeof data.refundPercentage === 'number';
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `Your ${data.serviceName} booking has been cancelled`,
             html: `
@@ -360,7 +377,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async bookingStatusChangeMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data?.email,
             subject: `${data?.subject}`,
             html: `
@@ -388,7 +405,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async bookingCompletionRequestMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `${data.vendorName} marked your ${data.serviceName} booking as completed`,
             html: `
@@ -416,7 +433,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async bookingCompletedMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `Your ${data.serviceName} booking has been completed`,
             html: `
@@ -437,7 +454,7 @@ let NodemailerService = class NodemailerService {
         });
     }
     async bookingCompletionRejectedMail(data) {
-        await this.mailerService.sendMail({
+        await this.sendMail({
             to: data.recipientEmail,
             subject: `Your completion request for ${data.serviceName} was rejected`,
             html: `
@@ -461,7 +478,6 @@ let NodemailerService = class NodemailerService {
     }
 };
 exports.NodemailerService = NodemailerService;
-exports.NodemailerService = NodemailerService = __decorate([
-    (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [mailer_1.MailerService])
+exports.NodemailerService = NodemailerService = NodemailerService_1 = __decorate([
+    (0, common_1.Injectable)()
 ], NodemailerService);

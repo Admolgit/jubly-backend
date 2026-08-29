@@ -217,6 +217,9 @@ let PaystackController = class PaystackController {
             if (!transactionExists) {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
+            if (transactionExists.bookingId) {
+                return { status: true };
+            }
             if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
                 const { bookingId, percentageFee, clientName, clientEmail, title } = event.data.metadata;
                 if (!bookingId) {
@@ -227,9 +230,6 @@ let PaystackController = class PaystackController {
                 });
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
-                }
-                if (booking.paymentVerification === 'PAYSTACK_VERIFIED') {
-                    return { status: true };
                 }
                 const updatedBooking = await this.prisma.booking.update({
                     where: { id: bookingId },
@@ -357,9 +357,6 @@ let PaystackController = class PaystackController {
                         }
                     })();
                 });
-                return { status: true };
-            }
-            if (transactionExists.bookingId) {
                 return { status: true };
             }
             {

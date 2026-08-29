@@ -18,18 +18,20 @@ const booking_service_1 = require("../booking/booking.service");
 const transaction_service_1 = require("../transaction/transaction.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const activityLog_service_1 = require("../activity/activityLog.service");
 const PENDING_TRANSACTION_STALE_AFTER_MS = 20 * 60 * 1000;
 const PENDING_TRANSACTION_ABANDON_AFTER_MS = 48 * 60 * 60 * 1000;
 const SETTLEMENT_RETRY_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 25;
 let PaystackReconciliationService = class PaystackReconciliationService {
-    constructor(prisma, paystackService, bookingService, transactionsService, mailService, platformSettingsService) {
+    constructor(prisma, paystackService, bookingService, transactionsService, mailService, platformSettingsService, activityService) {
         this.prisma = prisma;
         this.paystackService = paystackService;
         this.bookingService = bookingService;
         this.transactionsService = transactionsService;
         this.mailService = mailService;
         this.platformSettingsService = platformSettingsService;
+        this.activityService = activityService;
     }
     onModuleInit() {
         new cron_1.CronJob('*/10 * * * *', () => {
@@ -85,6 +87,9 @@ let PaystackReconciliationService = class PaystackReconciliationService {
         });
         if (!existing || existing.bookingId) {
             return;
+        }
+        if (chargeData.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
+            return this.finalizeVendorCreatedBookingLinkCharge(chargeData);
         }
         const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = chargeData.metadata ?? {};
         if (!vendorId ||
@@ -222,6 +227,150 @@ let PaystackReconciliationService = class PaystackReconciliationService {
             }
         }
     }
+    async finalizeVendorCreatedBookingLinkCharge(chargeData) {
+        const { bookingId, percentageFee, clientName, clientEmail, title } = chargeData.metadata ?? {};
+        if (!bookingId) {
+            console.error(`[PaystackReconciliation] Incomplete vendor-created-link metadata for transaction ${chargeData.reference}`);
+            return;
+        }
+        const booking = await this.prisma.booking.findUnique({
+            where: { id: bookingId },
+        });
+        if (!booking) {
+            console.error(`[PaystackReconciliation] Vendor-created booking ${bookingId} not found for transaction ${chargeData.reference}`);
+            return;
+        }
+        if (booking.paymentVerification === 'PAYSTACK_VERIFIED') {
+            return;
+        }
+        const auth = chargeData.authorization;
+        const bank = auth?.bank || null;
+        const accountName = auth?.account_name || null;
+        const accountNumber = auth?.account_number || null;
+        const paymentChannel = chargeData.channel || auth?.channel || 'unknown';
+        const updatedBooking = await this.prisma.booking.update({
+            where: { id: bookingId },
+            data: {
+                status: 'CONFIRMED',
+                paymentVerification: 'PAYSTACK_VERIFIED',
+                paymentExpiresAt: null,
+            },
+        });
+        const senderDetails = await this.prisma.senderDetails.create({
+            data: {
+                vendorId: booking.vendorId,
+                email: clientEmail,
+                senderName: accountName ?? clientName,
+                senderAccountNumber: accountNumber,
+                senderBankName: bank,
+                senderDescription: 'Payment via Paystack (vendor-created link, reconciled)',
+            },
+        });
+        await this.prisma.transaction.update({
+            where: { providerRef: chargeData.reference },
+            data: {
+                bookingId: updatedBooking.id,
+                status: 'PENDING',
+                paidAt: new Date(),
+                percentageFee: percentageFee ?? 0.05,
+                paymentMethod: paymentChannel,
+                senderDetailsId: senderDetails.id,
+            },
+        });
+        await this.activityService.createLog({
+            vendorId: booking.vendorId,
+            action: 'PAYMENT_RECEIVED',
+            description: `Payment of ₦${booking.amount?.toLocaleString() ?? ''} received for booking #${booking.id} (reconciled).`,
+            actor: 'System',
+            actorType: 'SYSTEM',
+            color: 'yellow',
+        });
+        let bookingVendor = null;
+        let vendorUser = null;
+        try {
+            bookingVendor = await this.prisma.vendor.findUnique({
+                where: { id: booking.vendorId },
+            });
+            vendorUser = bookingVendor
+                ? await this.prisma.user.findUnique({
+                    where: { id: bookingVendor.userId },
+                })
+                : null;
+        }
+        catch (err) {
+            console.error('[PaystackReconciliation] Failed to load vendor for receipt emails:', err);
+        }
+        try {
+            await this.mailService.sendClientBookingMail({
+                clientEmail: booking.clientEmail,
+                clientName: booking.clientName ?? clientName,
+                serviceName: title,
+                date: updatedBooking.startTime.toDateString(),
+                time: updatedBooking.startTime.toLocaleTimeString(),
+                endTime: updatedBooking.endTime.toLocaleTimeString(),
+                durationMins: '',
+                businessName: '',
+                address: '',
+            });
+        }
+        catch (err) {
+            console.error('[PaystackReconciliation] sendClientBookingMail failed:', err);
+        }
+        if (vendorUser?.email) {
+            try {
+                await this.mailService.sendVendorBookingMail({
+                    vendorEmail: vendorUser.email,
+                    clientName: booking.clientName ?? clientName,
+                    clientEmail: booking.clientEmail,
+                    serviceName: title,
+                    date: updatedBooking.startTime.toDateString(),
+                    time: updatedBooking.startTime.toLocaleTimeString(),
+                    endTime: updatedBooking.endTime.toLocaleTimeString(),
+                    phone: booking.clientPhone ?? '',
+                    durationMins: '',
+                });
+            }
+            catch (err) {
+                console.error('[PaystackReconciliation] sendVendorBookingMail failed:', err);
+            }
+            try {
+                await this.mailService.sendVendorReceiptMail({
+                    vendorEmail: vendorUser.email,
+                    bookingName: booking.name,
+                    clientName: booking.clientName ?? clientName,
+                    clientAddress: booking.clientAddress ?? undefined,
+                    clientPhone: booking.clientPhone ?? undefined,
+                    serviceName: title,
+                    date: updatedBooking.startTime.toDateString(),
+                    startTime: updatedBooking.startTime.toLocaleTimeString(),
+                    endTime: updatedBooking.endTime.toLocaleTimeString(),
+                    transactionRef: chargeData.reference,
+                });
+            }
+            catch (err) {
+                console.error('[PaystackReconciliation] sendVendorReceiptMail failed:', err);
+            }
+        }
+        try {
+            await this.mailService.sendClientReceiptMail({
+                clientEmail: booking.clientEmail,
+                bookingName: booking.name,
+                vendorName: bookingVendor?.businessName ?? '',
+                vendorAddress: bookingVendor
+                    ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
+                    : undefined,
+                vendorPhone: vendorUser?.phone ?? undefined,
+                serviceName: title,
+                date: updatedBooking.startTime.toDateString(),
+                startTime: updatedBooking.startTime.toLocaleTimeString(),
+                endTime: updatedBooking.endTime.toLocaleTimeString(),
+                transactionRef: chargeData.reference,
+            });
+        }
+        catch (err) {
+            console.error('[PaystackReconciliation] sendClientReceiptMail failed:', err);
+        }
+    }
     async retryFailedSettlements() {
         const retryThreshold = new Date(Date.now() - SETTLEMENT_RETRY_MAX_AGE_MS);
         const failedSettlements = await this.prisma.settlement.findMany({
@@ -304,5 +453,6 @@ exports.PaystackReconciliationService = PaystackReconciliationService = __decora
         booking_service_1.BookingService,
         transaction_service_1.TransactionService,
         nodemailer_service_1.NodemailerService,
-        platform_settings_service_1.PlatformSettingsService])
+        platform_settings_service_1.PlatformSettingsService,
+        activityLog_service_1.ActivityService])
 ], PaystackReconciliationService);
