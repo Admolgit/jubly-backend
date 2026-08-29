@@ -467,13 +467,38 @@ export class PaystackController {
           phone,
         } = event.data.metadata;
 
+        //   {
+        //   "slug": "jub-digital-solutions-limited-935f9f",
+        //   "vendorId":"6a92fea8ab101fdc2d3c3524",T
+        //   "clientId":"6a9351cfd9b9a38050bb3da4",
+        //   "serviceId":"6a92ff48ab101fdc2d3c3525",
+        //   "title":"Web dev",
+        //   "clientName":"Simbiat Saka Ademola",
+        //   "clientAddress":"8, Okeya Street, Coker, Coker-Aguda, Surulere.",
+        //   "email":"saka001@yopmail.com",
+        //   "vendorEmail":"zealtube890@gmail.com",
+        //   "businessName":"Jub Digital Solutions Limited",
+        //   "city":"Surulere",
+        //   "state":"Lagos",
+        //   "country":"Nigeria",
+        //   "durationMins":60,
+        //   "dayOfWeek":0,
+        //   "startTime":"2026-08-30T14:00:00.000Z",
+        //   "phone":"08035480953",
+        //   "endTime":"2026-08-30T15:00:00.000Z",
+        //   "type":"JUBLY_BOOKING",
+        //   "vendorUserId":"6a92d06388374928f847942f",
+        //   "userId":"6a92d06388374928f847942f",
+        //   "referrer":"https://jubly.com.ng/"
+        // }
+
         if (
           !vendorId ||
           !vendorUserId ||
           !serviceId ||
           !clientId ||
           !email ||
-          !dayOfWeek ||
+          dayOfWeek == null ||
           !startTime ||
           !endTime
         ) {
