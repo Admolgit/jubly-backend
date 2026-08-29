@@ -233,6 +233,8 @@ export class PaystackController {
         return { status: true };
       }
 
+      JSON.stringify(event.data.metadata);
+
       const paymentChannel =
         event.data.channel || event.data.authorization?.channel || 'unknown';
 
@@ -464,8 +466,6 @@ export class PaystackController {
           vendorUserId,
           phone,
         } = event.data.metadata;
-
-        JSON.stringify(event.data.metadata);
 
         if (
           !vendorId ||
