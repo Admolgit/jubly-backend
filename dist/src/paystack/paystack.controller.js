@@ -217,9 +217,6 @@ let PaystackController = class PaystackController {
             if (!transactionExists) {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
-            if (transactionExists.bookingId) {
-                return { status: true };
-            }
             if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
                 const { bookingId, percentageFee, clientName, clientEmail, title } = event.data.metadata;
                 if (!bookingId) {
@@ -230,6 +227,9 @@ let PaystackController = class PaystackController {
                 });
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
+                }
+                if (booking.paymentVerification === 'PAYSTACK_VERIFIED') {
+                    return { status: true };
                 }
                 const updatedBooking = await this.prisma.booking.update({
                     where: { id: bookingId },
@@ -253,7 +253,7 @@ let PaystackController = class PaystackController {
                     where: { providerRef: event.data.reference },
                     data: {
                         bookingId: updatedBooking.id,
-                        status: 'COMPLETED',
+                        status: 'PENDING',
                         paidAt: new Date(),
                         percentageFee: percentageFee ?? 0.05,
                         paymentMethod: paymentChannel,
@@ -268,14 +268,21 @@ let PaystackController = class PaystackController {
                     actorType: 'SYSTEM',
                     color: 'yellow',
                 });
-                const bookingVendor = await this.prisma.vendor.findUnique({
-                    where: { id: booking.vendorId },
-                });
-                const vendorUser = bookingVendor
-                    ? await this.prisma.user.findUnique({
-                        where: { id: bookingVendor.userId },
-                    })
-                    : null;
+                let bookingVendor = null;
+                let vendorUser = null;
+                try {
+                    bookingVendor = await this.prisma.vendor.findUnique({
+                        where: { id: booking.vendorId },
+                    });
+                    vendorUser = bookingVendor
+                        ? await this.prisma.user.findUnique({
+                            where: { id: bookingVendor.userId },
+                        })
+                        : null;
+                }
+                catch (err) {
+                    console.error('Failed to load vendor for receipt emails:', err);
+                }
                 setImmediate(() => {
                     void (async () => {
                         try {
@@ -290,7 +297,12 @@ let PaystackController = class PaystackController {
                                 businessName: '',
                                 address: '',
                             });
-                            if (vendorUser?.email) {
+                        }
+                        catch (err) {
+                            console.error('sendClientBookingMail failed:', err);
+                        }
+                        if (vendorUser?.email) {
+                            try {
                                 await this.mailService.sendVendorBookingMail({
                                     vendorEmail: vendorUser.email,
                                     clientName: booking.clientName ?? clientName,
@@ -303,12 +315,51 @@ let PaystackController = class PaystackController {
                                     durationMins: '',
                                 });
                             }
+                            catch (err) {
+                                console.error('sendVendorBookingMail failed:', err);
+                            }
+                            try {
+                                await this.mailService.sendVendorReceiptMail({
+                                    vendorEmail: vendorUser.email,
+                                    bookingName: booking.name,
+                                    clientName: booking.clientName ?? clientName,
+                                    clientAddress: booking.clientAddress ?? undefined,
+                                    clientPhone: booking.clientPhone ?? undefined,
+                                    serviceName: title,
+                                    date: updatedBooking.startTime.toDateString(),
+                                    startTime: updatedBooking.startTime.toLocaleTimeString(),
+                                    endTime: updatedBooking.endTime.toLocaleTimeString(),
+                                    transactionRef: event.data.reference,
+                                });
+                            }
+                            catch (err) {
+                                console.error('sendVendorReceiptMail failed:', err);
+                            }
+                        }
+                        try {
+                            await this.mailService.sendClientReceiptMail({
+                                clientEmail: booking.clientEmail,
+                                bookingName: booking.name,
+                                vendorName: bookingVendor?.businessName ?? '',
+                                vendorAddress: bookingVendor
+                                    ? `${bookingVendor.city} ${bookingVendor.state} ${bookingVendor.country ?? ''}`.trim()
+                                    : undefined,
+                                vendorPhone: vendorUser?.phone ?? undefined,
+                                serviceName: title,
+                                date: updatedBooking.startTime.toDateString(),
+                                startTime: updatedBooking.startTime.toLocaleTimeString(),
+                                endTime: updatedBooking.endTime.toLocaleTimeString(),
+                                transactionRef: event.data.reference,
+                            });
                         }
                         catch (err) {
-                            console.error(err);
+                            console.error('sendClientReceiptMail failed:', err);
                         }
                     })();
                 });
+                return { status: true };
+            }
+            if (transactionExists.bookingId) {
                 return { status: true };
             }
             {
@@ -365,6 +416,15 @@ let PaystackController = class PaystackController {
                     description: 'Payment via Paystack',
                 };
                 await this.transactionsService.updateTransaction(userId, dto);
+                let vendorUserRecord = null;
+                try {
+                    vendorUserRecord = await this.prisma.user.findUnique({
+                        where: { id: vendorUserId },
+                    });
+                }
+                catch (err) {
+                    console.error('Failed to load vendor for receipt emails:', err);
+                }
                 setImmediate(() => {
                     void (async () => {
                         try {
@@ -379,6 +439,11 @@ let PaystackController = class PaystackController {
                                 businessName: businessName,
                                 address: `${city} ${state} ${country}`,
                             });
+                        }
+                        catch (err) {
+                            console.error('sendClientBookingMail failed:', err);
+                        }
+                        try {
                             await this.mailService.sendVendorBookingMail({
                                 vendorEmail: vendorEmail,
                                 clientName: clientName,
@@ -392,7 +457,43 @@ let PaystackController = class PaystackController {
                             });
                         }
                         catch (err) {
-                            console.error(err);
+                            console.error('sendVendorBookingMail failed:', err);
+                        }
+                        try {
+                            await this.mailService.sendClientReceiptMail({
+                                clientEmail: email,
+                                bookingName: book.name,
+                                vendorName: businessName,
+                                vendorAddress: `${city} ${state} ${country ?? ''}`.trim(),
+                                vendorPhone: vendorUserRecord?.phone ?? undefined,
+                                serviceName: title,
+                                date: dayOfWeek,
+                                startTime: startTime,
+                                endTime: endTime,
+                                transactionRef: event.data.reference,
+                            });
+                        }
+                        catch (err) {
+                            console.error('sendClientReceiptMail failed:', err);
+                        }
+                        if (vendorEmail) {
+                            try {
+                                await this.mailService.sendVendorReceiptMail({
+                                    vendorEmail,
+                                    bookingName: book.name,
+                                    clientName,
+                                    clientAddress,
+                                    clientPhone: phone,
+                                    serviceName: title,
+                                    date: dayOfWeek,
+                                    startTime: startTime,
+                                    endTime: endTime,
+                                    transactionRef: event.data.reference,
+                                });
+                            }
+                            catch (err) {
+                                console.error('sendVendorReceiptMail failed:', err);
+                            }
                         }
                     })();
                 });

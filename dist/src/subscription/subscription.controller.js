@@ -44,10 +44,14 @@ let SubscriptionController = class SubscriptionController {
         if (!vendor) {
             throw new common_2.NotFoundException('Vendor not found');
         }
+        const subscriptionsEnabled = await this.platformSettingsService.isSubscriptionsEnabled(vendor.id);
+        if (!subscriptionsEnabled) {
+            throw new common_2.BadRequestException('Subscriptions are not required while Jubly is free — there is nothing to upgrade to right now.');
+        }
         const user = await this.prisma.user.findUnique({
             where: { id: req.user.id },
         });
-        const { priceNaira, durationDays } = await this.platformSettingsService.getSubscriptionPricing();
+        const { priceNaira, durationDays } = await this.platformSettingsService.getSubscriptionPricing(vendor.id);
         const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(user?.email ?? '', priceNaira, {
             type: 'SUBSCRIPTION_UPGRADE',
             vendorId: vendor.id,
