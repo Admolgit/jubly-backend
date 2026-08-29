@@ -22,6 +22,7 @@ const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const paystack_service_1 = require("../paystack/paystack.service");
 const activityLog_service_1 = require("../activity/activityLog.service");
 const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const subscription_service_1 = require("../subscription/subscription.service");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -30,7 +31,7 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
-    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService, jwtService, platformSettingsService) {
+    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService, jwtService, platformSettingsService, subscriptionService) {
         this.googleCalendarService = googleCalendarService;
         this.prisma = prisma;
         this.authService = authService;
@@ -39,6 +40,7 @@ let BookingService = class BookingService {
         this.activityService = activityService;
         this.jwtService = jwtService;
         this.platformSettingsService = platformSettingsService;
+        this.subscriptionService = subscriptionService;
         this.completionTokenPurpose = 'booking-completion-approval';
         this.completionTokenTtl = '72h';
         this.bookingTimezone = 'Africa/Lagos';
@@ -1849,5 +1851,6 @@ exports.BookingService = BookingService = __decorate([
         paystack_service_1.PaystackService,
         activityLog_service_1.ActivityService,
         jwt_1.JwtService,
-        platform_settings_service_1.PlatformSettingsService])
+        platform_settings_service_1.PlatformSettingsService,
+        subscription_service_1.SubscriptionService])
 ], BookingService);

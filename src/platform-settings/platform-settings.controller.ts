@@ -13,7 +13,7 @@ export class PlatformSettingsController {
 
   @Get('')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.VENDOR)
   getSettings() {
     return this.platformSettingsService.getSettings();
   }
@@ -27,4 +27,11 @@ export class PlatformSettingsController {
   ) {
     return this.platformSettingsService.updateSettings(dto, req.user.id);
   }
+
+  // @Get('sub')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserRole.VENDOR)
+  // getPricingSeetings() {
+  //   return this.platformSettingsService.getSettings();
+  // }
 }

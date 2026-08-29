@@ -34,7 +34,7 @@ exports.PlatformSettingsController = PlatformSettingsController;
 __decorate([
     (0, common_1.Get)(''),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
-    (0, role_guard_1.Roles)(client_1.UserRole.ADMIN),
+    (0, role_guard_1.Roles)(client_1.UserRole.ADMIN, client_1.UserRole.VENDOR),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)

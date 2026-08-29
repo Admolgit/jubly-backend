@@ -217,10 +217,10 @@ let PaystackController = class PaystackController {
             if (!transactionExists) {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
-            if (transactionExists.bookingId) {
-                return { status: true };
-            }
             if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
+                if (transactionExists.status === 'COMPLETED') {
+                    return { status: true };
+                }
                 const { bookingId, percentageFee, clientName, clientEmail, title } = event.data.metadata;
                 if (!bookingId) {
                     throw new common_1.BadRequestException('Incomplete booking metadata');
@@ -309,6 +309,9 @@ let PaystackController = class PaystackController {
                         }
                     })();
                 });
+                return { status: true };
+            }
+            if (transactionExists.bookingId) {
                 return { status: true };
             }
             {

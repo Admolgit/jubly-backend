@@ -31,6 +31,7 @@ import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { ActivityService } from 'src/activity/activityLog.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
+import { SubscriptionService } from 'src/subscription/subscription.service';
 
 export enum DateFilter {
   DAY = 'day',
@@ -50,6 +51,7 @@ export class BookingService {
     private readonly activityService: ActivityService,
     private readonly jwtService: JwtService,
     private readonly platformSettingsService: PlatformSettingsService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   private readonly completionTokenPurpose = 'booking-completion-approval';

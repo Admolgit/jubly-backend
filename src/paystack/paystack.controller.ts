@@ -239,10 +239,7 @@ export class PaystackController {
       const bank = auth?.bank || null;
       const accountName = auth?.account_name || null;
       const accountNumber = auth?.account_number || null;
-
-      // Subscription upgrades never create a Transaction row (kept out of
-      // booking/revenue analytics entirely — see SubscriptionService), so
-      // they're handled up front, before the Transaction-based lookup below.
+      
       if (event.data.metadata?.type === 'SUBSCRIPTION_UPGRADE') {
         const { vendorId, plan, durationDays } = event.data.metadata;
 
@@ -280,11 +277,16 @@ export class PaystackController {
         throw new BadRequestException('Transaction was not initialized');
       }
 
-      if (transactionExists.bookingId) {
-        return { status: true };
-      }
-
       if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
+        // This Transaction row already has `bookingId` set from the moment
+        // it was created (unlike the marketplace flow), so the generic
+        // `transactionExists.bookingId` idempotency guard below would always
+        // short-circuit here before the booking is ever confirmed. Use the
+        // transaction's status for idempotency instead.
+        if (transactionExists.status === 'COMPLETED') {
+          return { status: true };
+        }
+
         const { bookingId, percentageFee, clientName, clientEmail, title } =
           event.data.metadata;
 
@@ -383,6 +385,10 @@ export class PaystackController {
           })();
         });
 
+        return { status: true };
+      }
+
+      if (transactionExists.bookingId) {
         return { status: true };
       }
 

@@ -44,6 +44,10 @@ let SubscriptionController = class SubscriptionController {
         if (!vendor) {
             throw new common_2.NotFoundException('Vendor not found');
         }
+        const platformSettings = await this.platformSettingsService.getOrCreateSettings();
+        if (!platformSettings.subscriptionsEnabled) {
+            throw new common_2.BadRequestException('Subscriptions are not required while Jubly is free — there is nothing to upgrade to right now.');
+        }
         const user = await this.prisma.user.findUnique({
             where: { id: req.user.id },
         });

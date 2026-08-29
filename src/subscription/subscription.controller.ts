@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
@@ -44,6 +44,15 @@ export class SubscriptionController {
 
     if (!vendor) {
       throw new NotFoundException('Vendor not found');
+    }
+
+    const platformSettings =
+      await this.platformSettingsService.getOrCreateSettings();
+
+    if (!platformSettings.subscriptionsEnabled) {
+      throw new BadRequestException(
+        'Subscriptions are not required while Jubly is free — there is nothing to upgrade to right now.',
+      );
     }
 
     const user = await this.prisma.user.findUnique({
