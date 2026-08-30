@@ -24,6 +24,7 @@ const activityLog_service_1 = require("../activity/activityLog.service");
 const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const subscription_service_1 = require("../subscription/subscription.service");
 const dateAndTimeConverter_1 = require("../utils/dateAndTimeConverter");
+const paystackCalculation_1 = require("../utils/paystackCalculation");
 var DateFilter;
 (function (DateFilter) {
     DateFilter["DAY"] = "day";
@@ -175,6 +176,7 @@ let BookingService = class BookingService {
                     clientName: dto.clientName,
                     clientAddress: dto.clientAddress,
                     clientId: dto.clientId,
+                    amount: service.price,
                     name: service.name,
                     startTime,
                     endTime,
@@ -266,7 +268,9 @@ let BookingService = class BookingService {
                 savedClientId = saved.data.client.id;
             }
             const amount = services.price;
-            const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, amount, {
+            const pastackAmount = (0, paystackCalculation_1.addPaystackFee)(amount);
+            const calculatedAmount = pastackAmount.totalAmount;
+            const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, calculatedAmount, {
                 slug: vendorUser?.slug,
                 vendorId: vendor.id,
                 clientId: savedClientId,
@@ -453,7 +457,9 @@ let BookingService = class BookingService {
             const vendorUser = await this.prisma.user.findUnique({
                 where: { id: userId },
             });
-            const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, amount, {
+            const pastackAmount = (0, paystackCalculation_1.addPaystackFee)(amount);
+            const calculatedAmount = pastackAmount.totalAmount;
+            const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, calculatedAmount, {
                 type: 'VENDOR_CREATED_BOOKING_LINK',
                 bookingId: booking.id,
                 vendorId: vendor.id,

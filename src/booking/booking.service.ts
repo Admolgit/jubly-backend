@@ -33,6 +33,7 @@ import { ActivityService } from 'src/activity/activityLog.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 import { SubscriptionService } from 'src/subscription/subscription.service';
 import { dateConverter, timeConverter } from 'src/utils/dateAndTimeConverter';
+import { addPaystackFee } from 'src/utils/paystackCalculation';
 
 export enum DateFilter {
   DAY = 'day',
@@ -219,6 +220,7 @@ export class BookingService {
           clientName: dto.clientName,
           clientAddress: dto.clientAddress,
           clientId: dto.clientId,
+          amount: service.price,
           name: service.name,
           startTime,
           endTime,
@@ -335,10 +337,14 @@ export class BookingService {
 
       const amount = services.price;
 
+      const pastackAmount = addPaystackFee(amount);
+
+      const calculatedAmount = pastackAmount.totalAmount;
+
       const { authorizationUrl, reference } =
         await this.paystackService.initializeTransaction(
           dto.clientEmail,
-          amount,
+          calculatedAmount,
           {
             slug: vendorUser?.slug,
             vendorId: vendor.id,
@@ -349,9 +355,6 @@ export class BookingService {
             clientAddress: dto.clientAddress,
             email: dto.clientEmail,
             vendorEmail: vendorUser?.email,
-            // Sourced from the vendor's own record rather than trusted from
-            // the frontend request — that field was never reliably sent,
-            // leaving these "undefined" in booking/receipt emails.
             businessName: vendor.businessName,
             city: vendor.city,
             state: vendor.state,
@@ -604,10 +607,14 @@ export class BookingService {
         where: { id: userId },
       });
 
+      const pastackAmount = addPaystackFee(amount);
+
+      const calculatedAmount = pastackAmount.totalAmount;
+
       const { authorizationUrl, reference } =
         await this.paystackService.initializeTransaction(
           dto.clientEmail,
-          amount,
+          calculatedAmount,
           {
             type: 'VENDOR_CREATED_BOOKING_LINK',
             bookingId: booking.id,

@@ -233,8 +233,6 @@ export class PaystackController {
         return { status: true };
       }
 
-      console.log(JSON.stringify(event.data.metadata));
-
       const paymentChannel =
         event.data.channel || event.data.authorization?.channel || 'unknown';
 
@@ -518,7 +516,6 @@ export class PaystackController {
           );
 
         const dto = {
-          amount: event.data.amount,
           senderDetailsId: senderDetails.id,
           status: 'PENDING',
           providerRef: event.data.reference,
