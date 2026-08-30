@@ -44,6 +44,8 @@ async function bootstrap() {
                 'exp://192.168.100.6:8081',
                 'https://admin.jubly.com.ng',
                 'http://admin.jubly.com.ng',
+                'https://www.admin.jubly.com.ng',
+                'http://www.admin.jubly.com.ng',
             ];
             if (!origin || allowedOrigins.includes(origin)) {
                 callback(null, true);

@@ -55,6 +55,8 @@ async function bootstrap() {
         'exp://192.168.100.6:8081',
         'https://admin.jubly.com.ng',
         'http://admin.jubly.com.ng',
+        'https://www.admin.jubly.com.ng',
+        'http://www.admin.jubly.com.ng',
       ];
 
       // Allow requests with no origin (React Native, Expo, mobile apps, Postman)
