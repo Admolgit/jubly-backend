@@ -213,7 +213,6 @@ export class PaystackReconciliationService implements OnModuleInit {
       await this.platformSettingsService.resolvePlatformPercentage(vendorId);
 
     await this.transactionsService.updateTransaction(userId, {
-      amount: chargeData.amount,
       senderDetailsId: senderDetails.id,
       status: 'PENDING',
       providerRef: chargeData.reference,
