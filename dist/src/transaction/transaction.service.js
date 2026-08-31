@@ -81,6 +81,7 @@ let TransactionService = class TransactionService {
                     paidAt: new Date(),
                     status: dto.status,
                     percentageFee: dto.percentageFee,
+                    paymentMethod: dto.paymentMethod,
                     providerRef: dto.providerRef,
                 },
             });
