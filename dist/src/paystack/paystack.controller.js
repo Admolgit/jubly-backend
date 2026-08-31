@@ -371,6 +371,7 @@ let PaystackController = class PaystackController {
                 });
                 const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendorId);
                 const dto = {
+                    amount: event.data.amount,
                     senderDetailsId: senderDetails.id,
                     status: 'PENDING',
                     providerRef: event.data.reference,

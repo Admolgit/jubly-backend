@@ -516,6 +516,9 @@ export class PaystackController {
           );
 
         const dto = {
+          // Paystack reports amounts in kobo. TransactionService converts this
+          // to naira before persisting it alongside the payout percentage.
+          amount: event.data.amount,
           senderDetailsId: senderDetails.id,
           status: 'PENDING',
           providerRef: event.data.reference,
