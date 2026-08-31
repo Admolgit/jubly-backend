@@ -74,8 +74,7 @@ export class TransactionService {
       if (!dto.vendorId) {
         throw new BadRequestException('Vendor ID is required');
       }
-      const convertedAmount = dto.amount / 100;
-      await this.prisma.transaction.update({
+      const transaction = await this.prisma.transaction.update({
         where: {
           providerRef: dto.providerRef,
         },
@@ -83,7 +82,6 @@ export class TransactionService {
           vendorId: dto.vendorId,
           title: dto.name,
           bookingId: dto.bookingId,
-          amount: convertedAmount,
           senderDetailsId: dto.senderDetailsId,
           currency: 'NGN',
           paidAt: new Date(),
@@ -94,6 +92,7 @@ export class TransactionService {
         },
       });
 
+      const convertedAmount = transaction.amount;
       await this.activityService.createLog({
         vendorId: dto.vendorId,
         userId: userId ?? dto.userId,
