@@ -383,10 +383,15 @@ model Settlement {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   bookingId     String   @db.ObjectId
   amount        Float
+  reference     String?
   transferCode  String?
   recipientCode String?
   status        String
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([reference])
 }
 
 model Enquiry {

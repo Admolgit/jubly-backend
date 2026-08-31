@@ -522,9 +522,13 @@ export class PaystackReconciliationService implements OnModuleInit {
     const failedSettlements = await this.prisma.settlement.findMany({
       where: {
         status: 'FAILED',
-        createdAt: { gte: retryThreshold },
+        createdAt: {
+          gte: retryThreshold,
+        },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: {
+        createdAt: 'asc',
+      },
       take: BATCH_SIZE,
     });
 
@@ -533,31 +537,58 @@ export class PaystackReconciliationService implements OnModuleInit {
         continue;
       }
 
+      const reference = `booking-${settlement.bookingId}-retry-${Date.now()}`;
+
       try {
+        // Save the reference BEFORE calling Paystack.
+        //
+        // This allows the transfer webhook to find this
+        // settlement even if the response from initiateTransfer()
+        // never makes it back to your server.
+        await this.prisma.settlement.update({
+          where: {
+            id: settlement.id,
+          },
+          data: {
+            reference,
+            status: 'PENDING',
+          },
+        });
+
         const transfer = await this.paystackService.initiateTransfer({
           amount: settlement.amount,
           recipientCode: settlement.recipientCode,
           reason: `Settlement retry for booking ${settlement.bookingId}`,
-          reference: `booking-${settlement.bookingId}-retry-${Date.now()}`,
+          reference,
         });
 
         const transferStatus = transfer.status?.toUpperCase() || 'PENDING';
 
         await this.prisma.settlement.update({
-          where: { id: settlement.id },
+          where: {
+            id: settlement.id,
+          },
           data: {
-            transferCode: transfer.transfer_code,
+            transferCode: transfer.transfer_code ?? settlement.transferCode,
+
             status: transferStatus,
           },
         });
 
+        // Paystack may occasionally return SUCCESS immediately.
+        // Handle that here instead of waiting for the webhook.
         if (transferStatus === 'SUCCESS') {
           await this.prisma.transaction.updateMany({
             where: {
               bookingId: settlement.bookingId,
-              status: { not: 'COMPLETED' },
+
+              status: {
+                not: 'COMPLETED',
+              },
             },
-            data: { status: 'COMPLETED' },
+            data: {
+              status: 'COMPLETED',
+            },
           });
         }
       } catch (error) {
@@ -565,6 +596,18 @@ export class PaystackReconciliationService implements OnModuleInit {
           `[PaystackReconciliation] Settlement retry failed for settlement ${settlement.id}:`,
           error instanceof Error ? error.message : error,
         );
+
+        // Important:
+        // If initiateTransfer itself failed, return the settlement
+        // to FAILED so the cron can retry it again later.
+        await this.prisma.settlement.update({
+          where: {
+            id: settlement.id,
+          },
+          data: {
+            status: 'FAILED',
+          },
+        });
       }
     }
   }

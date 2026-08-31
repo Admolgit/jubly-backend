@@ -180,6 +180,65 @@ let PaystackController = class PaystackController {
             if (!event?.data?.reference) {
                 throw new common_1.BadRequestException('Invalid Paystack webhook payload');
             }
+            if (event.event === 'transfer.success' ||
+                event.event === 'transfer.failed' ||
+                event.event === 'transfer.reversed') {
+                const transferData = event.data;
+                const reference = transferData?.reference;
+                const transferCode = transferData?.transfer_code;
+                const settlement = await this.prisma.settlement.findFirst({
+                    where: {
+                        OR: [
+                            ...(reference ? [{ reference }] : []),
+                            ...(transferCode ? [{ transferCode }] : []),
+                        ],
+                    },
+                });
+                if (!settlement) {
+                    console.error(`Settlement not found for transfer ${reference ?? transferCode ?? 'unknown'}`);
+                    return { status: true };
+                }
+                if (event.event === 'transfer.success') {
+                    if (settlement.status === 'SUCCESS') {
+                        return { status: true };
+                    }
+                    await this.prisma.$transaction([
+                        this.prisma.settlement.update({
+                            where: {
+                                id: settlement.id,
+                            },
+                            data: {
+                                status: 'SUCCESS',
+                                transferCode: transferCode ?? settlement.transferCode,
+                            },
+                        }),
+                        this.prisma.transaction.updateMany({
+                            where: {
+                                bookingId: settlement.bookingId,
+                                status: {
+                                    not: 'COMPLETED',
+                                },
+                            },
+                            data: {
+                                status: 'COMPLETED',
+                            },
+                        }),
+                    ]);
+                    console.log(`✅ Settlement ${settlement.id} completed successfully`);
+                    return { status: true };
+                }
+                await this.prisma.settlement.update({
+                    where: {
+                        id: settlement.id,
+                    },
+                    data: {
+                        status: 'FAILED',
+                        transferCode: transferCode ?? settlement.transferCode,
+                    },
+                });
+                console.error(`❌ Settlement ${settlement.id} changed to FAILED (${event.event})`);
+                return { status: true };
+            }
             if (event.event !== 'charge.success') {
                 return { status: true };
             }
@@ -371,7 +430,6 @@ let PaystackController = class PaystackController {
                 });
                 const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendorId);
                 const dto = {
-                    amount: event.data.amount,
                     senderDetailsId: senderDetails.id,
                     status: 'PENDING',
                     providerRef: event.data.reference,

@@ -1946,8 +1946,15 @@ export class BookingService {
     await this.activityService.createLog({
       vendorId: booking.vendorId,
       userId: user.id,
-      action: 'SETTLEMENT_PAID',
-      description: `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} processed.`,
+      action:
+        settlement?.status === 'SUCCESS'
+          ? 'SETTLEMENT_PAID'
+          : 'SETTLEMENT_PROCESSING',
+
+      description:
+        settlement?.status === 'SUCCESS'
+          ? `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} paid successfully.`
+          : `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} is being processed.`,
       actor: 'System',
       actorType: 'SYSTEM',
       color: 'purple',
