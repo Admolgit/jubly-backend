@@ -19,6 +19,11 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
+], ServiceItemDto.prototype, "id", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
 ], ServiceItemDto.prototype, "name", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
@@ -35,6 +40,11 @@ __decorate([
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Object)
 ], ServiceItemDto.prototype, "durationMins", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], ServiceItemDto.prototype, "vendorId", void 0);
 class CreateServicesDto {
 }
 exports.CreateServicesDto = CreateServicesDto;

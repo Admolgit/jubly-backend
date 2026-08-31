@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const availability_service_1 = require("./availability.service");
 const role_guard_1 = require("../auth/role.guard");
 const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const public_decorator_1 = require("../auth/public.decorator");
 const client_1 = require("@prisma/client");
 const availability_dto_1 = require("./dto/availability.dto");
 let AvailabilityController = class AvailabilityController {
@@ -38,10 +39,18 @@ let AvailabilityController = class AvailabilityController {
     deleteAvailability(req, dayOfWeek) {
         return this.availabilityService.deleteAvailability(req.user.id, dayOfWeek);
     }
+    updateBufferTime(dto, req) {
+        return this.availabilityService.updateBufferTime(req.user.id, dto);
+    }
+    getBufferTime(req) {
+        const userId = req.user.id;
+        return this.availabilityService.getExistingBufferTime(userId);
+    }
 };
 exports.AvailabilityController = AvailabilityController;
 __decorate([
     (0, common_1.Get)('slots/:vendorId/:date/:serviceId'),
+    (0, public_decorator_1.Public)(),
     __param(0, (0, common_1.Param)('vendorId')),
     __param(1, (0, common_1.Param)('serviceId')),
     __param(2, (0, common_1.Param)('date')),
@@ -87,6 +96,25 @@ __decorate([
     __metadata("design:paramtypes", [Object, Number]),
     __metadata("design:returntype", void 0)
 ], AvailabilityController.prototype, "deleteAvailability", null);
+__decorate([
+    (0, common_1.Patch)('buffer-time'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)(client_1.UserRole.VENDOR),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], AvailabilityController.prototype, "updateBufferTime", null);
+__decorate([
+    (0, common_1.Get)('buffer-time'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)(client_1.UserRole.VENDOR),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AvailabilityController.prototype, "getBufferTime", null);
 exports.AvailabilityController = AvailabilityController = __decorate([
     (0, common_1.Controller)('availability'),
     __metadata("design:paramtypes", [availability_service_1.AvailabilityService])

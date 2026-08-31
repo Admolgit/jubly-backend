@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const googleapis_1 = require("googleapis");
 const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const response_1 = require("../utils/response");
 let GoogleCalendarService = class GoogleCalendarService {
     constructor(config, prisma) {
         this.config = config;
@@ -41,7 +42,10 @@ let GoogleCalendarService = class GoogleCalendarService {
         return obj;
     }
     getAuthUrl() {
-        const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
+        const scopes = [
+            'https://www.googleapis.com/auth/calendar.events',
+            'https://www.googleapis.com/auth/calendar.readonly',
+        ];
         return this.oauthClient.generateAuthUrl({
             access_type: 'offline',
             scope: scopes,
@@ -49,7 +53,10 @@ let GoogleCalendarService = class GoogleCalendarService {
         });
     }
     async saveTokens(userId, code) {
-        const { tokens } = await this.oauthClient.getToken(code);
+        const { tokens } = await this.oauthClient.getToken({
+            code,
+            redirect_uri: process.env.GOOGLE_CALLBACK_URL,
+        });
         if (!tokens.access_token || !tokens.refresh_token) {
             throw new common_1.InternalServerErrorException('Google did not return tokens');
         }
@@ -58,15 +65,15 @@ let GoogleCalendarService = class GoogleCalendarService {
             update: {
                 accessToken: tokens.access_token,
                 refreshToken: tokens.refresh_token,
-                expiryDate: tokens.expiry_date || Date.now(),
+                expiryDate: new Date(tokens.expiry_date),
                 linked: true,
             },
             create: {
-                provider: 'GOOGLE',
+                provider: 'google',
                 userId: userId,
                 accessToken: tokens.access_token,
                 refreshToken: tokens.refresh_token,
-                expiryDate: tokens.expiry_date || Date.now(),
+                expiryDate: new Date(tokens.expiry_date),
                 linked: true,
             },
         });
@@ -77,51 +84,297 @@ let GoogleCalendarService = class GoogleCalendarService {
         return tokens;
     }
     async verifyBooking(dto) {
-        const { accessToken, startTime, endTime } = dto;
-        this.oauthClient.setCredentials({
-            access_token: accessToken,
+        const { calendar, startTime, endTime } = dto;
+        const oauth2Client = new googleapis_1.google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_CALLBACK_URL);
+        oauth2Client.setCredentials({
+            access_token: calendar.accessToken,
+            refresh_token: calendar.refreshToken,
         });
-        const calendar = googleapis_1.google.calendar({
+        if (calendar.expiryDate && new Date() > calendar.expiryDate) {
+            const { credentials } = await oauth2Client.refreshAccessToken();
+            oauth2Client.setCredentials(credentials);
+            await this.prisma.vendorCalendar.update({
+                where: { id: calendar.id },
+                data: {
+                    accessToken: credentials.access_token,
+                    expiryDate: new Date(credentials.expiry_date),
+                },
+            });
+        }
+        const calendarApi = googleapis_1.google.calendar({
             version: 'v3',
-            auth: this.oauthClient,
+            auth: oauth2Client,
         });
-        const events = await calendar.events.list({
+        const events = await calendarApi.events.list({
             calendarId: 'primary',
             timeMin: startTime.toISOString(),
             timeMax: endTime.toISOString(),
             singleEvents: true,
+            orderBy: 'startTime',
         });
-        if (events?.data.items?.length > 0) {
+        const items = events.data.items || [];
+        const hasConflict = items.some((event) => {
+            const eventStart = new Date(event.start?.dateTime || '');
+            const eventEnd = new Date(event.end?.dateTime || '');
+            return startTime < eventEnd && endTime > eventStart;
+        });
+        if (hasConflict) {
             throw new Error('Vendor already has an event at this time');
         }
     }
-    async createCalendarEvent(accessToken, booking) {
-        const oauth2Client = new googleapis_1.google.auth.OAuth2();
+    async calendarEnv(calendarIntegration) {
+        const oauth2Client = new googleapis_1.google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_CALLBACK_URL);
         oauth2Client.setCredentials({
-            access_token: accessToken,
+            access_token: calendarIntegration.accessToken,
+            refresh_token: calendarIntegration.refreshToken,
         });
-        const calendar = googleapis_1.google.calendar({
+        if (calendarIntegration.expiryDate &&
+            new Date() > calendarIntegration.expiryDate) {
+            const { credentials } = await oauth2Client.refreshAccessToken();
+            oauth2Client.setCredentials(credentials);
+            await this.prisma.vendorCalendar.update({
+                where: { id: calendarIntegration.id },
+                data: {
+                    accessToken: credentials.access_token,
+                    expiryDate: new Date(credentials.expiry_date),
+                },
+            });
+        }
+        const calendarApi = googleapis_1.google.calendar({
             version: 'v3',
             auth: oauth2Client,
         });
-        const event = {
-            summary: booking.title,
-            description: booking.description,
-            start: {
-                dateTime: booking.startTime.toISOString(),
-                timeZone: 'UTC',
+        return calendarApi;
+    }
+    async createCalendarEvent(calendarIntegration, booking) {
+        const attendees = [
+            {
+                email: booking.attendeeEmail,
+                displayName: booking.attendeeName,
             },
-            end: {
-                dateTime: booking.endTime.toISOString(),
-                timeZone: 'UTC',
-            },
-            attendees: [{ email: booking.attendeeEmail }],
-        };
-        const response = await calendar.events.insert({
+            ...(booking.vendorEmail &&
+                booking.vendorEmail.toLowerCase() !== booking.attendeeEmail.toLowerCase()
+                ? [
+                    {
+                        email: booking.vendorEmail,
+                        displayName: 'Vendor',
+                    },
+                ]
+                : []),
+        ];
+        const calendarApi = this.calendarEnv(calendarIntegration);
+        const data = (await calendarApi).events.insert({
             calendarId: 'primary',
-            requestBody: event,
+            sendUpdates: 'all',
+            requestBody: {
+                summary: booking.title,
+                description: booking.description,
+                start: {
+                    dateTime: booking.startTime.toISOString(),
+                    timeZone: 'Africa/Lagos',
+                },
+                end: {
+                    dateTime: booking.endTime.toISOString(),
+                    timeZone: 'Africa/Lagos',
+                },
+                attendees,
+                reminders: {
+                    useDefault: false,
+                    overrides: [
+                        {
+                            method: 'email',
+                            minutes: 60,
+                        },
+                        {
+                            method: 'popup',
+                            minutes: 30,
+                        },
+                    ],
+                },
+            },
         });
-        return response.data;
+        const googleCalendarId = (await data).data.id;
+        await this.prisma.booking.update({
+            where: { id: booking.bookingId },
+            data: {
+                googleEventId: googleCalendarId,
+            },
+        });
+        return data;
+    }
+    async getUserCalendarLinked(userId) {
+        try {
+            const calendar = await this.prisma.vendorCalendar.findFirst({
+                where: {
+                    userId,
+                    linked: true,
+                },
+                select: {
+                    id: true,
+                    provider: true,
+                    linked: true,
+                    expiryDate: true,
+                },
+            });
+            return (0, response_1.successResponse)({ linked: !!calendar, calendar }, 'Successfully fetched calendar linked status');
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to fetch dashboard stats.', error.message);
+        }
+    }
+    async getCalendar({ userId, view, year, month, date, vendorId, }) {
+        try {
+            const vendor = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            if (!vendor || vendor.id !== vendorId) {
+                throw new common_1.ForbiddenException('Not allowed to view this calendar');
+            }
+            let startTime = new Date();
+            let endTime = new Date();
+            if (view === 'month') {
+                startTime = new Date(year, month - 1, 1);
+                endTime = new Date(year, month, 0, 23, 59, 59);
+            }
+            if (view === 'week') {
+                const current = new Date(date);
+                const day = current.getDay();
+                const diffToSunday = current.getDate() - day;
+                startTime = new Date(current.setDate(diffToSunday));
+                startTime.setHours(0, 0, 0, 0);
+                endTime = new Date(startTime);
+                endTime.setDate(startTime.getDate() + 6);
+                endTime.setHours(23, 59, 59);
+            }
+            if (view === 'day') {
+                startTime = new Date(date);
+                startTime.setHours(0, 0, 0, 0);
+                endTime = new Date(date);
+                endTime.setHours(23, 59, 59);
+            }
+            const bookings = await this.prisma.booking.findMany({
+                where: {
+                    vendorId,
+                    status: 'CONFIRMED',
+                    date: {
+                        gte: startTime,
+                        lte: endTime,
+                    },
+                },
+                orderBy: {
+                    startTime: 'asc',
+                },
+            });
+            return this.formatCalendarData(view, bookings, startTime);
+        }
+        catch (error) {
+            if (error instanceof common_1.ForbiddenException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to fetch calendar data.', error.message);
+        }
+    }
+    async getClientCalendar({ userId, view, year, month, date, }) {
+        try {
+            const user = await this.prisma.user.findUnique({
+                where: { id: userId },
+            });
+            if (!user) {
+                throw new common_1.NotFoundException('User not found');
+            }
+            let startTime = new Date();
+            let endTime = new Date();
+            if (view === 'month') {
+                startTime = new Date(year, month - 1, 1);
+                endTime = new Date(year, month, 0, 23, 59, 59);
+            }
+            if (view === 'week') {
+                const current = new Date(date);
+                const day = current.getDay();
+                const diffToSunday = current.getDate() - day;
+                startTime = new Date(current.setDate(diffToSunday));
+                startTime.setHours(0, 0, 0, 0);
+                endTime = new Date(startTime);
+                endTime.setDate(startTime.getDate() + 6);
+                endTime.setHours(23, 59, 59);
+            }
+            if (view === 'day') {
+                startTime = new Date(date);
+                startTime.setHours(0, 0, 0, 0);
+                endTime = new Date(date);
+                endTime.setHours(23, 59, 59);
+            }
+            const bookings = await this.prisma.booking.findMany({
+                where: {
+                    clientEmail: user.email,
+                    status: 'CONFIRMED',
+                    date: {
+                        gte: startTime,
+                        lte: endTime,
+                    },
+                },
+                orderBy: {
+                    startTime: 'asc',
+                },
+            });
+            return this.formatCalendarData(view, bookings, startTime);
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to fetch clients calendar data.', error.message);
+        }
+    }
+    formatCalendarData(view, bookings, startDate) {
+        try {
+            if (view === 'month') {
+                const calendar = {};
+                bookings.forEach((b) => {
+                    const key = b.date.toISOString().split('T')[0];
+                    if (!calendar[key])
+                        calendar[key] = [];
+                    calendar[key].push({
+                        id: b.id,
+                        title: b.name,
+                        startTime: b.startTime,
+                        endTime: b.endTime,
+                        status: b.status,
+                    });
+                });
+                return (0, response_1.successResponse)({ view, calendar }, 'Successfully fetched calendar.');
+            }
+            if (view === 'week') {
+                const days = [];
+                for (let i = 0; i < 7; i++) {
+                    const current = new Date(startDate);
+                    current.setDate(startDate.getDate() + i);
+                    const key = current.toISOString().split('T')[0];
+                    const dayBookings = bookings.filter((b) => b.date.toISOString().split('T')[0] === key);
+                    days.push({
+                        date: key,
+                        bookings: dayBookings,
+                    });
+                }
+                if (view === 'day') {
+                    return (0, response_1.successResponse)({
+                        view,
+                        date: startDate,
+                        bookings,
+                    }, 'Successfully fetched calendar.');
+                }
+                return (0, response_1.successResponse)({ view, days }, 'Successfully fetched calendar.');
+            }
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to format calendar data.', error.message);
+        }
     }
 };
 exports.GoogleCalendarService = GoogleCalendarService;

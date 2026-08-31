@@ -15,6 +15,10 @@ const booking_service_1 = require("./booking.service");
 const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
+const paystack_service_1 = require("../paystack/paystack.service");
+const activityLog_service_1 = require("../activity/activityLog.service");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const subscription_service_1 = require("../subscription/subscription.service");
 let BookingModule = class BookingModule {
 };
 exports.BookingModule = BookingModule;
@@ -30,6 +34,10 @@ exports.BookingModule = BookingModule = __decorate([
             config_1.ConfigService,
             auth_service_1.AuthService,
             nodemailer_service_1.NodemailerService,
+            paystack_service_1.PaystackService,
+            activityLog_service_1.ActivityService,
+            platform_settings_service_1.PlatformSettingsService,
+            subscription_service_1.SubscriptionService,
         ],
     })
 ], BookingModule);

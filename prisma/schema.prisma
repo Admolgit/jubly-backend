@@ -30,28 +30,86 @@ enum BookingStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
+  RESCHEDULE_REQUESTED
+  CANCELLED_BY_CLIENT
+  CANCELLED_BY_VENDOR
+  COMPLETION_PENDING_APPROVAL
+}
+
+enum CancellationPolicyType {
+  STANDARD
+}
+
+enum BookingSource {
+  MARKETPLACE
+  VENDOR_CREATED
+  BOOKING_LINK
+}
+
+enum BookingPaymentMethod {
+  PAYSTACK
+  PAY_BY_LINK
+  PAID_BY_HAND
+}
+
+enum PaymentVerification {
+  PAYSTACK_VERIFIED
+  VENDOR_REPORTED
+  UNVERIFIED
+  PENDING
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PAST_DUE
+}
+
+enum RescheduleStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COUNTER_PROPOSED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum NotificationCategory {
+  PAYMENT
+  SECURITY
+  SYSTEM
+  REPORT
 }
 
 model User {
-  id               String       @id @default(auto()) @map("_id") @db.ObjectId
-  email            String       @unique
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  email            String        @unique
   password         String?
   firstName        String?
   lastName         String?
   phone            String?
-  role             UserRole     @default(VENDOR)
+  role             UserRole      @default(VENDOR)
   codeExpiresAt    DateTime?
   verificationCode String?
   refreshTokenHash String?
   isOnline         Boolean?
-  lastLogin        DateTime     @default(now())
-  provider         AuthProvider @default(EMAIL)
-  isVerified       Boolean      @default(false)
+  lastLogin        DateTime      @default(now())
+  provider         AuthProvider  @default(EMAIL)
+  isVerified       Boolean       @default(false)
   slug             String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  isSuspended      Boolean       @default(false)
+  clientVendorId   String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
   vendor           Vendor?
   bookings         Booking[]
+  ActivityLog      ActivityLog[]
 }
 
 model Vendor {
@@ -74,27 +132,33 @@ model Vendor {
   bankAccountNumber  String?
   bankCode           String?
   paystackSubaccount String?
+  vendorViews        Int?
+
+  cancellationStrikes Int @default(0)
 
   bookings           Booking[]
   vendorAvailability VendorAvailability[]
   transaction        Transaction[]        @relation("Transaction")
 
-  kycStatus  KYCStatus @default(NOT_SUBMITTED)
-  isApproved Boolean   @default(false)
-  isActive   Boolean   @default(false)
+  kycStatus           KYCStatus @default(NOT_SUBMITTED)
+  isApproved          Boolean   @default(false)
+  isActive            Boolean   @default(false)
+  onboardingCompleted Boolean   @default(false)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  VendorBookingSettings VendorBookingSettings?
+  ActivityLog           ActivityLog[]
 }
 
 model Service {
   id     String @id @default(auto()) @map("_id") @db.ObjectId
   userId String @db.ObjectId
 
-  name         String // "Bridal Makeup"
+  name         String
   description  String?
-  price        Int // ₦
-  durationMins Int? // 120
+  price        Int
+  durationMins Int?
 
   active Boolean @default(true)
 
@@ -104,30 +168,68 @@ model Service {
   vendorId  String?   @db.ObjectId
   booking   Booking[]
 
-  @@index([userId])
+  @@unique([userId, name])
 }
 
 model VendorAvailability {
   id        String @id @default(auto()) @map("_id") @db.ObjectId
-  dayOfWeek Int // 0 = Sunday, 6 = Saturday
-  startTime String // "09:00"
-  endTime   String // "18:00"
+  dayOfWeek Int
+  startTime String
+  endTime   String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  Vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
   vendorId String? @db.ObjectId
 
-  @@unique([dayOfWeek])
+  @@unique([vendorId, dayOfWeek])
+}
+
+type CancellationPolicyTierConfig {
+  label                        String
+  minHoursBeforeStart          Float
+  clientRefundPercentage       Float
+  vendorCompensationPercentage Float
+}
+
+type NoShowPolicyConfig {
+  clientRefundPercentage       Float
+  vendorCompensationPercentage Float
+}
+
+model CancellationPolicySetting {
+  id         String                         @id @default(auto()) @map("_id") @db.ObjectId
+  tiers      CancellationPolicyTierConfig[]
+  noShowTier NoShowPolicyConfig?
+  updatedBy  String?                        @db.ObjectId
+  createdAt  DateTime                       @default(now())
+  updatedAt  DateTime                       @updatedAt
+}
+
+model VendorBookingSettings {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId String @unique @db.ObjectId
+
+  bufferTime Int @default(0)
+
+  cancellationPolicy CancellationPolicyType @default(STANDARD)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
 }
 
 model Booking {
-  id         String  @id @default(auto()) @map("_id") @db.ObjectId
-  vendorId   String
-  clientId   String?
-  serviceId  String
-  clientName String?
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId      String
+  clientId      String?
+  name          String
+  googleEventId String?
+  serviceId     String
+  clientName    String?
+  clientAddress String?
 
   date        DateTime // booking day
   startTime   DateTime // "10:00"
@@ -136,14 +238,74 @@ model Booking {
 
   status BookingStatus @default(PENDING)
 
+  // Cancellation audit
+  cancelledBy        String? // userId of whoever cancelled (client or vendor)
+  cancelledByRole    UserRole?
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  cancellationTier             String?
+  refundPercentage             Float?
+  vendorCompensationPercentage Float?
+  refundAmount                 Float?
+  vendorCompensationAmount     Float?
+
+  // Vendor-initiated completion approval audit
+  completionRequestedBy     String? // userId of the vendor who requested completion
+  completionRequestedAt     DateTime?
+  completionApprovedAt      DateTime?
+  completionRejectedAt      DateTime?
+  completionRejectionReason String?
+
+  rescheduleCount Int @default(0)
+
+  // Vendor-created booking support
+  source              BookingSource?
+  paymentMethod       BookingPaymentMethod?
+  paymentVerification PaymentVerification?
+  clientPhone         String?
+  amount              Float?
+  paymentExpiresAt    DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  vendor      Vendor        @relation(fields: [vendorId], references: [id])
-  services    Service       @relation(fields: [serviceId], references: [id])
-  User        User?         @relation(fields: [userId], references: [id])
-  userId      String?       @db.ObjectId
-  Transaction Transaction[]
+  vendor             Vendor              @relation(fields: [vendorId], references: [id])
+  services           Service             @relation(fields: [serviceId], references: [id])
+  user               User?               @relation(fields: [userId], references: [id])
+  userId             String?             @db.ObjectId
+  Transaction        Transaction[]
+  rescheduleRequests RescheduleRequest[]
+}
+
+model RescheduleRequest {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  bookingId String  @db.ObjectId
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  initiatedBy     String   @db.ObjectId
+  initiatedByRole UserRole
+
+  proposedDate DateTime
+
+  previousProposedDate DateTime?
+
+  reason String?
+
+  status RescheduleStatus @default(PENDING)
+
+  bookingStatusBeforeRequest BookingStatus
+
+  respondedBy    String?   @db.ObjectId
+  respondedAt    DateTime?
+  responseReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
 }
 
 model SlotLock {
@@ -166,7 +328,7 @@ model SubAccount {
   accountName       String
   limit             Float?
   isActive          Boolean  @default(true)
-  percentageFee     Float?   @default(0.05)
+  percentageFee     Float    @default(0.05)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
@@ -208,11 +370,132 @@ model Transaction {
 }
 
 model vendorCalendar {
-  id           String  @id @default(auto()) @map("_id") @db.ObjectId
-  userId       String  @db.ObjectId @unique
-  provider     String  
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @unique @db.ObjectId
+  provider     String
   accessToken  String
   refreshToken String
-  expiryDate   String
+  expiryDate   DateTime
   linked       Boolean
+}
+
+model Settlement {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId     String   @db.ObjectId
+  amount        Float
+  transferCode  String?
+  recipientCode String?
+  status        String
+  createdAt     DateTime @default(now())
+}
+
+model Enquiry {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String
+  phone     String
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationSettings {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String   @unique @db.ObjectId
+  emailNotifications Boolean  @default(true)
+  smsNotifications   Boolean  @default(false)
+  pushNotifications  Boolean  @default(true)
+  bookingDigest      String   @default("EVERY_MORNING")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Notification {
+  id        String               @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String               @db.ObjectId
+  title     String
+  message   String
+  type      NotificationType     @default(INFO)
+  category  NotificationCategory
+  isRead    Boolean              @default(false)
+  readAt    DateTime?
+  data      Json?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model ActivityLog {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId   String? @db.ObjectId
+  vendorId String? @db.ObjectId
+
+  action      String
+  description String
+
+  actor     String
+  actorType ActivityActorType
+  color     String?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  vendor Vendor? @relation(fields: [vendorId], references: [id])
+
+  @@index([userId])
+  @@index([vendorId])
+  @@index([createdAt])
+}
+
+enum ActivityActorType {
+  SYSTEM
+  CLIENT
+  VENDOR
+  ADMIN
+}
+
+model PlatformSettings {
+  id                           String   @id @default(auto()) @map("_id") @db.ObjectId
+  subscriptionsEnabled         Boolean  @default(false)
+  defaultPlatformPercentage    Float    @default(0.05)
+  subscriberPlatformPercentage Float    @default(0.05)
+  manualBookingEnabled         Boolean  @default(true)
+  paidByHandEnabled            Boolean  @default(true)
+  subscriptionPriceNaira       Float    @default(3000)
+  subscriptionDurationDays     Int      @default(30)
+  updatedBy                    String?  @db.ObjectId
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+model VendorPlatformSettings {
+  id                           String   @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId                     String   @unique @db.ObjectId
+  subscriptionsEnabled         Boolean?
+  defaultPlatformPercentage    Float?
+  subscriberPlatformPercentage Float?
+  manualBookingEnabled         Boolean?
+  paidByHandEnabled            Boolean?
+  subscriptionPriceNaira       Float?
+  subscriptionDurationDays     Int?
+  updatedBy                    String?  @db.ObjectId
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+model Subscription {
+  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId             String             @unique @db.ObjectId
+  plan                 String
+  status               SubscriptionStatus @default(EXPIRED)
+  startedAt            DateTime           @default(now())
+  expiresAt            DateTime?
+  cancelledAt          DateTime?
+  lastPaymentReference String?
+  lastPaymentAmount    Float?
+  lastPaidAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 }

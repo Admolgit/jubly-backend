@@ -1,24 +1,247 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Body, Controller, Post, Req } from '@nestjs/common';
-import { BookingService } from './booking.service';
-import type { Request } from 'express';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { BookingService, DateFilter } from './booking.service';
 import type { IBooking } from './dto/booking.dto';
+import { RejectCompletionDto } from './dto/booking.dto';
+import { CreateVendorBookingDto } from './dto/vendor-booking.dto';
+
+import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { RolesGuard, Roles } from 'src/auth/role.guard';
+import { Public } from 'src/auth/public.decorator';
 
 @Controller('booking')
 export class BookingController {
-  constructor(private bookingService: BookingService) {}
+  constructor(private readonly bookingService: BookingService) {}
 
   @Post('')
-  createBooking(@Req() req: Request, @Body() dto: IBooking) {
-    const userId = req.body.id as string;
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  createBooking(@Req() req: { user: { id: string } }, @Body() dto: IBooking) {
+    const userId = req.user.id;
     return this.bookingService.createBooking(userId, dto);
   }
 
+  @Post('vendor-create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  createVendorBooking(
+    @Req() req: { user: { id: string } },
+    @Body() dto: CreateVendorBookingDto,
+  ) {
+    return this.bookingService.createVendorBooking(req.user.id, dto);
+  }
+
   @Post('initialize-payment')
+  @Public()
   paymentInitialize(@Body() dto: any) {
     return this.bookingService.initializeBookingPayment(
       dto.bookingId as string,
       dto,
     );
+  }
+
+  @Get('dashboard-stats/:vendorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getDashboardStats(
+    @Req() req: { user: { id: string } },
+    @Param('vendorId') vendorId: string,
+  ) {
+    const userId = req.user.id;
+    return this.bookingService.dashboardStats(userId, vendorId);
+  }
+
+  @Get('upcoming')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async getTopUpcoming(@Req() req) {
+    return this.bookingService.getNext24HoursBookings(req.user.id as string);
+  }
+
+  @Get('upcoming-bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getUpcomingBookings(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getUpcomingBookings(req.user.id);
+  }
+
+  @Get('client/upcoming-bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  getClientUpcomingBookings(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getClientUpcomingBookings(req.user.id);
+  }
+
+  @Get('services-count')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async getServicesByCount(@Req() req) {
+    return this.bookingService.countBookingsByService(req.user.id as string);
+  }
+
+  @Get('admin/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAdminBookingStats() {
+    return this.bookingService.getAdminBookingStats();
+  }
+
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getAdminBookings(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: DateFilter,
+    @Query('date') date?: string,
+    @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const dto = {
+      page,
+      limit,
+      search,
+      dateFilter,
+      date,
+      status,
+      startDate,
+      endDate,
+    };
+
+    return this.bookingService.getAdminBookings(dto);
+  }
+
+  @Get('')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async getBookings(
+    @Req() req: { user: { id: string } },
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: DateFilter,
+    @Query('date') date?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.bookingService.getBookings(
+      req.user.id,
+      page,
+      limit,
+      search as string,
+      dateFilter as DateFilter,
+      date as any,
+      status as string,
+    );
+  }
+
+  @Get('clients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT')
+  getClientsBookings(
+    @Req() req: { user: { id: string } },
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('dateFilter') dateFilter?: DateFilter,
+    @Query('date') date?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.bookingService.getClientsBookings(
+      req.user.id,
+      page,
+      limit,
+      search as string,
+      dateFilter as DateFilter,
+      date as any,
+      status as string,
+    );
+  }
+
+  @Get('clients/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  getStats(@Req() req: { user: { id: string } }) {
+    const userId = req.user.id;
+    return this.bookingService.getClientsStats(userId);
+  }
+
+  @Get('clients/booking-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CLIENT', 'VENDOR')
+  getBookingStats(@Req() req: { user: { id: string } }) {
+    const userId = req.user.id;
+    return this.bookingService.getClientBookingsStats(userId);
+  }
+
+  @Patch(':bookingId/mark-as-completed')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  markAsComplete(
+    @Param('bookingId') bookingId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.bookingService.markAsCompleted(bookingId, req.user.id);
+  }
+
+  @Get('completion/review')
+  @Public()
+  getCompletionReview(@Query('token') token: string) {
+    return this.bookingService.getCompletionReview(token);
+  }
+
+  @Post('completion/approve')
+  @Public()
+  approveCompletion(@Body('token') token: string) {
+    return this.bookingService.approveCompletion(token);
+  }
+
+  @Post('completion/reject')
+  @Public()
+  rejectCompletion(@Body() dto: RejectCompletionDto) {
+    return this.bookingService.rejectCompletion(dto.token, dto.reason);
+  }
+
+  @Get('status/filter')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  async getBookingsStatusFilter(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getBookingsStatusFilter(req.user.id);
+  }
+
+  @Get('insights')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getInsights(@Req() req: { user: { id: string } }) {
+    return this.bookingService.getBusinessInsights(req.user.id);
+  }
+
+  @Get('client/:vendorId/:clientEmail/booking-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getClientBookingStats(
+    @Param('clientEmail') clientEmail: string,
+    @Param('vendorId') vendorId: string,
+  ) {
+    return this.bookingService.getClientBookingStats(clientEmail, vendorId);
+  }
+
+  @Get('business-categories')
+  @Public()
+  getBusinessCategories() {
+    return this.bookingService.getBusinessCategories();
   }
 }

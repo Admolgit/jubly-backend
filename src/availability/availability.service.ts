@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -41,7 +44,11 @@ export class AvailabilityService {
         where: { vendorId: vendor.id },
         orderBy: { dayOfWeek: 'asc' },
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch vendor availability',
         error?.message,
@@ -49,10 +56,30 @@ export class AvailabilityService {
     }
   }
 
+  isSameDay(a: Date, b: Date) {
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+
+  isPastDay(date: Date) {
+    const today = new Date();
+
+    const chosenDate = new Date(date);
+    chosenDate.setHours(0, 0, 0, 0);
+
+    const todayDate = new Date(today);
+    todayDate.setHours(0, 0, 0, 0);
+
+    return chosenDate < todayDate;
+  }
+
   async getAvailableSlots(vendorId: string, serviceId: string, date: Date) {
     try {
       const vendor = await this.prisma.vendor.findUnique({
-        where: { id: vendorId },
+        where: { userId: vendorId },
         include: {
           vendorAvailability: true,
           bookings: true,
@@ -80,23 +107,48 @@ export class AvailabilityService {
       );
       const end = new Date(`${dateObj.toDateString()} ${availability.endTime}`);
 
-      const duration = services[0].durationMins;
+      let duration = services[0].durationMins || 60;
 
-      const slots = this.generateSlots(start, end, duration as number);
+      const bufferTime = await this.prisma.vendorBookingSettings.findFirst({
+        where: { vendorId: vendor.id },
+      });
+
+      const bufferMins = bufferTime?.bufferTime || 0;
+      duration += bufferMins;
+
+      const slots = this.generateSlots(start, end, duration);
 
       const bookings = vendor.bookings;
 
+      const now = new Date();
+
+      const isToday = this.isSameDay(dateObj, now);
+
+      if (this.isPastDay(date)) {
+        throw new BadRequestException('No slots for past dates');
+      }
+
       const availableSlots = slots.filter((slot) => {
+        if (isToday && slot.startTime <= now) {
+          return false;
+        }
         return !bookings.some(
-          (b) => slot.startTime < b.endTime && slot.endTime > b.startTime,
+          (b) =>
+            slot.startTime < new Date(b.endTime) &&
+            slot.endTime > new Date(b.startTime),
         );
       });
+
+      if (availableSlots.length === 0) {
+        throw new NotFoundException('No available slots for this date');
+      }
 
       return successResponse(
         { availableSlots },
         'Available slot fetched successfully.',
       );
-    } catch (error) {
+    } catch (error: any) {
+      console.error({ error });
       throw new InternalServerErrorException(
         'Failed to fetch vendor availabile slot',
         error?.message,
@@ -114,7 +166,6 @@ export class AvailabilityService {
         orderBy: { dayOfWeek: 'asc' },
       });
 
-      // Group by dayOfWeek for easy frontend consumption
       const grouped: Record<number, { startTime: string; endTime: string }[]> =
         {};
 
@@ -127,7 +178,11 @@ export class AvailabilityService {
       });
 
       return successResponse({ grouped }, 'Availability fetched successfully');
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to fetch vendor availability',
         error?.message,
@@ -151,32 +206,53 @@ export class AvailabilityService {
         }
       }
 
-      const updatedAvailabilities = await Promise.all(
-        dto.availabilities.map((item) =>
-          this.prisma.vendorAvailability.upsert({
+      const updatedAvailabilities = await this.prisma.$transaction(
+        async (tx) => {
+          const selectedDays = dto.availabilities.map((item) => item.dayOfWeek);
+
+          await tx.vendorAvailability.deleteMany({
             where: {
               vendorId: vendor.id,
-              dayOfWeek: item.dayOfWeek,
+              dayOfWeek: {
+                notIn: selectedDays,
+              },
             },
-            update: {
-              startTime: item.startTime,
-              endTime: item.endTime,
-            },
-            create: {
-              vendorId: vendor.id,
-              dayOfWeek: item.dayOfWeek,
-              startTime: item.startTime,
-              endTime: item.endTime,
-            },
-          }),
-        ),
+          });
+
+          await Promise.all(
+            dto.availabilities.map((item) =>
+              tx.vendorAvailability.upsert({
+                where: {
+                  vendorId_dayOfWeek: {
+                    vendorId: vendor.id,
+                    dayOfWeek: item.dayOfWeek,
+                  },
+                },
+                update: {
+                  startTime: item.startTime,
+                  endTime: item.endTime,
+                },
+                create: {
+                  vendorId: vendor.id,
+                  dayOfWeek: item.dayOfWeek,
+                  startTime: item.startTime,
+                  endTime: item.endTime,
+                },
+              }),
+            ),
+          );
+        },
       );
 
       return successResponse(
         { updatedAvailabilities },
         'Availability updated successfully',
       );
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to set vendor availability',
         error?.message,
@@ -184,7 +260,6 @@ export class AvailabilityService {
     }
   }
 
-  // Delete availability for a specific day
   async deleteAvailability(userId: string, dayOfWeek: number) {
     try {
       const vendor = await this.prisma.vendor.findUnique({ where: { userId } });
@@ -199,10 +274,77 @@ export class AvailabilityService {
       }
 
       return successResponse({ deleted }, 'Availability deleted successfully');
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to set vendor availability',
         error?.message,
+      );
+    }
+  }
+
+  async updateBufferTime(userId: string, dto: { bufferTime: number }) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    const updatedBuffer = await this.prisma.vendorBookingSettings.upsert({
+      where: {
+        vendorId: vendor.id,
+      },
+
+      update: {
+        bufferTime: dto.bufferTime,
+      },
+
+      create: {
+        vendorId: vendor.id,
+        bufferTime: dto.bufferTime,
+      },
+    });
+
+    return successResponse(updatedBuffer, 'Buffer time updated successfully.');
+  }
+
+  async getExistingBufferTime(userId: string) {
+    try {
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+      const existingBuffer = await this.prisma.vendorBookingSettings.findUnique(
+        {
+          where: {
+            vendorId: vendor.id,
+          },
+          select: {
+            bufferTime: true,
+          },
+        },
+      );
+
+      return successResponse(
+        existingBuffer,
+        'Existing buffer time fetched successfully.',
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to fetch existing buffer time.',
+        error.message as string,
       );
     }
   }

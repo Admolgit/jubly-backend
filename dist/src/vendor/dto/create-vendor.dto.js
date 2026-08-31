@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.QueryVendorsDto = exports.CreateVendorDto = void 0;
+exports.QueryVendorsDto = exports.CreateVendorProfileDto = exports.CreateVendorDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class CreateVendorDto {
@@ -36,10 +36,42 @@ __decorate([
     __metadata("design:type", String)
 ], CreateVendorDto.prototype, "country", void 0);
 __decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorDto.prototype, "vendorId", void 0);
+__decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateVendorDto.prototype, "bio", void 0);
+class CreateVendorProfileDto {
+}
+exports.CreateVendorProfileDto = CreateVendorProfileDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorProfileDto.prototype, "businessName", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorProfileDto.prototype, "category", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorProfileDto.prototype, "city", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorProfileDto.prototype, "state", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorProfileDto.prototype, "country", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorProfileDto.prototype, "bio", void 0);
 class QueryVendorsDto {
     constructor() {
         this.page = 1;

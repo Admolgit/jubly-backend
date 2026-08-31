@@ -13,21 +13,17 @@ const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = require("dotenv");
 const compression_1 = __importDefault(require("compression"));
-const body_parser_1 = __importDefault(require("body-parser"));
 const redis_keepAlive_1 = require("./server/redis.keepAlive");
 const common_1 = require("@nestjs/common");
 const path_1 = require("path");
 const fs_1 = require("fs");
 (0, dotenv_1.config)();
 async function bootstrap() {
-    const app = await core_1.NestFactory.create(app_module_1.AppModule);
+    const app = await core_1.NestFactory.create(app_module_1.AppModule, {
+        rawBody: true,
+        bodyParser: false,
+    });
     app.set('trust proxy', 1);
-    app.use(body_parser_1.default.json({
-        verify: (req, _res, buf) => {
-            req.rawBody = buf;
-        },
-    }));
-    app.use(body_parser_1.default.urlencoded({ extended: true }));
     app.useGlobalPipes(new common_1.ValidationPipe({
         transform: true,
         whitelist: true,
@@ -35,23 +31,59 @@ async function bootstrap() {
     app.setGlobalPrefix('api/v1');
     app.enableVersioning({ type: common_1.VersioningType.URI });
     app.enableCors({
-        origin: [
-            'http://localhost:5173',
-            'http://localhost:5174',
-            'https://jubly-frontend.vercel.app',
-        ],
+        origin: (origin, callback) => {
+            const allowedOrigins = [
+                'https://jubly-frontend.vercel.app',
+                'http://localhost:5173',
+                'https://jubly.com.ng',
+                'https://www.jubly.com.ng',
+                'http://jubly.com.ng',
+                'http://www.jubly.com.ng',
+                'http://localhost:5174',
+                'http://localhost:8081',
+                'exp://192.168.100.6:8081',
+                'https://admin.jubly.com.ng',
+                'http://admin.jubly.com.ng',
+                'https://www.admin.jubly.com.ng',
+                'http://www.admin.jubly.com.ng',
+            ];
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            }
+            else {
+                callback(new Error(`CORS blocked: ${origin}`));
+            }
+        },
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
     });
     app.use((0, cookie_parser_1.default)());
     app.use((0, helmet_1.default)());
     app.use((0, compression_1.default)());
-    app.use((0, express_1.json)({ limit: '50mb' }));
+    app.use((0, express_1.json)({
+        limit: '50mb',
+        verify: (req, res, buf) => {
+            req.rawBody = buf;
+        },
+    }));
     app.use((0, express_1.urlencoded)({ extended: true, limit: '50mb' }));
     const limiter = (0, express_rate_limit_1.default)({
         windowMs: 15 * 60 * 1000,
         max: 500,
     });
     app.use(limiter);
+    const resolveBankLimiter = (0, express_rate_limit_1.default)({
+        windowMs: 60 * 1000,
+        max: 10,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: {
+            status: false,
+            message: 'Too many bank verification requests. Please slow down and try again shortly.',
+        },
+    });
+    app.use('/api/v1/paystack/resolve-bank', resolveBankLimiter);
     app.use((0, express_session_1.default)({
         secret: process.env.JWT_SECRET,
         resave: false,
@@ -69,7 +101,6 @@ async function bootstrap() {
         res.setHeader('Cache-Control', 'no-store');
         next();
     });
-    redis_keepAlive_1.keepServerAliveDeployment.start();
     const clientBuildPath = (0, path_1.join)(__dirname, '..', 'client');
     if ((0, fs_1.existsSync)(clientBuildPath)) {
         app.useStaticAssets(clientBuildPath);
@@ -82,6 +113,7 @@ async function bootstrap() {
             }
         }));
     }
+    redis_keepAlive_1.keepServerAliveDeployment.start();
     const port = process.env.PORT ?? 4001;
     await app.listen(port, '0.0.0.0');
 }

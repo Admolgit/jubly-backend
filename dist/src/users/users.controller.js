@@ -1,0 +1,244 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.UsersController = void 0;
+const common_1 = require("@nestjs/common");
+const jwt_authGuard_1 = require("../auth/jwt.authGuard");
+const public_decorator_1 = require("../auth/public.decorator");
+const users_service_1 = require("./users.service");
+const role_guard_1 = require("../auth/role.guard");
+const platform_express_1 = require("@nestjs/platform-express");
+const notification_dto_1 = require("./dto/notification.dto");
+const cloudinary_middleware_1 = require("../middlewares/cloudinary.middleware");
+const client_1 = require("@prisma/client");
+let UsersController = class UsersController {
+    constructor(usersService) {
+        this.usersService = usersService;
+    }
+    getMe(req) {
+        return this.usersService.getMe(req.user.id);
+    }
+    updateProfileImage(req, files) {
+        return this.usersService.updateProfilePicture(req.user.id, files?.profileImage?.[0]);
+    }
+    updateProfile(req, dto) {
+        return this.usersService.updateProfile(req.user.id, dto);
+    }
+    getUserById(userId) {
+        return this.usersService.getUserById(userId);
+    }
+    getUserSubAccount(req) {
+        return this.usersService.getUserSubAccount(req.user.id);
+    }
+    getUserByEmail(email) {
+        return this.usersService.getUserEmail(email);
+    }
+    createEnquiry(body) {
+        return this.usersService.createEnquiry(body);
+    }
+    updateNotifications(req, dto) {
+        const userId = req.user.id;
+        return this.usersService.createNotification(userId, dto);
+    }
+    getNotication(req) {
+        return this.usersService.getNotificationPreference(req.user.id);
+    }
+    getNotications(req, query) {
+        return this.usersService.getAllUserNotifications(req.user.id, query);
+    }
+    createAndSendNotification(dto, req) {
+        const userId = req.user.id;
+        return this.usersService.createAndSend(userId, dto);
+    }
+    getAllUsers(role, isSuspended, page, limit, search) {
+        return this.usersService.getAllUsers({
+            role,
+            isSuspended: isSuspended === undefined ? undefined : isSuspended === 'true',
+            page,
+            limit,
+            search,
+        });
+    }
+    getAllUserAdminStats() {
+        return this.usersService.getAllUserAdminStats();
+    }
+    suspendUser(userId) {
+        return this.usersService.suspendUser(userId);
+    }
+    unsuspendUser(userId) {
+        return this.usersService.unsuspendUser(userId);
+    }
+    getClientsByVendor(req, clientVendorId, page, limit, search) {
+        return this.usersService.getClientsByVendor(req.user.id, clientVendorId, page, limit, search);
+    }
+};
+exports.UsersController = UsersController;
+__decorate([
+    (0, common_1.Get)('me'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getMe", null);
+__decorate([
+    (0, common_1.Patch)('profile-image'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)([{ name: 'profileImage', maxCount: 1 }], cloudinary_middleware_1.cloudinaryMulterOptions)),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.UploadedFiles)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "updateProfileImage", null);
+__decorate([
+    (0, common_1.Patch)('user/update'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "updateProfile", null);
+__decorate([
+    (0, common_1.Get)('user/:userId'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getUserById", null);
+__decorate([
+    (0, common_1.Get)('me/sub-account'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getUserSubAccount", null);
+__decorate([
+    (0, common_1.Get)('email/:email'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Param)('email')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getUserByEmail", null);
+__decorate([
+    (0, common_1.Post)('enquiry'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "createEnquiry", null);
+__decorate([
+    (0, common_1.Patch)('notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, notification_dto_1.UpdateNotificationDto]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "updateNotifications", null);
+__decorate([
+    (0, common_1.Get)('notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getNotication", null);
+__decorate([
+    (0, common_1.Get)('user-notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getNotications", null);
+__decorate([
+    (0, common_1.Post)('create-notification'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "createAndSendNotification", null);
+__decorate([
+    (0, common_1.Get)('all-users'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Query)('role')),
+    __param(1, (0, common_1.Query)('isSuspended')),
+    __param(2, (0, common_1.Query)('page')),
+    __param(3, (0, common_1.Query)('limit')),
+    __param(4, (0, common_1.Query)('search')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Number, Number, String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getAllUsers", null);
+__decorate([
+    (0, common_1.Get)('admin-stats'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getAllUserAdminStats", null);
+__decorate([
+    (0, common_1.Patch)('suspend/:userId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "suspendUser", null);
+__decorate([
+    (0, common_1.Patch)('unsuspend/:userId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "unsuspendUser", null);
+__decorate([
+    (0, common_1.Get)(':clientVendorId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Param)('clientVendorId')),
+    __param(2, (0, common_1.Query)('page')),
+    __param(3, (0, common_1.Query)('limit')),
+    __param(4, (0, common_1.Query)('search')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, Number, Number, String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "getClientsByVendor", null);
+exports.UsersController = UsersController = __decorate([
+    (0, common_1.Controller)('users'),
+    __metadata("design:paramtypes", [users_service_1.UsersService])
+], UsersController);

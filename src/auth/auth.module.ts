@@ -8,6 +8,9 @@ import { VendorService } from 'src/vendor/vendor.service';
 import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
+import { GoogleLoginStrategy } from 'src/middlewares/google-login-strategy.middleware';
+import { ActivityService } from 'src/activity/activityLog.service';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   controllers: [AuthController],
@@ -15,7 +18,7 @@ import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
     PassportModule.register({ defaultStrategy: 'jwt', session: true }),
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '1d' },
+      signOptions: { expiresIn: '14d' },
     }),
     PassportModule,
     NodemailerModule,
@@ -26,6 +29,9 @@ import { NodemailerModule } from 'src/nodemailer/nodemailer.module';
     VendorService,
     CloudinaryService,
     PaystackService,
+    GoogleLoginStrategy,
+    ActivityService,
+    JwtStrategy,
   ],
   exports: [JwtModule, PassportModule, NodemailerModule],
 })

@@ -17,6 +17,9 @@ const vendor_service_1 = require("../vendor/vendor.service");
 const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
 const paystack_service_1 = require("../paystack/paystack.service");
 const nodemailer_module_1 = require("../nodemailer/nodemailer.module");
+const google_login_strategy_middleware_1 = require("../middlewares/google-login-strategy.middleware");
+const activityLog_service_1 = require("../activity/activityLog.service");
+const jwt_strategy_1 = require("./jwt.strategy");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -27,7 +30,7 @@ exports.AuthModule = AuthModule = __decorate([
             passport_1.PassportModule.register({ defaultStrategy: 'jwt', session: true }),
             jwt_1.JwtModule.register({
                 secret: process.env.JWT_SECRET,
-                signOptions: { expiresIn: '1d' },
+                signOptions: { expiresIn: '14d' },
             }),
             passport_1.PassportModule,
             nodemailer_module_1.NodemailerModule,
@@ -38,6 +41,9 @@ exports.AuthModule = AuthModule = __decorate([
             vendor_service_1.VendorService,
             cloudinary_service_1.CloudinaryService,
             paystack_service_1.PaystackService,
+            google_login_strategy_middleware_1.GoogleLoginStrategy,
+            activityLog_service_1.ActivityService,
+            jwt_strategy_1.JwtStrategy,
         ],
         exports: [jwt_1.JwtModule, passport_1.PassportModule, nodemailer_module_1.NodemailerModule],
     })

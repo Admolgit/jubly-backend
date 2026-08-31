@@ -13,7 +13,6 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from 'dotenv';
 import compression from 'compression';
-import bodyParser from 'body-parser';
 import { keepServerAliveDeployment } from './server/redis.keepAlive';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { join } from 'path';
@@ -23,18 +22,11 @@ import { Request, Response, NextFunction } from 'express';
 config();
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+    bodyParser: false,
+  });
   app.set('trust proxy', 1);
-
-  // Body parser with raw body for webhook verification
-  app.use(
-    bodyParser.json({
-      verify: (req: any, _res, buf) => {
-        req.rawBody = buf;
-      },
-    }),
-  );
-  app.use(bodyParser.urlencoded({ extended: true }));
 
   // Validation
   app.useGlobalPipes(
@@ -50,19 +42,47 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://jubly-frontend.vercel.app',
-    ],
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        'https://jubly-frontend.vercel.app',
+        'http://localhost:5173',
+        'https://jubly.com.ng',
+        'https://www.jubly.com.ng',
+        'http://jubly.com.ng',
+        'http://www.jubly.com.ng',
+        'http://localhost:5174',
+        'http://localhost:8081',
+        'exp://192.168.100.6:8081',
+        'https://admin.jubly.com.ng',
+        'http://admin.jubly.com.ng',
+        'https://www.admin.jubly.com.ng',
+        'http://www.admin.jubly.com.ng',
+      ];
+
+      // Allow requests with no origin (React Native, Expo, mobile apps, Postman)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked: ${origin}`));
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   });
 
   // Security middlewares
   app.use(cookieParser());
   app.use(helmet());
   app.use(compression());
-  app.use(json({ limit: '50mb' }));
+  app.use(
+    json({
+      limit: '50mb',
+      verify: (req: any, res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Rate limiter
@@ -71,6 +91,21 @@ async function bootstrap() {
     max: 500,
   }) as express.RequestHandler;
   app.use(limiter);
+
+  // Stricter limiter for bank account resolution to protect against
+  // duplicate/rapid calls (e.g. un-debounced frontend input) tripping Paystack's own rate limit.
+  const resolveBankLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      status: false,
+      message:
+        'Too many bank verification requests. Please slow down and try again shortly.',
+    },
+  }) as express.RequestHandler;
+  app.use('/api/v1/paystack/resolve-bank', resolveBankLimiter);
 
   // Session & Passport
   app.use(
@@ -95,9 +130,6 @@ async function bootstrap() {
     next();
   });
 
-  // Keep server alive (if using Redis)
-  keepServerAliveDeployment.start();
-
   // Serve React static build
   const clientBuildPath = join(__dirname, '..', 'client'); // adjust to your React build
   if (existsSync(clientBuildPath)) {
@@ -112,6 +144,9 @@ async function bootstrap() {
       }
     }) as express.RequestHandler);
   }
+
+  // Keep server alive (if using Redis)
+  keepServerAliveDeployment.start();
 
   // Start server
   const port = process.env.PORT ?? 4001;

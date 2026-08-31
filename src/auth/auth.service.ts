@@ -4,29 +4,54 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
+  HttpException,
   HttpStatus,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException } from '@nestjs/common';
 import { comparePassword, hashPassword } from './hash';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { successResponse } from 'src/utils/response';
-// import { KYCStatus, UserRole } from '@prisma/client';
 import Helper from 'src/utils/helpers';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 import { generateTempPassword } from 'src/utils/generateTempPassword';
+import { UserRole } from '@prisma/client';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
-    private nodemailService: NodemailerService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+    private readonly nodemailService: NodemailerService,
+    private readonly activityService: ActivityService,
   ) {}
+
+  private sanitizeUser<T extends Record<string, any> | null | undefined>(
+    user: T,
+  ) {
+    if (!user) return user;
+    const {
+      password,
+      refreshTokenHash,
+      verificationCode,
+      codeExpiresAt,
+      ...safeUser
+    } = user;
+
+    console.log({
+      password,
+      refreshTokenHash,
+      verificationCode,
+      codeExpiresAt,
+    });
+
+    return safeUser;
+  }
 
   async register(dto: RegisterDto) {
     try {
@@ -34,36 +59,65 @@ export class AuthService {
         where: { email: dto.email },
       });
 
-      if (existingUser) {
+      if (existingUser?.isVerified) {
         throw new BadRequestException('Email already in use');
       }
 
-      const otpGenerated = Helper.generateUniqueCharacters(6);
+      if (existingUser && !existingUser?.isVerified) {
+        const otpGenerated = Helper.generateUniqueCharacters(6);
+        const user = await this.prisma.user.update({
+          where: { email: dto.email },
+          data: {
+            verificationCode: otpGenerated,
+            codeExpiresAt: Helper.set24HourExpiry(),
+          },
+        });
 
-      const hashed = await hashPassword(dto.password);
-      const user = await this.prisma.user.create({
-        data: {
-          email: dto.email,
-          password: hashed,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          phone: dto.phone,
-          role: dto.role,
-          verificationCode: otpGenerated,
-          codeExpiresAt: Helper.set24HourExpiry(),
-        },
-      });
+        const token = this.jwtService.sign({
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+        });
 
-      const token = this.jwtService.sign({
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-      });
+        await this.nodemailService.sendOTP(dto.email, otpGenerated);
 
-      await this.nodemailService.sendOTP(dto.email, otpGenerated);
+        return successResponse(
+          { user: this.sanitizeUser(user), token },
+          'Email already in use',
+          200,
+        );
+      } else {
+        const otpGenerated = Helper.generateUniqueCharacters(6);
 
-      return successResponse({ user, token }, 'Registration successful', 201);
-    } catch (error) {
+        const hashed = await hashPassword(dto.password);
+        const user = await this.prisma.user.create({
+          data: {
+            email: dto.email,
+            password: hashed,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            phone: dto.phone,
+            role: dto.role,
+            verificationCode: otpGenerated,
+            codeExpiresAt: Helper.set24HourExpiry(),
+          },
+        });
+
+        const token = this.jwtService.sign({
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+        });
+
+        await this.nodemailService.sendOTP(dto.email, otpGenerated);
+
+        return successResponse(
+          { user: this.sanitizeUser(user), token },
+          'Registration successful',
+          201,
+        );
+      }
+    } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
@@ -79,41 +133,82 @@ export class AuthService {
     email: string;
     clientName: string;
     phone: string;
+    clientVendorId: string;
   }) {
     try {
       const existingUser = await this.prisma.user.findUnique({
         where: { email: dto.email },
       });
 
+      // Email is already registered — skip registration and continue with
+      // the existing account rather than failing the caller's flow.
       if (existingUser) {
-        throw new BadRequestException('Email already in use');
+        return successResponse(
+          { client: this.sanitizeUser(existingUser) },
+          'Client already registered.',
+          200,
+        );
       }
 
       const generatedPassword = generateTempPassword();
-
       const hashed = await hashPassword(generatedPassword);
 
-      const client = await this.prisma.user.create({
-        data: {
-          email: dto.email,
-          password: hashed,
-          firstName: dto.clientName,
-          phone: dto.phone,
-          role: 'CLIENT',
-          codeExpiresAt: Helper.set24HourExpiry(),
-          isVerified: true,
-        },
-      });
+      let client;
+      try {
+        client = await this.prisma.user.create({
+          data: {
+            email: dto.email,
+            password: hashed,
+            firstName: dto.clientName,
+            phone: dto.phone,
+            role: UserRole.CLIENT,
+            isVerified: true,
+            clientVendorId: dto.clientVendorId,
+          },
+        });
+      } catch (createError: any) {
+        // Two concurrent requests raced to register the same email — the
+        // loser hits the unique index. Treat that the same as "already
+        // registered" and continue with the winner's account instead of
+        // failing the request.
+        if (createError?.code === 'P2002') {
+          const raceWinner = await this.prisma.user.findUnique({
+            where: { email: dto.email },
+          });
 
-      await this.nodemailService.sendTempPassword(dto.email, generatedPassword);
+          if (raceWinner) {
+            return successResponse(
+              { client: this.sanitizeUser(raceWinner) },
+              'Client already registered.',
+              200,
+            );
+          }
+        }
+
+        throw createError;
+      }
+
+      // Registration itself already succeeded at this point — a flaky
+      // temp-password email must not be reported as a registration failure.
+      try {
+        await this.nodemailService.sendTempPassword(
+          dto.email,
+          generatedPassword,
+        );
+      } catch (mailError: any) {
+        console.error(
+          'Failed to send temp password email:',
+          mailError?.message,
+        );
+      }
 
       return successResponse(
-        { client },
+        { client: this.sanitizeUser(client) },
         'Client is registered successfully.',
         201,
       );
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
         throw error;
       }
 
@@ -137,33 +232,143 @@ export class AuthService {
         throw new UnauthorizedException('Invalid credentials');
       }
 
+      if (user?.isSuspended) {
+        throw new UnauthorizedException(
+          'Your account has been suspended. Please contact support for assistance.',
+        );
+      }
+
+      if (user.role === 'VENDOR' && !user.isVerified) {
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+        return successResponse(
+          { user: this.sanitizeUser(user), token, refreshToken },
+          'User not verfied',
+          400,
+        );
+      }
+
       const vendor = await this.prisma.vendor.findUnique({
         where: { userId: user.id },
       });
 
       if (user.role === 'VENDOR' && !vendor) {
-        throw new UnauthorizedException('Vendor account not found');
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+        return successResponse(
+          { user: this.sanitizeUser(user), token, refreshToken },
+          'Complete registration',
+          404,
+        );
       }
 
       if (
-        vendor &&
-        vendor.isApproved === false &&
-        vendor.kycStatus === 'NOT_SUBMITTED'
+        vendor?.isApproved === false &&
+        vendor?.kycStatus === 'NOT_SUBMITTED'
       ) {
-        throw new UnauthorizedException('Complete your onboarding');
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+
+        return successResponse(
+          { user: this.sanitizeUser(user), token, refreshToken },
+          'Complete your onboarding',
+          404,
+        );
       }
 
       if (
-        vendor &&
-        vendor.isApproved === false &&
-        vendor.kycStatus === 'PENDING'
+        vendor?.isApproved === true &&
+        vendor?.onboardingCompleted === false
       ) {
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshToken = this.jwtService.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          { expiresIn: '14d' },
+        );
+
+        const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            refreshTokenHash,
+            lastLogin: new Date(),
+            isOnline: true,
+          },
+        });
+
+        return successResponse(
+          { user: this.sanitizeUser(user), token, refreshToken },
+          'Onboarding not completed',
+          404,
+        );
+      }
+
+      if (vendor?.isApproved === false && vendor?.kycStatus === 'PENDING') {
         throw new UnauthorizedException('Vendor account pending approval');
       }
 
       const token = this.jwtService.sign(
         { sub: user.id, email: user.email, role: user.role },
-        { expiresIn: '7d' },
+        { expiresIn: '14d' },
       );
 
       const refreshToken = this.jwtService.sign(
@@ -182,9 +387,11 @@ export class AuthService {
         },
       });
 
-      return successResponse({ user, token, refreshToken }, 'Login successful');
-    } catch (error) {
-      // preserve existing HTTP exceptions
+      return successResponse(
+        { user: this.sanitizeUser(user), token, refreshToken },
+        'Login successful',
+      );
+    } catch (error: any) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
@@ -210,6 +417,12 @@ export class AuthService {
         );
       }
 
+      if (user?.isSuspended) {
+        throw new UnauthorizedException(
+          'Your account has been suspended. Please contact support for assistance.',
+        );
+      }
+
       let isSignup = false;
       let alreadyExists = true;
 
@@ -223,7 +436,7 @@ export class AuthService {
             lastName: lastname,
             provider: 'GOOGLE',
             isVerified: true,
-            role: 'CLIENT',
+            role: 'VENDOR',
             password: password || null,
           },
         });
@@ -231,7 +444,7 @@ export class AuthService {
 
       const token = await this.generateJwt(user);
       const refreshToken = await this.jwtService.signAsync(
-        { id: user.id, role: user.role },
+        { sub: user.id, email: user.email, role: user.role },
         { expiresIn: '14d' },
       );
 
@@ -244,7 +457,7 @@ export class AuthService {
 
       return successResponse(
         {
-          user,
+          user: this.sanitizeUser(user),
           token,
           refreshToken,
           alreadyExists,
@@ -253,7 +466,11 @@ export class AuthService {
         HttpStatus.OK,
         { isSignup, requestedRedirectUrl, alreadyExists },
       );
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Google Login/Register failed',
         error.message,
@@ -263,20 +480,25 @@ export class AuthService {
 
   async generateJwt(user: any): Promise<string> {
     return await this.jwtService.signAsync(
-      { id: user.id, role: user.role },
-      { expiresIn: '7d' },
+      { sub: user.id, email: user.email, role: user.role },
+      { expiresIn: '14d' },
     );
   }
 
   async refreshToken(refreshToken: string) {
+    let payload: any;
     try {
-      const payload = this.jwtService.verify(refreshToken);
+      payload = this.jwtService.verify(refreshToken);
+    } catch {
+      throw new UnauthorizedException('Refresh token expired or invalid');
+    }
 
+    try {
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
       });
 
-      if (!user || !user.refreshTokenHash) {
+      if (!user?.refreshTokenHash) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
@@ -286,18 +508,19 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const accessToken = this.jwtService.sign(
-        { id: user.id, role: user.role },
-        { expiresIn: '15m' },
+      const token = this.jwtService.sign(
+        { sub: user.id, email: user.email, role: user.role },
+        { expiresIn: '14d' },
       );
 
-      return {
-        accessToken,
-      };
-    } catch (error) {
-      console.log(error);
+      return successResponse({ token }, 'Token refreshed successfully');
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
-        'Refresh token expired or invalid',
+        'Refresh token failed',
         error.message,
       );
     }
@@ -319,7 +542,11 @@ export class AuthService {
         data: { password: hash },
       });
       return successResponse(null, 'Password reset successfully');
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Password reset failed',
         error.message,
@@ -357,8 +584,28 @@ export class AuthService {
         where: { id: userId },
         data: { password: hash },
       });
+
+      const vendor = await this.prisma.vendor.findFirst({
+        where: { userId },
+      });
+
+      await this.activityService.createLog({
+        userId,
+        vendorId: vendor ? vendor.id : undefined,
+        action: 'PASSWORD_CHANGED',
+        description: 'Vendor password was updated.',
+        actor: vendor
+          ? vendor.businessName
+          : `${user.firstName} ${user.lastName}`,
+        actorType: 'VENDOR',
+        color: 'orange',
+      });
       return successResponse(null, 'Password changed successfully');
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Change password failed',
         error.message,
@@ -392,7 +639,11 @@ export class AuthService {
       });
 
       return successResponse(null, 'Email verified successfully');
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Failed to verify email',
         error.message,
@@ -420,7 +671,11 @@ export class AuthService {
       await this.nodemailService.sendOTP(user.email, verificationCode);
 
       return successResponse(null, 'Verification code resent successfully');
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException(
         'Resend OTP failed',
         error.message,
@@ -434,10 +689,25 @@ export class AuthService {
         where: {
           id: userId,
         },
+        include: {
+          vendor: {
+            select: {
+              id: true,
+              isApproved: true,
+              onboardingCompleted: true,
+              kycStatus: true,
+              isActive: true,
+            },
+          },
+        },
       });
 
-      return successResponse({ user }, 'successful');
-    } catch (error) {
+      return successResponse({ user: this.sanitizeUser(user) }, 'successful');
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new InternalServerErrorException('User failed', error.message);
     }
   }

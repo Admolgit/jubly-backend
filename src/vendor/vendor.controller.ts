@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -11,16 +13,18 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { JwtAuthGuard } from 'src/auth/jwt.authGuard';
+import { Public } from 'src/auth/public.decorator';
 import { Roles, RolesGuard } from 'src/auth/role.guard';
 import {
   CompleteVendorOnboardingDto,
-  CreateVendorDto,
+  CreateVendorProfileDto,
   QueryVendorsDto,
 } from './dto/create-vendor.dto';
 import {
@@ -28,8 +32,12 @@ import {
   FilesInterceptor,
 } from '@nestjs/platform-express';
 import { cloudinaryMulterOptions } from 'src/middlewares/cloudinary.middleware';
-import { CreateSubaccountDto } from 'src/paystack';
-import { BulkUpdateItemDto, CreateServicesDto } from './dto/services.dto';
+import {
+  CreateSubaccountDto,
+  UpdateBankDetailsDto,
+  UpdateSubAccountFeeDto,
+} from 'src/paystack';
+import { BulkUpdateItemDto } from './dto/services.dto';
 
 @Controller('vendor')
 export class VendorController {
@@ -39,11 +47,14 @@ export class VendorController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'profileImage', maxCount: 1 },
-      { name: 'documentFrontUrl', maxCount: 1 },
-      { name: 'portfolio', maxCount: 10 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'profileImage', maxCount: 1 },
+        { name: 'documentFrontUrl', maxCount: 1 },
+        { name: 'portfolio', maxCount: 10 },
+      ],
+      cloudinaryMulterOptions,
+    ),
   )
   async completeOnboarding(
     @Req() req: { user: { id: string } },
@@ -89,7 +100,7 @@ export class VendorController {
   @Roles('VENDOR')
   createProfile(
     @Req() req: { user: { id: string } },
-    @Body() dto: CreateVendorDto,
+    @Body() dto: CreateVendorProfileDto,
   ) {
     const userId = req.user.id;
     return this.vendorService.createProfile(userId, dto);
@@ -98,11 +109,11 @@ export class VendorController {
   @Post('onboarding/services')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
-  createServices(@Req() req, @Body() body: CreateServicesDto) {
+  createServices(@Req() req, @Body() body: any) {
     return this.vendorService.createServices(
       req.user.id,
+      body.vendorId,
       body.services,
-      req.user.id,
     );
   }
 
@@ -117,6 +128,7 @@ export class VendorController {
   }
 
   @Get('onboarding/vendor-services/:userId')
+  @Public()
   getVendorServices(@Param('userId') userId: string) {
     return this.vendorService.getVendorServices(userId);
   }
@@ -140,15 +152,41 @@ export class VendorController {
     return this.vendorService.createPaystackSubaccount(userId, dto);
   }
 
+  @Patch('bank-details')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  updateBankDetails(
+    @Req() req: { user: { id: string } },
+    @Body() dto: UpdateBankDetailsDto,
+  ) {
+    return this.vendorService.updateBankDetails(req.user.id, dto);
+  }
   @Patch('onboarding/identity-image')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'documentFrontUrl', maxCount: 1 },
-      { name: 'documentBackUrl', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'documentFrontUrl', maxCount: 1 },
+        { name: 'documentBackUrl', maxCount: 1 },
+      ],
+      cloudinaryMulterOptions,
+    ),
   )
+  submitIdentityImage(
+    @Req() req: { user: { id: string } },
+    @Body('identityType') identityType: string,
+    @UploadedFiles()
+    files: {
+      documentFrontUrl?: Express.Multer.File[];
+      documentBackUrl?: Express.Multer.File[];
+    },
+  ) {
+    return this.vendorService.submitIdentity(req.user.id, identityType, {
+      documentFront: files.documentFrontUrl?.[0],
+    });
+  }
+
   @Patch('onboarding/portfolio-images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
@@ -202,18 +240,50 @@ export class VendorController {
     return this.vendorService.getPendingVendors();
   }
 
+  @Patch('admin/subaccount/fee')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  updateSubAccountFee(@Body() dto: UpdateSubAccountFeeDto) {
+    return this.vendorService.updateSubAccountFee(dto);
+  }
+
   @Get('booking-vendor/:slug')
+  @Public()
   getBookingPage(@Param('slug') slug: string) {
     return this.vendorService.vendorBooking(slug);
   }
 
   @Get('service/:serviceId')
+  @Public()
   getServiceById(@Param('serviceId') serviceId: string) {
     return this.vendorService.getServiceById(serviceId);
   }
 
   @Get('search-vendor')
+  @Public()
   searchVendors(@Query() query: QueryVendorsDto) {
     return this.vendorService.findVendors(query);
+  }
+
+  @Get('export/csv')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async exportBookingsCSV(
+    @Req() req: { user: { id: string } },
+    @Res() res: any,
+  ) {
+    const csv = await this.vendorService.exportBookingsToCSV(req.user.id);
+
+    res.setHeader('Content-Type', 'text/csv');
+
+    res.setHeader('Content-Disposition', 'attachment; filename=bookings.csv');
+
+    return res.status(200).send(csv);
+  }
+
+  @Get('all-vendors')
+  @Public()
+  getAllVendorsHome() {
+    return this.vendorService.getAllVendors();
   }
 }

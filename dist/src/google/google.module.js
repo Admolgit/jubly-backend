@@ -14,6 +14,7 @@ const google_service_1 = require("./google.service");
 const config_1 = require("@nestjs/config");
 const auth_service_1 = require("../auth/auth.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
+const activityLog_service_1 = require("../activity/activityLog.service");
 let GoogleCalenderModule = class GoogleCalenderModule {
 };
 exports.GoogleCalenderModule = GoogleCalenderModule;
@@ -25,6 +26,7 @@ exports.GoogleCalenderModule = GoogleCalenderModule = __decorate([
             google_service_1.GoogleCalendarService,
             auth_service_1.AuthService,
             nodemailer_service_1.NodemailerService,
+            activityLog_service_1.ActivityService,
         ],
         exports: [],
         imports: [config_1.ConfigModule],

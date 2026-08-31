@@ -5,6 +5,7 @@ import { GoogleCalendarService } from './google.service';
 import { ConfigModule } from '@nestjs/config';
 import { AuthService } from 'src/auth/auth.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
+import { ActivityService } from 'src/activity/activityLog.service';
 
 @Module({
   controllers: [GoogleController],
@@ -13,6 +14,7 @@ import { NodemailerService } from 'src/nodemailer/nodemailer.service';
     GoogleCalendarService,
     AuthService,
     NodemailerService,
+    ActivityService,
   ],
   exports: [],
   imports: [ConfigModule],
