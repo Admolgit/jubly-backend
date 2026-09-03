@@ -540,11 +540,6 @@ export class PaystackReconciliationService implements OnModuleInit {
       const reference = `booking-${settlement.bookingId}-retry-${Date.now()}`;
 
       try {
-        // Save the reference BEFORE calling Paystack.
-        //
-        // This allows the transfer webhook to find this
-        // settlement even if the response from initiateTransfer()
-        // never makes it back to your server.
         await this.prisma.settlement.update({
           where: {
             id: settlement.id,
