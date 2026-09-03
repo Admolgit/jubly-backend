@@ -1876,11 +1876,7 @@ export class BookingService {
     if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
       throw new BadRequestException('Vendor has no settlement bank account');
     }
-
-    // The platform's cut (resolved from PlatformSettingsService at the time
-    // the payment was confirmed — defaultPlatformPercentage, or
-    // subscriberPlatformPercentage for a subscribed vendor) is withheld here;
-    // the vendor is transferred the remainder, not the full client payment.
+    
     const percentageFee = transaction.percentageFee ?? 0;
     const vendorAmount =
       Math.round(transaction.amount * (1 - percentageFee) * 100) / 100;
