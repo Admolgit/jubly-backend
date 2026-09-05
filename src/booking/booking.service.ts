@@ -803,7 +803,7 @@ export class BookingService {
         where: {
           vendorId,
           status: {
-            in: ['COMPLETED', 'CONFIRMED'],
+            in: ['COMPLETED'],
           },
         },
         _sum: {
@@ -815,7 +815,7 @@ export class BookingService {
         where: {
           vendorId,
           status: {
-            in: ['COMPLETED', 'CONFIRMED'],
+            in: ['COMPLETED'],
           },
           createdAt: {
             gte: startOfMonth,
@@ -830,7 +830,7 @@ export class BookingService {
         where: {
           vendorId,
           status: {
-            in: ['COMPLETED', 'CONFIRMED'],
+            in: ['COMPLETED'],
           },
           createdAt: {
             gte: startOfLastMonth,
