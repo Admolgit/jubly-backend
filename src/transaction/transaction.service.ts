@@ -291,7 +291,7 @@ export class TransactionService {
       const total = await this.prisma.transaction.aggregate({
         where: {
           ...where,
-          status: { in: ['COMPLETED', 'PENDING'] },
+          status: { in: ['COMPLETED'] },
           vendorId,
         },
         _sum: {
@@ -299,7 +299,7 @@ export class TransactionService {
         },
       });
 
-      const totalSum = total._sum.amount ?? 0 / 100;
+      const totalSum = total._sum.amount;
 
       return successResponse(
         { total: totalSum },
@@ -371,7 +371,7 @@ export class TransactionService {
       const transactions = await this.prisma.transaction.findMany({
         where: {
           vendorId: vendor.id,
-          status: { in: ['COMPLETED', 'PENDING'] },
+          status: { in: ['COMPLETED'] },
           createdAt: {
             gte: startDate,
             lte: endDate,

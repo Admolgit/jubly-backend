@@ -594,7 +594,7 @@ let BookingService = class BookingService {
                 where: {
                     vendorId,
                     status: {
-                        in: ['COMPLETED', 'CONFIRMED'],
+                        in: ['COMPLETED'],
                     },
                 },
                 _sum: {
@@ -605,7 +605,7 @@ let BookingService = class BookingService {
                 where: {
                     vendorId,
                     status: {
-                        in: ['COMPLETED', 'CONFIRMED'],
+                        in: ['COMPLETED'],
                     },
                     createdAt: {
                         gte: startOfMonth,
@@ -619,7 +619,7 @@ let BookingService = class BookingService {
                 where: {
                     vendorId,
                     status: {
-                        in: ['COMPLETED', 'CONFIRMED'],
+                        in: ['COMPLETED'],
                     },
                     createdAt: {
                         gte: startOfLastMonth,
