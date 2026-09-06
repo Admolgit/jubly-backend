@@ -412,7 +412,7 @@ export class AuthService {
       });
 
       if (user && user.provider !== 'GOOGLE') {
-        return new BadRequestException(
+        throw new BadRequestException(
           'User already exists with a different provider',
         );
       }
