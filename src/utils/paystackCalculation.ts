@@ -31,3 +31,14 @@ export function addPaystackFee(amount: number): {
     totalAmount,
   };
 }
+
+export function calculateJublyCommission(
+  amount: number,
+  commissionRate: number,
+) {
+  const JUBLY_COMMISSION_CAP = 10_000;
+
+  const percentageFee = amount * commissionRate;
+
+  return Math.min(percentageFee, JUBLY_COMMISSION_CAP);
+}

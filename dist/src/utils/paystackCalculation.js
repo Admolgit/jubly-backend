@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.addPaystackFee = addPaystackFee;
+exports.calculateJublyCommission = calculateJublyCommission;
 function addPaystackFee(amount) {
     const percentage = 0.015;
     const feeCap = 2000;
@@ -19,4 +20,9 @@ function addPaystackFee(amount) {
         processingFee: Math.round((totalAmount - amount) * 100) / 100,
         totalAmount,
     };
+}
+function calculateJublyCommission(amount, commissionRate) {
+    const JUBLY_COMMISSION_CAP = 10_000;
+    const percentageFee = amount * commissionRate;
+    return Math.min(percentageFee, JUBLY_COMMISSION_CAP);
 }
