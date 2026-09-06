@@ -1401,7 +1401,9 @@ let BookingService = class BookingService {
             throw new common_1.BadRequestException('Vendor has no settlement bank account');
         }
         const percentageFee = transaction.percentageFee ?? 0;
-        const vendorAmount = Math.round(transaction.amount * (1 - percentageFee) * 100) / 100;
+        const transactionAmount = transaction.amount ?? 0;
+        const jublyFee = (0, paystackCalculation_1.calculateJublyCommission)(transactionAmount, percentageFee);
+        const vendorAmount = Math.round((transactionAmount - jublyFee) * 100) / 100;
         const recipient = await this.paystackService.createTransferRecipient({
             name: booking.vendor.businessName,
             accountNumber: booking.vendor.bankAccountNumber,
