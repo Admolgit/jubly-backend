@@ -33,7 +33,10 @@ import { ActivityService } from 'src/activity/activityLog.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 import { SubscriptionService } from 'src/subscription/subscription.service';
 import { dateConverter, timeConverter } from 'src/utils/dateAndTimeConverter';
-import { addPaystackFee } from 'src/utils/paystackCalculation';
+import {
+  addPaystackFee,
+  calculateJublyCommission,
+} from 'src/utils/paystackCalculation';
 
 export enum DateFilter {
   DAY = 'day',
@@ -803,7 +806,7 @@ export class BookingService {
         where: {
           vendorId,
           status: {
-            in: ['COMPLETED', 'CONFIRMED'],
+            in: ['COMPLETED'],
           },
         },
         _sum: {
@@ -815,7 +818,7 @@ export class BookingService {
         where: {
           vendorId,
           status: {
-            in: ['COMPLETED', 'CONFIRMED'],
+            in: ['COMPLETED'],
           },
           createdAt: {
             gte: startOfMonth,
@@ -830,7 +833,7 @@ export class BookingService {
         where: {
           vendorId,
           status: {
-            in: ['COMPLETED', 'CONFIRMED'],
+            in: ['COMPLETED'],
           },
           createdAt: {
             gte: startOfLastMonth,
@@ -1877,13 +1880,12 @@ export class BookingService {
       throw new BadRequestException('Vendor has no settlement bank account');
     }
 
-    // The platform's cut (resolved from PlatformSettingsService at the time
-    // the payment was confirmed — defaultPlatformPercentage, or
-    // subscriberPlatformPercentage for a subscribed vendor) is withheld here;
-    // the vendor is transferred the remainder, not the full client payment.
     const percentageFee = transaction.percentageFee ?? 0;
-    const vendorAmount =
-      Math.round(transaction.amount * (1 - percentageFee) * 100) / 100;
+    const transactionAmount = transaction.amount ?? 0;
+
+    const jublyFee = calculateJublyCommission(transactionAmount, percentageFee);
+
+    const vendorAmount = Math.round((transactionAmount - jublyFee) * 100) / 100;
 
     const recipient = await this.paystackService.createTransferRecipient({
       name: booking.vendor.businessName,
@@ -1946,8 +1948,15 @@ export class BookingService {
     await this.activityService.createLog({
       vendorId: booking.vendorId,
       userId: user.id,
-      action: 'SETTLEMENT_PAID',
-      description: `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} processed.`,
+      action:
+        settlement?.status === 'SUCCESS'
+          ? 'SETTLEMENT_PAID'
+          : 'SETTLEMENT_PROCESSING',
+
+      description:
+        settlement?.status === 'SUCCESS'
+          ? `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} paid successfully.`
+          : `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} is being processed.`,
       actor: 'System',
       actorType: 'SYSTEM',
       color: 'purple',

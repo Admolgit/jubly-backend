@@ -46,6 +46,7 @@ async function bootstrap() {
                 'http://admin.jubly.com.ng',
                 'https://www.admin.jubly.com.ng',
                 'http://www.admin.jubly.com.ng',
+                'https://jubly-frontend-bw6c6nwgb-jub-digital-solutions.vercel.app',
             ];
             if (!origin || allowedOrigins.includes(origin)) {
                 callback(null, true);

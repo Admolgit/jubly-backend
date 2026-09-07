@@ -594,7 +594,7 @@ let BookingService = class BookingService {
                 where: {
                     vendorId,
                     status: {
-                        in: ['COMPLETED', 'CONFIRMED'],
+                        in: ['COMPLETED'],
                     },
                 },
                 _sum: {
@@ -605,7 +605,7 @@ let BookingService = class BookingService {
                 where: {
                     vendorId,
                     status: {
-                        in: ['COMPLETED', 'CONFIRMED'],
+                        in: ['COMPLETED'],
                     },
                     createdAt: {
                         gte: startOfMonth,
@@ -619,7 +619,7 @@ let BookingService = class BookingService {
                 where: {
                     vendorId,
                     status: {
-                        in: ['COMPLETED', 'CONFIRMED'],
+                        in: ['COMPLETED'],
                     },
                     createdAt: {
                         gte: startOfLastMonth,
@@ -1401,7 +1401,9 @@ let BookingService = class BookingService {
             throw new common_1.BadRequestException('Vendor has no settlement bank account');
         }
         const percentageFee = transaction.percentageFee ?? 0;
-        const vendorAmount = Math.round(transaction.amount * (1 - percentageFee) * 100) / 100;
+        const transactionAmount = transaction.amount ?? 0;
+        const jublyFee = (0, paystackCalculation_1.calculateJublyCommission)(transactionAmount, percentageFee);
+        const vendorAmount = Math.round((transactionAmount - jublyFee) * 100) / 100;
         const recipient = await this.paystackService.createTransferRecipient({
             name: booking.vendor.businessName,
             accountNumber: booking.vendor.bankAccountNumber,
@@ -1454,8 +1456,12 @@ let BookingService = class BookingService {
         await this.activityService.createLog({
             vendorId: booking.vendorId,
             userId: user.id,
-            action: 'SETTLEMENT_PAID',
-            description: `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} processed.`,
+            action: settlement?.status === 'SUCCESS'
+                ? 'SETTLEMENT_PAID'
+                : 'SETTLEMENT_PROCESSING',
+            description: settlement?.status === 'SUCCESS'
+                ? `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} paid successfully.`
+                : `Settlement of ₦${payoutAmount?.toLocaleString() ?? '0'} is being processed.`,
             actor: 'System',
             actorType: 'SYSTEM',
             color: 'purple',

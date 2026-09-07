@@ -228,6 +228,7 @@ export class UsersService {
         where: {
           vendorId,
           clientId: { in: clientIds },
+          status: { in: ['COMPLETED', 'PENDING', 'CONFIRMED'] },
         },
         _count: { _all: true },
       });

@@ -229,6 +229,104 @@ export class PaystackController {
         throw new BadRequestException('Invalid Paystack webhook payload');
       }
 
+      // ============================================================
+      // PAYSTACK TRANSFER EVENTS
+      // ============================================================
+
+      if (
+        event.event === 'transfer.success' ||
+        event.event === 'transfer.failed' ||
+        event.event === 'transfer.reversed'
+      ) {
+        const transferData = event.data;
+
+        const reference = transferData?.reference;
+        const transferCode = transferData?.transfer_code;
+
+        const settlement = await this.prisma.settlement.findFirst({
+          where: {
+            OR: [
+              ...(reference ? [{ reference }] : []),
+
+              ...(transferCode ? [{ transferCode }] : []),
+            ],
+          },
+        });
+
+        if (!settlement) {
+          console.error(
+            `Settlement not found for transfer ${
+              reference ?? transferCode ?? 'unknown'
+            }`,
+          );
+
+          // Don't make Paystack repeatedly deliver an event
+          // we cannot associate with a settlement.
+          return { status: true };
+        }
+
+        // ==========================================================
+        // SUCCESS
+        // ==========================================================
+
+        if (event.event === 'transfer.success') {
+          // Idempotency for webhook redelivery.
+          if (settlement.status === 'SUCCESS') {
+            return { status: true };
+          }
+
+          await this.prisma.$transaction([
+            this.prisma.settlement.update({
+              where: {
+                id: settlement.id,
+              },
+              data: {
+                status: 'SUCCESS',
+
+                transferCode: transferCode ?? settlement.transferCode,
+              },
+            }),
+
+            this.prisma.transaction.updateMany({
+              where: {
+                bookingId: settlement.bookingId,
+                status: {
+                  not: 'COMPLETED',
+                },
+              },
+              data: {
+                status: 'COMPLETED',
+              },
+            }),
+          ]);
+
+          console.log(`✅ Settlement ${settlement.id} completed successfully`);
+
+          return { status: true };
+        }
+
+        // ==========================================================
+        // FAILED / REVERSED
+        // ==========================================================
+
+        await this.prisma.settlement.update({
+          where: {
+            id: settlement.id,
+          },
+          data: {
+            status: 'FAILED',
+
+            transferCode: transferCode ?? settlement.transferCode,
+          },
+        });
+
+        console.error(
+          `❌ Settlement ${settlement.id} changed to FAILED (${event.event})`,
+        );
+
+        return { status: true };
+      }
+
       if (event.event !== 'charge.success') {
         return { status: true };
       }
@@ -516,9 +614,6 @@ export class PaystackController {
           );
 
         const dto = {
-          // Paystack reports amounts in kobo. TransactionService converts this
-          // to naira before persisting it alongside the payout percentage.
-          amount: event.data.amount,
           senderDetailsId: senderDetails.id,
           status: 'PENDING',
           providerRef: event.data.reference,

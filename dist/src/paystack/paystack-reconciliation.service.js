@@ -317,27 +317,43 @@ let PaystackReconciliationService = class PaystackReconciliationService {
         const failedSettlements = await this.prisma.settlement.findMany({
             where: {
                 status: 'FAILED',
-                createdAt: { gte: retryThreshold },
+                createdAt: {
+                    gte: retryThreshold,
+                },
             },
-            orderBy: { createdAt: 'asc' },
+            orderBy: {
+                createdAt: 'asc',
+            },
             take: BATCH_SIZE,
         });
         for (const settlement of failedSettlements) {
             if (!settlement.recipientCode) {
                 continue;
             }
+            const reference = `booking-${settlement.bookingId}-retry-${Date.now()}`;
             try {
+                await this.prisma.settlement.update({
+                    where: {
+                        id: settlement.id,
+                    },
+                    data: {
+                        reference,
+                        status: 'PENDING',
+                    },
+                });
                 const transfer = await this.paystackService.initiateTransfer({
                     amount: settlement.amount,
                     recipientCode: settlement.recipientCode,
                     reason: `Settlement retry for booking ${settlement.bookingId}`,
-                    reference: `booking-${settlement.bookingId}-retry-${Date.now()}`,
+                    reference,
                 });
                 const transferStatus = transfer.status?.toUpperCase() || 'PENDING';
                 await this.prisma.settlement.update({
-                    where: { id: settlement.id },
+                    where: {
+                        id: settlement.id,
+                    },
                     data: {
-                        transferCode: transfer.transfer_code,
+                        transferCode: transfer.transfer_code ?? settlement.transferCode,
                         status: transferStatus,
                     },
                 });
@@ -345,14 +361,26 @@ let PaystackReconciliationService = class PaystackReconciliationService {
                     await this.prisma.transaction.updateMany({
                         where: {
                             bookingId: settlement.bookingId,
-                            status: { not: 'COMPLETED' },
+                            status: {
+                                not: 'COMPLETED',
+                            },
                         },
-                        data: { status: 'COMPLETED' },
+                        data: {
+                            status: 'COMPLETED',
+                        },
                     });
                 }
             }
             catch (error) {
                 console.error(`[PaystackReconciliation] Settlement retry failed for settlement ${settlement.id}:`, error instanceof Error ? error.message : error);
+                await this.prisma.settlement.update({
+                    where: {
+                        id: settlement.id,
+                    },
+                    data: {
+                        status: 'FAILED',
+                    },
+                });
             }
         }
     }

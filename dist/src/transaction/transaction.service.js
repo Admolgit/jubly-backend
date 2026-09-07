@@ -66,8 +66,7 @@ let TransactionService = class TransactionService {
             if (!dto.vendorId) {
                 throw new common_1.BadRequestException('Vendor ID is required');
             }
-            const convertedAmount = dto.amount / 100;
-            await this.prisma.transaction.update({
+            const transaction = await this.prisma.transaction.update({
                 where: {
                     providerRef: dto.providerRef,
                 },
@@ -75,7 +74,6 @@ let TransactionService = class TransactionService {
                     vendorId: dto.vendorId,
                     title: dto.name,
                     bookingId: dto.bookingId,
-                    amount: convertedAmount,
                     senderDetailsId: dto.senderDetailsId,
                     currency: 'NGN',
                     paidAt: new Date(),
@@ -85,6 +83,7 @@ let TransactionService = class TransactionService {
                     providerRef: dto.providerRef,
                 },
             });
+            const convertedAmount = transaction.amount;
             await this.activityService.createLog({
                 vendorId: dto.vendorId,
                 userId: userId ?? dto.userId,
@@ -228,14 +227,14 @@ let TransactionService = class TransactionService {
             const total = await this.prisma.transaction.aggregate({
                 where: {
                     ...where,
-                    status: { in: ['COMPLETED', 'PENDING'] },
+                    status: { in: ['COMPLETED'] },
                     vendorId,
                 },
                 _sum: {
                     amount: true,
                 },
             });
-            const totalSum = total._sum.amount ?? 0 / 100;
+            const totalSum = total._sum.amount;
             return (0, response_1.successResponse)({ total: totalSum }, 'Successfully fetched transactions amount.');
         }
         catch (error) {
@@ -287,7 +286,7 @@ let TransactionService = class TransactionService {
             const transactions = await this.prisma.transaction.findMany({
                 where: {
                     vendorId: vendor.id,
-                    status: { in: ['COMPLETED', 'PENDING'] },
+                    status: { in: ['COMPLETED'] },
                     createdAt: {
                         gte: startDate,
                         lte: endDate,
