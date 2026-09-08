@@ -285,7 +285,7 @@ let AuthService = class AuthService {
                 where: { email },
             });
             if (user && user.provider !== 'GOOGLE') {
-                return new common_1.BadRequestException('User already exists with a different provider');
+                throw new common_1.BadRequestException('User already exists with a different provider');
             }
             if (user?.isSuspended) {
                 throw new common_1.UnauthorizedException('Your account has been suspended. Please contact support for assistance.');
