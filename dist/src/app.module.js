@@ -31,6 +31,7 @@ const reschedule_module_1 = require("./reschedule/reschedule.module");
 const cancellation_policy_module_1 = require("./cancellation-policy/cancellation-policy.module");
 const platform_settings_module_1 = require("./platform-settings/platform-settings.module");
 const subscription_module_1 = require("./subscription/subscription.module");
+const reviews_module_1 = require("./reviews/reviews.module");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer
@@ -63,6 +64,7 @@ exports.AppModule = AppModule = __decorate([
             cancellation_policy_module_1.CancellationPolicyModule,
             platform_settings_module_1.PlatformSettingsModule,
             subscription_module_1.SubscriptionModule,
+            reviews_module_1.ReviewsModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

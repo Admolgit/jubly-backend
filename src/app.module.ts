@@ -22,6 +22,7 @@ import { RescheduleModule } from './reschedule/reschedule.module';
 import { CancellationPolicyModule } from './cancellation-policy/cancellation-policy.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     CancellationPolicyModule,
     PlatformSettingsModule,
     SubscriptionModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [
