@@ -25,8 +25,8 @@ let ReviewsController = class ReviewsController {
     constructor(reviewsService) {
         this.reviewsService = reviewsService;
     }
-    create(req, dto) {
-        return this.reviewsService.create(req.user.id, dto);
+    create(clientId, dto) {
+        return this.reviewsService.create(clientId, dto);
     }
     getVendorReviews(params, query) {
         return this.reviewsService.getVendorReviews(params.vendorId, query);
@@ -34,16 +34,18 @@ let ReviewsController = class ReviewsController {
     getBookingReview(req, params) {
         return this.reviewsService.getBookingReview(req.user.id, params.bookingId);
     }
+    getPublicStats(vendorId) {
+        return this.reviewsService.getPublicStats(vendorId);
+    }
 };
 exports.ReviewsController = ReviewsController;
 __decorate([
-    (0, common_1.Post)(),
-    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
-    (0, role_guard_1.Roles)('CLIENT'),
-    __param(0, (0, common_1.Req)()),
+    (0, common_1.Post)(':clientId'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Param)('clientId')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, create_review_dto_1.CreateReviewDto]),
+    __metadata("design:paramtypes", [String, create_review_dto_1.CreateReviewDto]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "create", null);
 __decorate([
@@ -66,6 +68,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, review_params_dto_1.BookingReviewParamsDto]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "getBookingReview", null);
+__decorate([
+    (0, common_1.Get)(':vendorId/public-stats'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Param)('vendorId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], ReviewsController.prototype, "getPublicStats", null);
 exports.ReviewsController = ReviewsController = __decorate([
     (0, common_1.Controller)('reviews'),
     __metadata("design:paramtypes", [reviews_service_1.ReviewsService])

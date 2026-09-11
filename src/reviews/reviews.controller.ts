@@ -23,11 +23,10 @@ import { ReviewsService } from './reviews.service';
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('CLIENT')
-  create(@Req() req: { user: { id: string } }, @Body() dto: CreateReviewDto) {
-    return this.reviewsService.create(req.user.id, dto);
+  @Post(':clientId')
+  @Public()
+  create(@Param('clientId') clientId: string, @Body() dto: CreateReviewDto) {
+    return this.reviewsService.create(clientId, dto);
   }
 
   @Get('vendor/:vendorId')
@@ -47,5 +46,11 @@ export class ReviewsController {
     @Param() params: BookingReviewParamsDto,
   ) {
     return this.reviewsService.getBookingReview(req.user.id, params.bookingId);
+  }
+
+  @Get(':vendorId/public-stats')
+  @Public()
+  getPublicStats(@Param('vendorId') vendorId: string) {
+    return this.reviewsService.getPublicStats(vendorId);
   }
 }

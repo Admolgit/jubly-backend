@@ -177,6 +177,53 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
             });
         });
     }
+    async getPublicStats(vendorId) {
+        const vendor = await this.prisma.vendor.findUnique({
+            where: { id: vendorId },
+        });
+        if (!vendor) {
+            throw new common_1.NotFoundException('Vendor not found');
+        }
+        const [completedBookings, reviewSummary] = await Promise.all([
+            this.prisma.booking.findMany({
+                where: {
+                    vendorId,
+                    status: 'COMPLETED',
+                },
+                select: {
+                    clientId: true,
+                },
+            }),
+            this.prisma.review.aggregate({
+                where: {
+                    vendorId,
+                },
+                _avg: {
+                    rating: true,
+                },
+                _count: {
+                    rating: true,
+                },
+            }),
+            this.prisma.booking.findMany({
+                where: {
+                    vendorId,
+                },
+                select: {
+                    createdAt: true,
+                },
+            }),
+        ]);
+        const happyClients = new Set(completedBookings.map((booking) => booking.clientId)).size;
+        const averageRating = reviewSummary._avg.rating ?? 0;
+        const satisfactionRate = reviewSummary._count.rating > 0
+            ? Math.round((averageRating / 5) * 100)
+            : 0;
+        return {
+            happyClients,
+            satisfactionRate,
+        };
+    }
 };
 exports.ReviewsService = ReviewsService;
 exports.ReviewsService = ReviewsService = ReviewsService_1 = __decorate([

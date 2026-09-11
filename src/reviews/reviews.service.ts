@@ -200,4 +200,100 @@ export class ReviewsService {
       );
     });
   }
+
+  async getPublicStats(vendorId: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    const [completedBookings, reviewSummary] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: {
+          vendorId,
+          status: 'COMPLETED',
+        },
+        select: {
+          clientId: true,
+        },
+      }),
+
+      this.prisma.review.aggregate({
+        where: {
+          vendorId,
+          // Include this if your Review model has moderation:
+          // status: 'APPROVED',
+        },
+        _avg: {
+          rating: true,
+        },
+        _count: {
+          rating: true,
+        },
+      }),
+
+      this.prisma.booking.findMany({
+        where: {
+          vendorId,
+          // vendorRespondedAt: {
+          //   not: null,
+          // },
+        },
+        select: {
+          createdAt: true,
+          // vendorRespondedAt: true,
+        },
+      }),
+    ]);
+
+    const happyClients = new Set(
+      completedBookings.map((booking) => booking.clientId),
+    ).size;
+
+    const averageRating = reviewSummary._avg.rating ?? 0;
+
+    // Converts a 5-star score to a percentage.
+    // Example: 4.5 / 5 × 100 = 90%
+    const satisfactionRate =
+      reviewSummary._count.rating > 0
+        ? Math.round((averageRating / 5) * 100)
+        : 0;
+
+    // const responseTimes = respondedBookings
+    //   .filter((booking) => booking.vendorRespondedAt)
+    //   .map((booking) => {
+    //     return (
+    //       (booking.vendorRespondedAt!.getTime() - booking.createdAt.getTime()) /
+    //       60_000
+    //     );
+    //   });
+
+    // const averageResponseMinutes =
+    //   responseTimes.length > 0
+    //     ? Math.round(
+    //         responseTimes.reduce((total, time) => total + time, 0) /
+    //           responseTimes.length,
+    //       )
+    //     : null;
+
+    return {
+      happyClients,
+      satisfactionRate,
+      // responseLabel: this.getResponseLabel(averageResponseMinutes),
+      // averageResponseMinutes,
+    };
+  }
+
+  // private getResponseLabel(
+  //   averageMinutes: number | null,
+  // ): 'Fast' | 'Average' | 'Slow' | 'New' {
+  //   if (averageMinutes === null) return 'New';
+  //   if (averageMinutes <= 60) return 'Fast';
+  //   if (averageMinutes <= 360) return 'Average';
+
+  //   return 'Slow';
+  // }
 }
