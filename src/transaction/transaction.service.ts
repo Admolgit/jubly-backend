@@ -503,7 +503,19 @@ export class TransactionService {
       where: {
         vendorId: vendor.id,
         status: {
-          in: ['COMPLETED', 'PENDING'],
+          in: ['COMPLETED'],
+        },
+        createdAt: {
+          gte: currentMonthStart,
+        },
+      },
+    });
+
+    const currentProcessingTransactions = await this.prisma.transaction.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: {
+          in: ['PENDING'],
         },
         createdAt: {
           gte: currentMonthStart,
@@ -515,7 +527,19 @@ export class TransactionService {
       where: {
         vendorId: vendor.id,
         status: {
-          in: ['COMPLETED', 'PENDING'],
+          in: ['COMPLETED'],
+        },
+        createdAt: {
+          gte: previousMonthStart,
+          lte: previousMonthEnd,
+        },
+      },
+    });
+    const previousProcessedTransactions = await this.prisma.transaction.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: {
+          in: ['PENDING'],
         },
         createdAt: {
           gte: previousMonthStart,
@@ -554,11 +578,11 @@ export class TransactionService {
 
     const previousCompleted = calculateAmount(previousCompletedTransactions);
 
-    const processingTransactions = currentTransactions.filter(
+    const processingTransactions = currentProcessingTransactions.filter(
       (item) => item.status === 'PENDING',
     );
 
-    const previousProcessingTransactions = previousTransactions.filter(
+    const previousProcessingTransactions = previousProcessedTransactions.filter(
       (item) => item.status === 'PENDING',
     );
 

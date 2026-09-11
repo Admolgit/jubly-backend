@@ -378,7 +378,18 @@ let TransactionService = class TransactionService {
             where: {
                 vendorId: vendor.id,
                 status: {
-                    in: ['COMPLETED', 'PENDING'],
+                    in: ['COMPLETED'],
+                },
+                createdAt: {
+                    gte: currentMonthStart,
+                },
+            },
+        });
+        const currentProcessingTransactions = await this.prisma.transaction.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: {
+                    in: ['PENDING'],
                 },
                 createdAt: {
                     gte: currentMonthStart,
@@ -389,7 +400,19 @@ let TransactionService = class TransactionService {
             where: {
                 vendorId: vendor.id,
                 status: {
-                    in: ['COMPLETED', 'PENDING'],
+                    in: ['COMPLETED'],
+                },
+                createdAt: {
+                    gte: previousMonthStart,
+                    lte: previousMonthEnd,
+                },
+            },
+        });
+        const previousProcessedTransactions = await this.prisma.transaction.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: {
+                    in: ['PENDING'],
                 },
                 createdAt: {
                     gte: previousMonthStart,
@@ -413,8 +436,8 @@ let TransactionService = class TransactionService {
         const previousCompletedTransactions = previousTransactions.filter((item) => item.status === 'COMPLETED');
         const completed = calculateAmount(completedTransactions);
         const previousCompleted = calculateAmount(previousCompletedTransactions);
-        const processingTransactions = currentTransactions.filter((item) => item.status === 'PENDING');
-        const previousProcessingTransactions = previousTransactions.filter((item) => item.status === 'PENDING');
+        const processingTransactions = currentProcessingTransactions.filter((item) => item.status === 'PENDING');
+        const previousProcessingTransactions = previousProcessedTransactions.filter((item) => item.status === 'PENDING');
         const processing = calculateAmount(processingTransactions);
         const previousProcessing = calculateAmount(previousProcessingTransactions);
         const failedTransactions = currentTransactions.filter((item) => item.status === 'failed');
