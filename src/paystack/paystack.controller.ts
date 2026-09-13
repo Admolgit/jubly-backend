@@ -376,10 +376,7 @@ export class PaystackController {
       if (!transactionExists) {
         throw new BadRequestException('Transaction was not initialized');
       }
-
-      // Shared idempotency guard for both flows below: bookingId is only
-      // ever set once a charge has actually been confirmed (by this webhook
-      // or by the reconciliation cron), so a redelivered webhook is a no-op.
+      
       if (transactionExists.bookingId) {
         return { status: true };
       }
@@ -409,6 +406,7 @@ export class PaystackController {
             status: 'CONFIRMED',
             paymentVerification: 'PAYSTACK_VERIFIED',
             paymentExpiresAt: null,
+            paymentUrl: null,
           },
         });
 

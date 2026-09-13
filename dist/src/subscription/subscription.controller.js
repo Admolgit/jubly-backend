@@ -21,6 +21,7 @@ const role_guard_1 = require("../auth/role.guard");
 const paystack_service_1 = require("../paystack/paystack.service");
 const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const subscription_service_1 = require("./subscription.service");
+const response_1 = require("../utils/response");
 let SubscriptionController = class SubscriptionController {
     constructor(prisma, paystackService, platformSettingsService, subscriptionService) {
         this.prisma = prisma;
@@ -36,6 +37,19 @@ let SubscriptionController = class SubscriptionController {
             throw new common_2.NotFoundException('Vendor not found');
         }
         return this.subscriptionService.getStatus(vendor.id);
+    }
+    async getSubscriptionFee(req) {
+        const vendor = await this.prisma.vendor.findFirst({
+            where: { userId: req.user.id },
+        });
+        if (!vendor) {
+            throw new common_2.NotFoundException('Vendor not found');
+        }
+        const { priceNaira, durationDays } = await this.platformSettingsService.getSubscriptionPricing(vendor.id);
+        return (0, response_1.successResponse)({
+            priceNaira,
+            durationDays,
+        }, 'Subscription fee retrieved successfully');
     }
     async upgrade(req) {
         const vendor = await this.prisma.vendor.findFirst({
@@ -71,6 +85,15 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], SubscriptionController.prototype, "getStatus", null);
+__decorate([
+    (0, common_1.Get)('fee'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SubscriptionController.prototype, "getSubscriptionFee", null);
 __decorate([
     (0, common_1.Post)('upgrade'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),

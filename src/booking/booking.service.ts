@@ -635,12 +635,16 @@ export class BookingService {
           },
         );
 
-      // bookingId is deliberately left unset here (matching the marketplace
-      // flow's pattern) — it only gets linked once the webhook or the
-      // reconciliation cron actually confirms payment. This is what lets
-      // the existing reconcilePendingTransactions() cron pick this up as a
-      // fallback if the live webhook delivery ever fails, exactly like it
-      // already does for marketplace bookings.
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          paymentExpiresAt: new Date(
+            Date.now() + this.vendorBookingPaymentExpiryMs,
+          ),
+          paymentUrl: authorizationUrl,
+        },
+      });
+
       await this.prisma.transaction.create({
         data: {
           vendorId: vendor.id,
