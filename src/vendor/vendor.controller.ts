@@ -117,6 +117,28 @@ export class VendorController {
     );
   }
 
+  @Patch('onboarding/profile-image')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [{ name: 'profileImage', maxCount: 1 }],
+      cloudinaryMulterOptions,
+    ),
+  )
+  submitProfileImage(
+    @Req() req: { user: { id: string } },
+    @UploadedFiles() file: { profileImage?: Express.Multer.File[] },
+  ) {
+    const profileImage = file.profileImage?.[0];
+
+    if (!profileImage) {
+      throw new BadRequestException('Profile image is required');
+    }
+
+    return this.vendorService.submitProfileImage(req.user.id, profileImage);
+  }
+
   @Patch('onboarding/update-services')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
@@ -196,6 +218,12 @@ export class VendorController {
     @UploadedFiles() files: Express.Multer.File[],
   ) {
     return this.vendorService.uploadPortfolio(req.user.id, files);
+  }
+
+  @Patch('onboarding/update-portfolio-images')
+  @UseInterceptors(FilesInterceptor('files', 10))
+  replacePortfolio(@Req() req, @UploadedFiles() files: Express.Multer.File[]) {
+    return this.vendorService.replacePortfolio(req.user.id, files);
   }
 
   @Get('onboarding/status')
