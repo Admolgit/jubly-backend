@@ -9,34 +9,19 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PasswordResetDTO = exports.ForgotPasswordDto = void 0;
+exports.BookingReviewParamsDto = exports.VendorReviewParamsDto = void 0;
 const class_validator_1 = require("class-validator");
-class ForgotPasswordDto {
+class VendorReviewParamsDto {
 }
-exports.ForgotPasswordDto = ForgotPasswordDto;
+exports.VendorReviewParamsDto = VendorReviewParamsDto;
 __decorate([
-    (0, class_validator_1.IsEmail)(),
-    (0, class_validator_1.MaxLength)(254),
+    (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
-], ForgotPasswordDto.prototype, "email", void 0);
-class PasswordResetDTO {
+], VendorReviewParamsDto.prototype, "vendorId", void 0);
+class BookingReviewParamsDto {
 }
-exports.PasswordResetDTO = PasswordResetDTO;
+exports.BookingReviewParamsDto = BookingReviewParamsDto;
 __decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)(),
-    (0, class_validator_1.MaxLength)(4096),
+    (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
-], PasswordResetDTO.prototype, "token", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(8),
-    (0, class_validator_1.MaxLength)(72),
-    __metadata("design:type", String)
-], PasswordResetDTO.prototype, "newPassword", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(8),
-    (0, class_validator_1.MaxLength)(72),
-    __metadata("design:type", String)
-], PasswordResetDTO.prototype, "confirmPassword", void 0);
+], BookingReviewParamsDto.prototype, "bookingId", void 0);

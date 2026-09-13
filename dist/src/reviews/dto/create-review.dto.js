@@ -9,34 +9,26 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PasswordResetDTO = exports.ForgotPasswordDto = void 0;
+exports.CreateReviewDto = void 0;
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
-class ForgotPasswordDto {
+class CreateReviewDto {
 }
-exports.ForgotPasswordDto = ForgotPasswordDto;
+exports.CreateReviewDto = CreateReviewDto;
 __decorate([
-    (0, class_validator_1.IsEmail)(),
-    (0, class_validator_1.MaxLength)(254),
+    (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
-], ForgotPasswordDto.prototype, "email", void 0);
-class PasswordResetDTO {
-}
-exports.PasswordResetDTO = PasswordResetDTO;
+], CreateReviewDto.prototype, "bookingId", void 0);
 __decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(5),
+    __metadata("design:type", Number)
+], CreateReviewDto.prototype, "rating", void 0);
+__decorate([
+    (0, class_transformer_1.Transform)(({ value }) => typeof value === 'string' ? value.trim() || null : value),
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)(),
-    (0, class_validator_1.MaxLength)(4096),
-    __metadata("design:type", String)
-], PasswordResetDTO.prototype, "token", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(8),
-    (0, class_validator_1.MaxLength)(72),
-    __metadata("design:type", String)
-], PasswordResetDTO.prototype, "newPassword", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(8),
-    (0, class_validator_1.MaxLength)(72),
-    __metadata("design:type", String)
-], PasswordResetDTO.prototype, "confirmPassword", void 0);
+    (0, class_validator_1.MaxLength)(2000),
+    __metadata("design:type", Object)
+], CreateReviewDto.prototype, "comment", void 0);

@@ -109,6 +109,7 @@ model User {
   updatedAt        DateTime      @updatedAt
   vendor           Vendor?
   bookings         Booking[]
+  reviews          Review[]
   ActivityLog      ActivityLog[]
 }
 
@@ -137,6 +138,7 @@ model Vendor {
   cancellationStrikes Int @default(0)
 
   bookings           Booking[]
+  reviews            Review[]
   vendorAvailability VendorAvailability[]
   transaction        Transaction[]        @relation("Transaction")
 
@@ -276,6 +278,24 @@ model Booking {
   userId             String?             @db.ObjectId
   Transaction        Transaction[]
   rescheduleRequests RescheduleRequest[]
+  review             Review?
+}
+
+model Review {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId  String   @unique @db.ObjectId
+  vendorId   String   @db.ObjectId
+  customerId String   @db.ObjectId
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor   Vendor  @relation(fields: [vendorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer User    @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([vendorId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([customerId])
 }
 
 model RescheduleRequest {

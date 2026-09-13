@@ -84,6 +84,100 @@ let ServicesService = class ServicesService {
             throw new common_1.InternalServerErrorException('Failed to fetch services', error instanceof Error ? error.message : 'Unknown error');
         }
     }
+    async getAllServicesAdmin(page, limit, search, isActive, date, month, year) {
+        try {
+            const currentPage = Math.max(1, Number(page));
+            const pageSize = Math.max(1, Number(limit));
+            const filters = {};
+            if (search?.trim()) {
+                filters.name = {
+                    contains: search.trim(),
+                    mode: 'insensitive',
+                };
+            }
+            if (isActive && isActive !== 'ALL') {
+                filters.active = isActive === 'ACTIVE';
+            }
+            if (date) {
+                const startDate = new Date(date);
+                const endDate = new Date(date);
+                endDate.setDate(endDate.getDate() + 1);
+                filters.createdAt = {
+                    gte: startDate,
+                    lt: endDate,
+                };
+            }
+            else if (month && year) {
+                const startDate = new Date(year, month - 1, 1);
+                const endDate = new Date(year, month, 1);
+                filters.createdAt = {
+                    gte: startDate,
+                    lt: endDate,
+                };
+            }
+            else if (year) {
+                const startDate = new Date(year, 0, 1);
+                const endDate = new Date(year + 1, 0, 1);
+                filters.createdAt = {
+                    gte: startDate,
+                    lt: endDate,
+                };
+            }
+            const [services, totalCount, all, active, inactive] = await Promise.all([
+                this.prisma.service.findMany({
+                    where: filters,
+                    include: {
+                        Vendor: {
+                            select: {
+                                id: true,
+                                businessName: true,
+                                userId: true,
+                            },
+                        },
+                        _count: {
+                            select: {
+                                booking: true,
+                            },
+                        },
+                    },
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    skip: (currentPage - 1) * pageSize,
+                    take: pageSize,
+                }),
+                this.prisma.service.count({
+                    where: filters,
+                }),
+                this.prisma.service.count(),
+                this.prisma.service.count({
+                    where: {
+                        active: true,
+                    },
+                }),
+                this.prisma.service.count({
+                    where: {
+                        active: false,
+                    },
+                }),
+            ]);
+            return (0, response_1.successResponse)(services, 'Services fetched successfully.', 200, {
+                totalCount,
+                page: currentPage,
+                limit: pageSize,
+                totalPages: Math.ceil(totalCount / pageSize),
+                all,
+                active,
+                inactive,
+            });
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to fetch services', error instanceof Error ? error.message : 'Unknown error');
+        }
+    }
     async updateServiceActive(serviceId, userId, active) {
         try {
             const isActive = active === 'true';
