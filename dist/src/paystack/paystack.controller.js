@@ -300,6 +300,7 @@ let PaystackController = class PaystackController {
                         status: 'CONFIRMED',
                         paymentVerification: 'PAYSTACK_VERIFIED',
                         paymentExpiresAt: null,
+                        paymentUrl: null,
                     },
                 });
                 const senderDetails = await this.prisma.senderDetails.create({

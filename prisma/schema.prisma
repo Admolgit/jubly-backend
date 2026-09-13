@@ -238,7 +238,8 @@ model Booking {
   endTime     DateTime // "11:30"
   clientEmail String
 
-  status BookingStatus @default(PENDING)
+  status     BookingStatus @default(PENDING)
+  paymentUrl String?
 
   // Cancellation audit
   cancelledBy        String? // userId of whoever cancelled (client or vendor)
