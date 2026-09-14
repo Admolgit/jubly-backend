@@ -119,7 +119,10 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
     getVendorReviews(vendorId, query) {
         return this.execute(async () => {
             const vendor = await this.prisma.vendor.findUnique({
-                where: { id: vendorId, kycStatus: 'APPROVED' },
+                where: {
+                    id: vendorId,
+                    OR: [{ kycStatus: 'APPROVED' }, { isApproved: true }],
+                },
                 select: { id: true },
             });
             if (!vendor)

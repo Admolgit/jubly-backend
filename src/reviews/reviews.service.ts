@@ -136,14 +136,21 @@ export class ReviewsService {
   getVendorReviews(vendorId: string, query: ReviewQueryDto) {
     return this.execute(async () => {
       const vendor = await this.prisma.vendor.findUnique({
-        where: { id: vendorId, kycStatus: 'APPROVED' },
+        where: {
+          id: vendorId,
+          OR: [{ kycStatus: 'APPROVED' }, { isApproved: true }],
+        },
         select: { id: true },
       });
+
       if (!vendor) throw new NotFoundException('Vendor profile not found');
+      
       const { page, limit } = query;
       const skip = (page - 1) * limit;
+
       if (!Number.isSafeInteger(skip))
         throw new BadRequestException('Page is too large');
+      
       const [rows, aggregate] = await this.prisma.$transaction([
         this.prisma.review.findMany({
           where: { vendorId },

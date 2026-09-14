@@ -14,7 +14,9 @@ import { PrismaService } from 'prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { comparePassword, hashPassword } from './hash';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
+import { LoginDto, PasswordResetDTO, RegisterDto } from './dto/auth.dto';
+import { createHmac, randomUUID } from 'crypto';
+import { isMongoId } from 'class-validator';
 import { successResponse } from 'src/utils/response';
 import Helper from 'src/utils/helpers';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
@@ -526,31 +528,153 @@ export class AuthService {
     }
   }
 
-  async resetPassword(
-    email: string,
-    newPassword: string,
-    confirmPassword: string,
-  ) {
+  private passwordResetSecret(user: {
+    id: string;
+    email: string;
+    password: string | null;
+  }) {
+    const secret = process.env.JWT_SECRET;
+    if (!secret)
+      throw new InternalServerErrorException(
+        'Password reset is not configured',
+      );
+    // Domain separation prevents reset JWTs from authenticating as access tokens.
+    // Binding to the password hash invalidates every issued link after a reset.
+    return createHmac('sha256', secret)
+      .update(
+        JSON.stringify([
+          'jubly-password-reset',
+          user.id,
+          user.email,
+          user.password,
+        ]),
+      )
+      .digest('hex');
+  }
+
+  async forgotPassword(email: string) {
     try {
+      const baseUrl = process.env.FRONTEND_BASE_URL;
+      if (!baseUrl)
+        throw new InternalServerErrorException(
+          'Password reset is not configured',
+        );
+      const resetUrl = new URL(`${baseUrl.replace(/\/+$/, '')}/reset-password`);
+      if (!['http:', 'https:'].includes(resetUrl.protocol)) {
+        throw new InternalServerErrorException(
+          'Password reset is not configured',
+        );
+      }
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, password: true },
+      });
+      if (user) {
+        const token = this.jwtService.sign(
+          { sub: user.id, email: user.email, purpose: 'password-reset' },
+          {
+            secret: this.passwordResetSecret(user),
+            algorithm: 'HS256',
+            expiresIn: '15m',
+            jwtid: randomUUID(),
+            audience: 'jubly-password-reset',
+          },
+        );
+        resetUrl.searchParams.set('token', token);
+        await this.nodemailService.sendPasswordReset(
+          user.email,
+          resetUrl.toString(),
+        );
+      }
+      return successResponse(
+        null,
+        'If an account exists for this email, a password reset link has been sent',
+      );
+    } catch (error: unknown) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException(
+        'Unable to request password reset',
+      );
+    }
+  }
+
+  async resetPassword(dto: PasswordResetDTO) {
+    try {
+      const { token, newPassword, confirmPassword } = dto;
       if (newPassword !== confirmPassword) {
         throw new BadRequestException('Passwords do not match');
       }
-
-      const hash = await bcrypt.hash(newPassword, 10);
-      await this.prisma.user.update({
-        where: { email },
-        data: { password: hash },
+      if (
+        newPassword.length < 8 ||
+        Buffer.byteLength(newPassword, 'utf8') > 72
+      ) {
+        throw new BadRequestException(
+          'Password must be at least 8 characters and at most 72 UTF-8 bytes',
+        );
+      }
+      const invalidToken = () =>
+        new BadRequestException('Reset token is invalid or expired');
+      let decoded: { sub?: unknown } | null;
+      try {
+        decoded = this.jwtService.decode(token) as { sub?: unknown } | null;
+      } catch {
+        throw invalidToken();
+      }
+      if (
+        !decoded ||
+        typeof decoded.sub !== 'string' ||
+        !isMongoId(decoded.sub)
+      )
+        throw invalidToken();
+      // Decoded claims are used only to locate the signing key, never to authorize.
+      const user = await this.prisma.user.findUnique({
+        where: { id: decoded.sub },
+        select: { id: true, email: true, password: true },
       });
+      if (!user) throw invalidToken();
+      const secret = this.passwordResetSecret(user);
+      try {
+        const payload = this.jwtService.verify<{
+          sub: string;
+          email: string;
+          purpose: string;
+          exp: number;
+        }>(token, {
+          secret,
+          algorithms: ['HS256'],
+          audience: 'jubly-password-reset',
+        });
+        if (
+          payload.sub !== user.id ||
+          payload.email !== user.email ||
+          payload.purpose !== 'password-reset' ||
+          !Number.isFinite(payload.exp)
+        ) {
+          throw invalidToken();
+        }
+      } catch {
+        throw invalidToken();
+      }
+      const hash = await hashPassword(newPassword);
+      // Compare-and-set prevents concurrent uses of the same link from succeeding.
+      const result = await this.prisma.user.updateMany({
+        where: {
+          id: user.id,
+          email: user.email,
+          ...(user.password === null
+            ? { OR: [{ password: null }, { password: { isSet: false } }] }
+            : { password: user.password }),
+        },
+        data: { password: hash, refreshTokenHash: null },
+      });
+      if (result.count !== 1) throw invalidToken();
       return successResponse(null, 'Password reset successfully');
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
       }
 
-      throw new InternalServerErrorException(
-        'Password reset failed',
-        error.message,
-      );
+      throw new InternalServerErrorException('Password reset failed');
     }
   }
 

@@ -474,6 +474,13 @@ let BookingService = class BookingService {
                 businessName: vendor.businessName,
                 slug: vendorUser?.slug,
             });
+            await this.prisma.booking.update({
+                where: { id: booking.id },
+                data: {
+                    paymentExpiresAt: new Date(Date.now() + this.vendorBookingPaymentExpiryMs),
+                    paymentUrl: authorizationUrl,
+                },
+            });
             await this.prisma.transaction.create({
                 data: {
                     vendorId: vendor.id,
