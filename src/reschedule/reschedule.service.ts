@@ -355,7 +355,7 @@ export class RescheduleService {
             const calendarApi =
               await this.googleCalendarService.calendarEnv(calendarIntegration);
 
-            await calendarApi.events.update({
+            await calendarApi.events.patch({
               calendarId: 'primary',
               eventId: booking.googleEventId,
               sendUpdates: 'all',
@@ -683,6 +683,32 @@ export class RescheduleService {
         refundAmount,
         vendorCompensationAmount,
       });
+
+      if (booking.googleEventId) {
+        try {
+          const calendarIntegration =
+            await this.prisma.vendorCalendar.findFirst({
+              where: {
+                userId: booking.vendor.userId,
+                provider: { in: ['google', 'GOOGLE'] },
+                linked: true,
+              },
+            });
+
+          if (calendarIntegration) {
+            const calendarApi =
+              await this.googleCalendarService.calendarEnv(calendarIntegration);
+
+            await calendarApi.events.delete({
+              calendarId: 'primary',
+              eventId: booking.googleEventId,
+              sendUpdates: 'all',
+            });
+          }
+        } catch (err: any) {
+          console.error('Google Calendar deletion failed:', err.message);
+        }
+      }
 
       if (participant.role === UserRole.VENDOR) {
         await this.repository.incrementVendorCancellationStrikes(
