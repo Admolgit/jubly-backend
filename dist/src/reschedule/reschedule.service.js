@@ -217,23 +217,7 @@ let RescheduleService = class RescheduleService {
                 throw new common_1.ForbiddenException('You cannot accept your own reschedule request');
             }
             const { start, end, date } = this.computeNewSchedule(booking, active.proposedDate);
-            const conflict = await this.repository.findConflictingBooking(booking.vendorId, bookingId, start, end);
-            if (conflict) {
-                throw new common_1.BadRequestException('The proposed time slot is no longer available');
-            }
-            const updatedBooking = await this.repository.updateBooking(bookingId, {
-                startTime: start,
-                endTime: end,
-                date,
-                status: client_1.BookingStatus.CONFIRMED,
-                rescheduleCount: { increment: 1 },
-            });
-            await this.repository.updateRescheduleRequest(active.id, {
-                status: client_1.RescheduleStatus.ACCEPTED,
-                respondedBy: user.id,
-                respondedAt: new Date(),
-                responseReason: dto.reason,
-            });
+            const updatedBooking = await this.repository.acceptReschedule(booking, active.id, { start, end, date }, user.id, dto.reason);
             if (booking.googleEventId) {
                 try {
                     const calendarIntegration = await this.prisma.vendorCalendar.findFirst({

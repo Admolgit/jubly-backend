@@ -12,6 +12,7 @@ const booking_controller_1 = require("./booking.controller");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const config_1 = require("@nestjs/config");
 const booking_service_1 = require("./booking.service");
+const booking_completion_job_1 = require("./booking-completion.job");
 const google_service_1 = require("../google/google.service");
 const auth_service_1 = require("../auth/auth.service");
 const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
@@ -30,6 +31,7 @@ exports.BookingModule = BookingModule = __decorate([
         providers: [
             prisma_service_1.PrismaService,
             booking_service_1.BookingService,
+            booking_completion_job_1.BookingCompletionJob,
             google_service_1.GoogleCalendarService,
             config_1.ConfigService,
             auth_service_1.AuthService,

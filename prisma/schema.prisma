@@ -402,8 +402,10 @@ model vendorCalendar {
 
 model Settlement {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  bookingId     String   @db.ObjectId
+  bookingId     String   @unique @db.ObjectId
   amount        Float
+  // Legacy settlements have no reference; a normal MongoDB unique index
+  // would reject multiple missing/null values. New attempts persist a UUID.
   reference     String?
   transferCode  String?
   recipientCode String?
@@ -411,7 +413,6 @@ model Settlement {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@index([bookingId])
   @@index([reference])
 }
 

@@ -374,6 +374,43 @@ export class PaystackService {
     }
   }
 
+  async verifyTransfer(reference: string) {
+    try {
+      const response = await axios.get<{
+        status: boolean;
+        data?: {
+          status: string;
+          reference: string;
+          amount: number;
+          currency: string;
+          recipient: { recipient_code: string };
+          transfer_code: string;
+        };
+      }>(
+        `${this.baseUrl}/transfer/verify/${encodeURIComponent(reference)}`,
+        { headers: this.getAuthHeaders() },
+      );
+      if (!response.data.status || !response.data.data?.status) {
+        throw new Error('Invalid transfer verification response');
+      }
+      return response.data.data;
+    } catch (error: any) {
+      if (
+        error.response?.status === HttpStatus.NOT_FOUND ||
+        (error.response?.status === HttpStatus.BAD_REQUEST &&
+          /^transfer( reference)? not found\.?$/i.test(
+            String(error.response?.data?.message || ''),
+          ))
+      ) {
+        return null;
+      }
+      throw new HttpException(
+        'Unable to verify settlement transfer',
+        error.response?.status || HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
   async initiateTransfer(payload: {
     amount: number;
     recipientCode: string;

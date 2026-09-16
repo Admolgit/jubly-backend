@@ -247,8 +247,17 @@ export class PaystackController {
           where: {
             OR: [
               ...(reference ? [{ reference }] : []),
-
-              ...(transferCode ? [{ transferCode }] : []),
+              ...(transferCode
+                ? [
+                    {
+                      transferCode,
+                      OR: [
+                        { reference: null },
+                        { reference: { isSet: false } },
+                      ],
+                    },
+                  ]
+                : []),
             ],
           },
         });
@@ -275,19 +284,24 @@ export class PaystackController {
             return { status: true };
           }
 
-          await this.prisma.$transaction([
-            this.prisma.settlement.update({
+          await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.settlement.updateMany({
               where: {
                 id: settlement.id,
+                ...(settlement.reference
+                  ? { reference: settlement.reference }
+                  : { transferCode }),
+                status: { notIn: ['SUCCESS', 'REVERSED'] },
               },
               data: {
                 status: 'SUCCESS',
 
                 transferCode: transferCode ?? settlement.transferCode,
               },
-            }),
+            });
+            if (!updated.count) return;
 
-            this.prisma.transaction.updateMany({
+            await tx.transaction.updateMany({
               where: {
                 bookingId: settlement.bookingId,
                 status: {
@@ -297,8 +311,8 @@ export class PaystackController {
               data: {
                 status: 'COMPLETED',
               },
-            }),
-          ]);
+            });
+          });
 
           console.log(`✅ Settlement ${settlement.id} completed successfully`);
 
@@ -309,12 +323,18 @@ export class PaystackController {
         // FAILED / REVERSED
         // ==========================================================
 
-        await this.prisma.settlement.update({
+        await this.prisma.settlement.updateMany({
           where: {
             id: settlement.id,
+            ...(settlement.reference
+              ? { reference: settlement.reference }
+              : { transferCode }),
+            ...(event.event === 'transfer.failed'
+              ? { status: { notIn: ['SUCCESS', 'REVERSED'] } }
+              : {}),
           },
           data: {
-            status: 'FAILED',
+            status: event.event === 'transfer.reversed' ? 'REVERSED' : 'FAILED',
 
             transferCode: transferCode ?? settlement.transferCode,
           },
@@ -400,15 +420,11 @@ export class PaystackController {
           throw new BadRequestException('Vendor-created booking was not found');
         }
 
-        const updatedBooking = await this.prisma.booking.update({
-          where: { id: bookingId },
-          data: {
-            status: 'CONFIRMED',
-            paymentVerification: 'PAYSTACK_VERIFIED',
-            paymentExpiresAt: null,
-            paymentUrl: null,
-          },
-        });
+        const updatedBooking =
+          await this.bookingService.confirmVendorBookingPayment(
+            bookingId,
+            event.data.reference,
+          );
 
         const senderDetails = await this.prisma.senderDetails.create({
           data: {
@@ -576,19 +592,26 @@ export class PaystackController {
           );
         }
 
-        const book = await this.bookingService.createBooking(vendorUserId, {
-          userId: vendorUserId,
-          clientId,
-          serviceId,
-          date: dayOfWeek,
-          clientName,
-          clientAddress,
-          clientEmail: email,
-          startTime: new Date(startTime),
-          endTime: new Date(endTime),
-          status: 'CONFIRMED',
-          phone: phone || '',
-        });
+        const book = await this.bookingService.createBooking(
+          vendorUserId,
+          {
+            userId: vendorUserId,
+            clientId,
+            serviceId,
+            date: dayOfWeek,
+            clientName,
+            clientAddress,
+            clientEmail: email,
+            startTime: new Date(startTime),
+            endTime: new Date(endTime),
+            status: 'CONFIRMED',
+            phone: phone || '',
+          },
+          {
+            reference: event.data.reference,
+            slotLockId: event.data.metadata.slotLockId,
+          },
+        );
 
         await this.prisma.transaction.update({
           where: { providerRef: event.data.reference },

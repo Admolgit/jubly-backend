@@ -118,9 +118,25 @@ export class AvailabilityService {
 
       const slots = this.generateSlots(start, end, duration);
 
-      const bookings = vendor.bookings;
-
       const now = new Date();
+      const bookings = vendor.bookings.filter(
+        (booking) =>
+          !['CANCELLED', 'CANCELLED_BY_CLIENT', 'CANCELLED_BY_VENDOR'].includes(
+            booking.status,
+          ) &&
+          !(
+            booking.status === 'PENDING' &&
+            booking.paymentExpiresAt &&
+            booking.paymentExpiresAt <= now
+          ),
+      );
+      const holds = await this.prisma.slotLock.findMany({
+        where: {
+          vendorId: vendor.id,
+          expiresAt: { gt: now },
+        },
+        select: { startTime: true, endTime: true },
+      });
 
       const isToday = this.isSameDay(dateObj, now);
 
@@ -132,10 +148,10 @@ export class AvailabilityService {
         if (isToday && slot.startTime <= now) {
           return false;
         }
-        return !bookings.some(
+        return ![...bookings, ...holds].some(
           (b) =>
-            slot.startTime < new Date(b.endTime) &&
-            slot.endTime > new Date(b.startTime),
+            new Date(slot.startTime.getTime() - bufferMins * 60000) <
+              new Date(b.endTime) && slot.endTime > new Date(b.startTime),
         );
       });
 

@@ -243,6 +243,23 @@ class PaystackService {
                 'Failed to create transfer recipient', error.response?.status || common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+    async verifyTransfer(reference) {
+        try {
+            const response = await axios_1.default.get(`${this.baseUrl}/transfer/verify/${encodeURIComponent(reference)}`, { headers: this.getAuthHeaders() });
+            if (!response.data.status || !response.data.data?.status) {
+                throw new Error('Invalid transfer verification response');
+            }
+            return response.data.data;
+        }
+        catch (error) {
+            if (error.response?.status === common_1.HttpStatus.NOT_FOUND ||
+                (error.response?.status === common_1.HttpStatus.BAD_REQUEST &&
+                    /^transfer( reference)? not found\.?$/i.test(String(error.response?.data?.message || '')))) {
+                return null;
+            }
+            throw new common_1.HttpException('Unable to verify settlement transfer', error.response?.status || common_1.HttpStatus.BAD_GATEWAY);
+        }
+    }
     async initiateTransfer(payload) {
         try {
             const response = await axios_1.default.post(`${this.baseUrl}/transfer`, {

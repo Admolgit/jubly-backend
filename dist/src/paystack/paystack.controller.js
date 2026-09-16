@@ -190,7 +190,17 @@ let PaystackController = class PaystackController {
                     where: {
                         OR: [
                             ...(reference ? [{ reference }] : []),
-                            ...(transferCode ? [{ transferCode }] : []),
+                            ...(transferCode
+                                ? [
+                                    {
+                                        transferCode,
+                                        OR: [
+                                            { reference: null },
+                                            { reference: { isSet: false } },
+                                        ],
+                                    },
+                                ]
+                                : []),
                         ],
                     },
                 });
@@ -202,17 +212,23 @@ let PaystackController = class PaystackController {
                     if (settlement.status === 'SUCCESS') {
                         return { status: true };
                     }
-                    await this.prisma.$transaction([
-                        this.prisma.settlement.update({
+                    await this.prisma.$transaction(async (tx) => {
+                        const updated = await tx.settlement.updateMany({
                             where: {
                                 id: settlement.id,
+                                ...(settlement.reference
+                                    ? { reference: settlement.reference }
+                                    : { transferCode }),
+                                status: { notIn: ['SUCCESS', 'REVERSED'] },
                             },
                             data: {
                                 status: 'SUCCESS',
                                 transferCode: transferCode ?? settlement.transferCode,
                             },
-                        }),
-                        this.prisma.transaction.updateMany({
+                        });
+                        if (!updated.count)
+                            return;
+                        await tx.transaction.updateMany({
                             where: {
                                 bookingId: settlement.bookingId,
                                 status: {
@@ -222,17 +238,23 @@ let PaystackController = class PaystackController {
                             data: {
                                 status: 'COMPLETED',
                             },
-                        }),
-                    ]);
+                        });
+                    });
                     console.log(`✅ Settlement ${settlement.id} completed successfully`);
                     return { status: true };
                 }
-                await this.prisma.settlement.update({
+                await this.prisma.settlement.updateMany({
                     where: {
                         id: settlement.id,
+                        ...(settlement.reference
+                            ? { reference: settlement.reference }
+                            : { transferCode }),
+                        ...(event.event === 'transfer.failed'
+                            ? { status: { notIn: ['SUCCESS', 'REVERSED'] } }
+                            : {}),
                     },
                     data: {
-                        status: 'FAILED',
+                        status: event.event === 'transfer.reversed' ? 'REVERSED' : 'FAILED',
                         transferCode: transferCode ?? settlement.transferCode,
                     },
                 });
@@ -294,15 +316,7 @@ let PaystackController = class PaystackController {
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
                 }
-                const updatedBooking = await this.prisma.booking.update({
-                    where: { id: bookingId },
-                    data: {
-                        status: 'CONFIRMED',
-                        paymentVerification: 'PAYSTACK_VERIFIED',
-                        paymentExpiresAt: null,
-                        paymentUrl: null,
-                    },
-                });
+                const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, event.data.reference);
                 const senderDetails = await this.prisma.senderDetails.create({
                     data: {
                         vendorId: booking.vendorId,
@@ -414,6 +428,9 @@ let PaystackController = class PaystackController {
                     endTime: new Date(endTime),
                     status: 'CONFIRMED',
                     phone: phone || '',
+                }, {
+                    reference: event.data.reference,
+                    slotLockId: event.data.metadata.slotLockId,
                 });
                 await this.prisma.transaction.update({
                     where: { providerRef: event.data.reference },

@@ -312,33 +312,13 @@ export class RescheduleService {
         active.proposedDate,
       );
 
-      const conflict = await this.repository.findConflictingBooking(
-        booking.vendorId,
-        bookingId,
-        start,
-        end,
+      const updatedBooking = await this.repository.acceptReschedule(
+        booking,
+        active.id,
+        { start, end, date },
+        user.id,
+        dto.reason,
       );
-
-      if (conflict) {
-        throw new BadRequestException(
-          'The proposed time slot is no longer available',
-        );
-      }
-
-      const updatedBooking = await this.repository.updateBooking(bookingId, {
-        startTime: start,
-        endTime: end,
-        date,
-        status: BookingStatus.CONFIRMED,
-        rescheduleCount: { increment: 1 },
-      });
-
-      await this.repository.updateRescheduleRequest(active.id, {
-        status: RescheduleStatus.ACCEPTED,
-        respondedBy: user.id,
-        respondedAt: new Date(),
-        responseReason: dto.reason,
-      });
 
       if (booking.googleEventId) {
         try {
