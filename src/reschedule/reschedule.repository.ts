@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import {
   BookingStatus,
   Prisma,
@@ -6,6 +6,10 @@ import {
   UserRole,
 } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
+import {
+  assertBookingSlotAvailable,
+  withVendorScheduleLock,
+} from 'src/booking/booking-slot.util';
 
 const bookingWithRelations = Prisma.validator<Prisma.BookingDefaultArgs>()({
   include: {
@@ -73,6 +77,56 @@ export class RescheduleRepository {
     return this.prisma.vendor.update({
       where: { id: vendorId },
       data: { cancellationStrikes: { increment: 1 } },
+    });
+  }
+
+  acceptReschedule(
+    booking: BookingWithRelations,
+    requestId: string,
+    schedule: { start: Date; end: Date; date: Date },
+    userId: string,
+    reason?: string,
+  ) {
+    return withVendorScheduleLock(this.prisma, booking.vendorId, async (tx) => {
+      await assertBookingSlotAvailable(tx, {
+        vendorId: booking.vendorId,
+        start: schedule.start,
+        end: schedule.end,
+        excludeBookingId: booking.id,
+      });
+      const updated = await tx.booking.updateMany({
+        where: {
+          id: booking.id,
+          updatedAt: booking.updatedAt,
+          status: BookingStatus.RESCHEDULE_REQUESTED,
+        },
+        data: {
+          startTime: schedule.start,
+          endTime: schedule.end,
+          date: schedule.date,
+          status: BookingStatus.CONFIRMED,
+          rescheduleCount: { increment: 1 },
+        },
+      });
+      const accepted = await tx.rescheduleRequest.updateMany({
+        where: {
+          id: requestId,
+          bookingId: booking.id,
+          status: RescheduleStatus.PENDING,
+        },
+        data: {
+          status: RescheduleStatus.ACCEPTED,
+          respondedBy: userId,
+          respondedAt: new Date(),
+          responseReason: reason,
+        },
+      });
+      if (!updated.count || !accepted.count) {
+        throw new ConflictException(
+          'Reschedule request changed; please try again',
+        );
+      }
+      return tx.booking.findUniqueOrThrow({ where: { id: booking.id } });
     });
   }
 

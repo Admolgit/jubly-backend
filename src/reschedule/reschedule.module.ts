@@ -1,3 +1,4 @@
+import { BookingFinanceModule } from '../booking-finance/booking-finance.module';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'prisma/prisma.service';
@@ -11,7 +12,7 @@ import { RescheduleRepository } from './reschedule.repository';
 import { RescheduleNotificationService } from './events/reschedule-notification.service';
 
 @Module({
-  imports: [CancellationPolicyModule],
+  imports: [CancellationPolicyModule, BookingFinanceModule],
   controllers: [RescheduleController],
   providers: [
     PrismaService,

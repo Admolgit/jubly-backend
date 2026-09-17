@@ -7,6 +7,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaystackModule = void 0;
+const reschedule_module_1 = require("../reschedule/reschedule.module");
+const booking_finance_module_1 = require("../booking-finance/booking-finance.module");
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const paystack_service_1 = require("./paystack.service");
@@ -42,6 +44,6 @@ exports.PaystackModule = PaystackModule = __decorate([
         ],
         exports: [paystack_service_1.PaystackService],
         controllers: [paystack_controller_1.PaystackController],
-        imports: [],
+        imports: [booking_finance_module_1.BookingFinanceModule, reschedule_module_1.RescheduleModule],
     })
 ], PaystackModule);
