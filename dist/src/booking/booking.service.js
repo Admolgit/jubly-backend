@@ -10,9 +10,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BookingService = exports.DateFilter = void 0;
+const booking_finance_service_1 = require("../booking-finance/booking-finance.service");
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
-const crypto_1 = require("crypto");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const google_service_1 = require("../google/google.service");
 const booking_slot_util_1 = require("./booking-slot.util");
@@ -35,7 +35,8 @@ var DateFilter;
     DateFilter["YEAR"] = "year";
 })(DateFilter || (exports.DateFilter = DateFilter = {}));
 let BookingService = class BookingService {
-    constructor(googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService, jwtService, platformSettingsService, subscriptionService) {
+    constructor(bookingFinance, googleCalendarService, prisma, authService, nodemailerService, paystackService, activityService, jwtService, platformSettingsService, subscriptionService) {
+        this.bookingFinance = bookingFinance;
         this.googleCalendarService = googleCalendarService;
         this.prisma = prisma;
         this.authService = authService;
@@ -336,6 +337,7 @@ let BookingService = class BookingService {
                 });
             });
             slotLockId = lock.id;
+            const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendor.id);
             const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, calculatedAmount, {
                 slug: vendorUser?.slug,
                 vendorId: vendor.id,
@@ -364,6 +366,7 @@ let BookingService = class BookingService {
                 data: {
                     vendorId: vendor.id,
                     amount,
+                    ...this.bookingFinance.checkoutSnapshot(amount, calculatedAmount, percentageFee, { vendorId: vendor.id, serviceId: dto.serviceId }),
                     providerRef: reference,
                     status: 'PENDING',
                 },
@@ -552,6 +555,11 @@ let BookingService = class BookingService {
                 data: {
                     vendorId: vendor.id,
                     amount,
+                    ...this.bookingFinance.checkoutSnapshot(amount, calculatedAmount, percentageFee, {
+                        vendorId: vendor.id,
+                        serviceId: dto.serviceId,
+                        bookingId: booking.id,
+                    }),
                     currency: 'NGN',
                     providerRef: reference,
                     status: 'PENDING',
@@ -1486,115 +1494,7 @@ let BookingService = class BookingService {
         }
     }
     async settleBookingPayment(booking) {
-        const existingSettlement = await this.prisma.settlement.findFirst({
-            where: {
-                bookingId: booking.id,
-            },
-        });
-        if (existingSettlement) {
-            if (existingSettlement.status !== 'SUCCESS' &&
-                (['FAILED', 'REVERSED'].includes(existingSettlement.status) ||
-                    !existingSettlement.transferCode)) {
-                throw new common_1.ConflictException('Settlement is awaiting reconciliation');
-            }
-            if (existingSettlement.status === 'SUCCESS') {
-                await this.prisma.transaction.updateMany({
-                    where: { bookingId: booking.id, status: 'PENDING' },
-                    data: { status: 'COMPLETED' },
-                });
-            }
-            const transaction = await this.prisma.transaction.findFirst({
-                where: { bookingId: booking.id },
-                orderBy: { createdAt: 'desc' },
-            });
-            return { transaction, settlement: existingSettlement };
-        }
-        if (booking.paymentMethod === 'PAID_BY_HAND') {
-            const transaction = await this.prisma.transaction.findFirst({
-                where: { bookingId: booking.id },
-                orderBy: { createdAt: 'desc' },
-            });
-            return { transaction, settlement: null };
-        }
-        const transaction = await this.prisma.transaction.findFirst({
-            where: { bookingId: booking.id, status: 'PENDING' },
-        });
-        if (!transaction) {
-            throw new common_1.BadRequestException('No pending payment found for this booking');
-        }
-        if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
-            throw new common_1.BadRequestException('Vendor has no settlement bank account');
-        }
-        const percentageFee = transaction.percentageFee ?? 0;
-        const transactionAmount = transaction.amount ?? 0;
-        const jublyFee = (0, paystackCalculation_1.calculateJublyCommission)(transactionAmount, percentageFee);
-        const vendorAmount = Math.round((transactionAmount - jublyFee) * 100) / 100;
-        const recipient = await this.paystackService.createTransferRecipient({
-            name: booking.vendor.businessName,
-            accountNumber: booking.vendor.bankAccountNumber,
-            bankCode: booking.vendor.bankCode,
-        });
-        const reference = (0, crypto_1.randomUUID)();
-        const settlement = await this.prisma
-            .$transaction(async (tx) => {
-            const claimed = await tx.booking.updateMany({
-                where: {
-                    id: booking.id,
-                    status: booking.status,
-                    updatedAt: booking.updatedAt,
-                },
-                data: {
-                    updatedAt: new Date(Math.max(Date.now(), booking.updatedAt.getTime() + 1)),
-                },
-            });
-            if (!claimed.count) {
-                throw new common_1.ConflictException('Booking changed; please try again');
-            }
-            return tx.settlement.create({
-                data: {
-                    bookingId: booking.id,
-                    amount: vendorAmount,
-                    recipientCode: recipient.recipient_code,
-                    reference,
-                    status: 'PENDING',
-                },
-            });
-        })
-            .catch((error) => {
-            if (error.code === 'P2002' || error.code === 'P2034') {
-                throw new common_1.ConflictException('Settlement is already being processed');
-            }
-            throw error;
-        });
-        const transfer = await this.paystackService.initiateTransfer({
-            amount: vendorAmount,
-            recipientCode: recipient.recipient_code,
-            reason: `Settlement for booking ${booking.id}`,
-            reference,
-        });
-        await this.prisma.settlement.updateMany({
-            where: {
-                id: settlement.id,
-                reference,
-                status: 'PENDING',
-                updatedAt: settlement.updatedAt,
-            },
-            data: {
-                transferCode: transfer.transfer_code,
-                status: transfer.status?.toUpperCase() || 'PENDING',
-            },
-        });
-        const currentSettlement = await this.prisma.settlement.findUniqueOrThrow({
-            where: { id: settlement.id },
-        });
-        if (['FAILED', 'REVERSED'].includes(currentSettlement.status)) {
-            throw new common_1.ConflictException('Settlement is awaiting reconciliation');
-        }
-        await this.prisma.transaction.update({
-            where: { id: transaction.id },
-            data: { status: 'COMPLETED' },
-        });
-        return { transaction, settlement: currentSettlement };
+        return this.bookingFinance.settleCompletion(booking.id, booking);
     }
     async completeBookingNow(booking, user) {
         const { transaction, settlement } = await this.settleBookingPayment(booking);
@@ -1603,7 +1503,7 @@ let BookingService = class BookingService {
             where: {
                 id: booking.id,
                 status: booking.status,
-                ...(settlement ? {} : { updatedAt: booking.updatedAt }),
+                ...(settlement ? { financialMode: 'COMPLETION' } : {}),
             },
             data: { status: 'COMPLETED' },
         });
@@ -1655,7 +1555,11 @@ let BookingService = class BookingService {
     }
     async requestCompletionApproval(booking, user) {
         const updatedBooking = await this.prisma.booking.update({
-            where: { id: booking.id },
+            where: {
+                id: booking.id,
+                status: 'CONFIRMED',
+                updatedAt: booking.updatedAt,
+            },
             data: {
                 status: 'COMPLETION_PENDING_APPROVAL',
                 completionRequestedBy: user.id,
@@ -1724,7 +1628,11 @@ let BookingService = class BookingService {
             const { transaction, settlement } = await this.settleBookingPayment(booking);
             const payoutAmount = settlement?.amount ?? transaction?.amount;
             const updatedBooking = await this.prisma.booking.update({
-                where: { id: booking.id },
+                where: {
+                    id: booking.id,
+                    status: 'COMPLETION_PENDING_APPROVAL',
+                    ...(settlement ? { financialMode: 'COMPLETION' } : {}),
+                },
                 data: {
                     status: 'COMPLETED',
                     completionApprovedAt: new Date(),
@@ -2057,7 +1965,8 @@ let BookingService = class BookingService {
 exports.BookingService = BookingService;
 exports.BookingService = BookingService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [google_service_1.GoogleCalendarService,
+    __metadata("design:paramtypes", [booking_finance_service_1.BookingFinanceService,
+        google_service_1.GoogleCalendarService,
         prisma_service_1.PrismaService,
         auth_service_1.AuthService,
         nodemailer_service_1.NodemailerService,

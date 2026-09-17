@@ -66,6 +66,9 @@ let TransactionService = class TransactionService {
             if (!dto.vendorId) {
                 throw new common_1.BadRequestException('Vendor ID is required');
             }
+            const original = await this.prisma.transaction.findUniqueOrThrow({
+                where: { providerRef: dto.providerRef },
+            });
             const transaction = await this.prisma.transaction.update({
                 where: {
                     providerRef: dto.providerRef,
@@ -77,8 +80,10 @@ let TransactionService = class TransactionService {
                     senderDetailsId: dto.senderDetailsId,
                     currency: 'NGN',
                     paidAt: new Date(),
-                    status: dto.status,
-                    percentageFee: dto.percentageFee,
+                    status: original.checkoutSnapshot ? undefined : dto.status,
+                    percentageFee: original.checkoutSnapshot
+                        ? undefined
+                        : dto.percentageFee,
                     paymentMethod: dto.paymentMethod,
                     providerRef: dto.providerRef,
                 },

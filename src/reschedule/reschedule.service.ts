@@ -1,3 +1,4 @@
+import { BookingFinanceService } from '../booking-finance/booking-finance.service';
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
@@ -28,8 +29,6 @@ import {
   RescheduleNotificationPayload,
 } from './events/reschedule-notification.events';
 import { RescheduleNotificationService } from './events/reschedule-notification.service';
-import { computeCancellationOutcome } from './cancellation-policy.util';
-import { CancellationPolicyService } from 'src/cancellation-policy/cancellation-policy.service';
 
 const NON_ACTIONABLE_STATUSES: readonly BookingStatus[] = [
   BookingStatus.CANCELLED,
@@ -45,13 +44,13 @@ interface Participant {
 @Injectable()
 export class RescheduleService {
   constructor(
+    private readonly bookingFinance: BookingFinanceService,
     private readonly prisma: PrismaService,
     private readonly repository: RescheduleRepository,
     private readonly activityService: ActivityService,
     private readonly googleCalendarService: GoogleCalendarService,
     private readonly notifications: RescheduleNotificationService,
     private readonly nodemailerService: NodemailerService,
-    private readonly cancellationPolicyService: CancellationPolicyService,
   ) {}
 
   private readonly bookingTimezone = 'Africa/Lagos';
@@ -616,53 +615,29 @@ export class RescheduleService {
       const booking = await this.loadBooking(bookingId);
       const participant = this.resolveParticipant(booking, user);
 
-      this.assertNotCompleted(
-        booking,
-        'Completed bookings cannot be cancelled',
+      const decision = await this.bookingFinance.cancel(
+        bookingId,
+        user.id,
+        participant.role,
+        dto.reason,
       );
-      this.assertNotCancelled(booking, 'This booking is already cancelled');
-
-      const newStatus =
-        participant.role === UserRole.VENDOR
-          ? BookingStatus.CANCELLED_BY_VENDOR
-          : BookingStatus.CANCELLED_BY_CLIENT;
-
-      const active =
-        await this.repository.findActiveRescheduleRequest(bookingId);
-      if (active) {
-        await this.repository.updateRescheduleRequest(active.id, {
-          status: RescheduleStatus.REJECTED,
-          respondedBy: user.id,
-          respondedAt: new Date(),
-          responseReason: 'Booking was cancelled',
-        });
+      const updatedBooking = decision.booking;
+      if (!decision.changed) {
+        await this.bookingFinance.processBooking(bookingId);
+        return successResponse(
+          updatedBooking,
+          'Booking cancelled successfully',
+        );
       }
-
-      const cancelledAt = new Date();
-      const { tiers, noShowPolicy } =
-        await this.cancellationPolicyService.getActiveTiers();
-      const { tier, refundAmount, vendorCompensationAmount } =
-        computeCancellationOutcome({
-          amount: booking.services.price,
-          appointmentStart: booking.startTime,
-          cancelledAt,
-          cancelledByRole: participant.role,
-          tiers,
-          noShowPolicy,
-        });
-
-      const updatedBooking = await this.repository.updateBooking(bookingId, {
-        status: newStatus,
-        cancelledBy: user.id,
-        cancelledByRole: participant.role,
-        cancelledAt,
-        cancellationReason: dto.reason,
-        cancellationTier: tier.label,
-        refundPercentage: tier.clientRefundPercentage,
-        vendorCompensationPercentage: tier.vendorCompensationPercentage,
-        refundAmount,
-        vendorCompensationAmount,
-      });
+      const cancelledAt = updatedBooking.cancelledAt!;
+      const newStatus = updatedBooking.status;
+      const refundAmount = updatedBooking.refundAmount ?? undefined;
+      const vendorCompensationAmount =
+        updatedBooking.vendorCompensationAmount ?? undefined;
+      const tier = {
+        label: updatedBooking.cancellationTier ?? undefined,
+        clientRefundPercentage: updatedBooking.refundPercentage ?? undefined,
+      };
 
       if (booking.googleEventId) {
         try {
@@ -688,12 +663,6 @@ export class RescheduleService {
         } catch (err: any) {
           console.error('Google Calendar deletion failed:', err.message);
         }
-      }
-
-      if (participant.role === UserRole.VENDOR) {
-        await this.repository.incrementVendorCancellationStrikes(
-          booking.vendorId,
-        );
       }
 
       await this.activityService.createLog({
@@ -748,6 +717,9 @@ export class RescheduleService {
         }),
       );
 
+      // The durable financial instructions already exist. Complete the existing
+      // calendar/email handling before potentially slow provider money requests.
+      await this.bookingFinance.processBooking(bookingId);
       return successResponse(updatedBooking, 'Booking cancelled successfully');
     } catch (error: any) {
       if (error instanceof HttpException) throw error;

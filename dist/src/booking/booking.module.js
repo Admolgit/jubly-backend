@@ -7,6 +7,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BookingModule = void 0;
+const booking_finance_module_1 = require("../booking-finance/booking-finance.module");
 const common_1 = require("@nestjs/common");
 const booking_controller_1 = require("./booking.controller");
 const prisma_service_1 = require("../../prisma/prisma.service");
@@ -26,7 +27,7 @@ exports.BookingModule = BookingModule;
 exports.BookingModule = BookingModule = __decorate([
     (0, common_1.Module)({
         controllers: [booking_controller_1.BookingController],
-        imports: [],
+        imports: [booking_finance_module_1.BookingFinanceModule],
         exports: [booking_service_1.BookingService],
         providers: [
             prisma_service_1.PrismaService,

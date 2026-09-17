@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RescheduleService = void 0;
+const booking_finance_service_1 = require("../booking-finance/booking-finance.service");
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
@@ -20,22 +21,20 @@ const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 const reschedule_repository_1 = require("./reschedule.repository");
 const reschedule_notification_events_1 = require("./events/reschedule-notification.events");
 const reschedule_notification_service_1 = require("./events/reschedule-notification.service");
-const cancellation_policy_util_1 = require("./cancellation-policy.util");
-const cancellation_policy_service_1 = require("../cancellation-policy/cancellation-policy.service");
 const NON_ACTIONABLE_STATUSES = [
     client_1.BookingStatus.CANCELLED,
     client_1.BookingStatus.CANCELLED_BY_CLIENT,
     client_1.BookingStatus.CANCELLED_BY_VENDOR,
 ];
 let RescheduleService = class RescheduleService {
-    constructor(prisma, repository, activityService, googleCalendarService, notifications, nodemailerService, cancellationPolicyService) {
+    constructor(bookingFinance, prisma, repository, activityService, googleCalendarService, notifications, nodemailerService) {
+        this.bookingFinance = bookingFinance;
         this.prisma = prisma;
         this.repository = repository;
         this.activityService = activityService;
         this.googleCalendarService = googleCalendarService;
         this.notifications = notifications;
         this.nodemailerService = nodemailerService;
-        this.cancellationPolicyService = cancellationPolicyService;
         this.bookingTimezone = 'Africa/Lagos';
     }
     async loadUser(userId) {
@@ -427,42 +426,20 @@ let RescheduleService = class RescheduleService {
             const user = await this.loadUser(userId);
             const booking = await this.loadBooking(bookingId);
             const participant = this.resolveParticipant(booking, user);
-            this.assertNotCompleted(booking, 'Completed bookings cannot be cancelled');
-            this.assertNotCancelled(booking, 'This booking is already cancelled');
-            const newStatus = participant.role === client_1.UserRole.VENDOR
-                ? client_1.BookingStatus.CANCELLED_BY_VENDOR
-                : client_1.BookingStatus.CANCELLED_BY_CLIENT;
-            const active = await this.repository.findActiveRescheduleRequest(bookingId);
-            if (active) {
-                await this.repository.updateRescheduleRequest(active.id, {
-                    status: client_1.RescheduleStatus.REJECTED,
-                    respondedBy: user.id,
-                    respondedAt: new Date(),
-                    responseReason: 'Booking was cancelled',
-                });
+            const decision = await this.bookingFinance.cancel(bookingId, user.id, participant.role, dto.reason);
+            const updatedBooking = decision.booking;
+            if (!decision.changed) {
+                await this.bookingFinance.processBooking(bookingId);
+                return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
             }
-            const cancelledAt = new Date();
-            const { tiers, noShowPolicy } = await this.cancellationPolicyService.getActiveTiers();
-            const { tier, refundAmount, vendorCompensationAmount } = (0, cancellation_policy_util_1.computeCancellationOutcome)({
-                amount: booking.services.price,
-                appointmentStart: booking.startTime,
-                cancelledAt,
-                cancelledByRole: participant.role,
-                tiers,
-                noShowPolicy,
-            });
-            const updatedBooking = await this.repository.updateBooking(bookingId, {
-                status: newStatus,
-                cancelledBy: user.id,
-                cancelledByRole: participant.role,
-                cancelledAt,
-                cancellationReason: dto.reason,
-                cancellationTier: tier.label,
-                refundPercentage: tier.clientRefundPercentage,
-                vendorCompensationPercentage: tier.vendorCompensationPercentage,
-                refundAmount,
-                vendorCompensationAmount,
-            });
+            const cancelledAt = updatedBooking.cancelledAt;
+            const newStatus = updatedBooking.status;
+            const refundAmount = updatedBooking.refundAmount ?? undefined;
+            const vendorCompensationAmount = updatedBooking.vendorCompensationAmount ?? undefined;
+            const tier = {
+                label: updatedBooking.cancellationTier ?? undefined,
+                clientRefundPercentage: updatedBooking.refundPercentage ?? undefined,
+            };
             if (booking.googleEventId) {
                 try {
                     const calendarIntegration = await this.prisma.vendorCalendar.findFirst({
@@ -484,9 +461,6 @@ let RescheduleService = class RescheduleService {
                 catch (err) {
                     console.error('Google Calendar deletion failed:', err.message);
                 }
-            }
-            if (participant.role === client_1.UserRole.VENDOR) {
-                await this.repository.incrementVendorCancellationStrikes(booking.vendorId);
             }
             await this.activityService.createLog({
                 vendorId: booking.vendorId,
@@ -532,6 +506,7 @@ let RescheduleService = class RescheduleService {
                 refundPercentage: tier.clientRefundPercentage,
                 vendorCompensationAmount,
             }));
+            await this.bookingFinance.processBooking(bookingId);
             return (0, response_1.successResponse)(updatedBooking, 'Booking cancelled successfully');
         }
         catch (error) {
@@ -590,11 +565,11 @@ let RescheduleService = class RescheduleService {
 exports.RescheduleService = RescheduleService;
 exports.RescheduleService = RescheduleService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+    __metadata("design:paramtypes", [booking_finance_service_1.BookingFinanceService,
+        prisma_service_1.PrismaService,
         reschedule_repository_1.RescheduleRepository,
         activityLog_service_1.ActivityService,
         google_service_1.GoogleCalendarService,
         reschedule_notification_service_1.RescheduleNotificationService,
-        nodemailer_service_1.NodemailerService,
-        cancellation_policy_service_1.CancellationPolicyService])
+        nodemailer_service_1.NodemailerService])
 ], RescheduleService);
