@@ -90,8 +90,18 @@ let AvailabilityService = class AvailabilityService {
             const bufferMins = bufferTime?.bufferTime || 0;
             duration += bufferMins;
             const slots = this.generateSlots(start, end, duration);
-            const bookings = vendor.bookings;
             const now = new Date();
+            const bookings = vendor.bookings.filter((booking) => !['CANCELLED', 'CANCELLED_BY_CLIENT', 'CANCELLED_BY_VENDOR'].includes(booking.status) &&
+                !(booking.status === 'PENDING' &&
+                    booking.paymentExpiresAt &&
+                    booking.paymentExpiresAt <= now));
+            const holds = await this.prisma.slotLock.findMany({
+                where: {
+                    vendorId: vendor.id,
+                    expiresAt: { gt: now },
+                },
+                select: { startTime: true, endTime: true },
+            });
             const isToday = this.isSameDay(dateObj, now);
             if (this.isPastDay(date)) {
                 throw new common_1.BadRequestException('No slots for past dates');
@@ -100,8 +110,8 @@ let AvailabilityService = class AvailabilityService {
                 if (isToday && slot.startTime <= now) {
                     return false;
                 }
-                return !bookings.some((b) => slot.startTime < new Date(b.endTime) &&
-                    slot.endTime > new Date(b.startTime));
+                return ![...bookings, ...holds].some((b) => new Date(slot.startTime.getTime() - bufferMins * 60000) <
+                    new Date(b.endTime) && slot.endTime > new Date(b.startTime));
             });
             if (availableSlots.length === 0) {
                 throw new common_1.NotFoundException('No available slots for this date');

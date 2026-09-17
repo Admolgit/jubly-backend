@@ -13,6 +13,7 @@ exports.RescheduleRepository = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const booking_slot_util_1 = require("../booking/booking-slot.util");
 const bookingWithRelations = client_1.Prisma.validator()({
     include: {
         services: true,
@@ -57,6 +58,47 @@ let RescheduleRepository = class RescheduleRepository {
         return this.prisma.vendor.update({
             where: { id: vendorId },
             data: { cancellationStrikes: { increment: 1 } },
+        });
+    }
+    acceptReschedule(booking, requestId, schedule, userId, reason) {
+        return (0, booking_slot_util_1.withVendorScheduleLock)(this.prisma, booking.vendorId, async (tx) => {
+            await (0, booking_slot_util_1.assertBookingSlotAvailable)(tx, {
+                vendorId: booking.vendorId,
+                start: schedule.start,
+                end: schedule.end,
+                excludeBookingId: booking.id,
+            });
+            const updated = await tx.booking.updateMany({
+                where: {
+                    id: booking.id,
+                    updatedAt: booking.updatedAt,
+                    status: client_1.BookingStatus.RESCHEDULE_REQUESTED,
+                },
+                data: {
+                    startTime: schedule.start,
+                    endTime: schedule.end,
+                    date: schedule.date,
+                    status: client_1.BookingStatus.CONFIRMED,
+                    rescheduleCount: { increment: 1 },
+                },
+            });
+            const accepted = await tx.rescheduleRequest.updateMany({
+                where: {
+                    id: requestId,
+                    bookingId: booking.id,
+                    status: client_1.RescheduleStatus.PENDING,
+                },
+                data: {
+                    status: client_1.RescheduleStatus.ACCEPTED,
+                    respondedBy: userId,
+                    respondedAt: new Date(),
+                    responseReason: reason,
+                },
+            });
+            if (!updated.count || !accepted.count) {
+                throw new common_1.ConflictException('Reschedule request changed; please try again');
+            }
+            return tx.booking.findUniqueOrThrow({ where: { id: booking.id } });
         });
     }
     findConflictingBooking(vendorId, excludeBookingId, start, end) {

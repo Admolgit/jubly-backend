@@ -1,8 +1,10 @@
+import { BookingFinanceModule } from '../booking-finance/booking-finance.module';
 import { Module } from '@nestjs/common';
 import { BookingController } from './booking.controller';
 import { PrismaService } from 'prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { BookingService } from './booking.service';
+import { BookingCompletionJob } from './booking-completion.job';
 import { GoogleCalendarService } from 'src/google/google.service';
 import { AuthService } from 'src/auth/auth.service';
 import { NodemailerService } from 'src/nodemailer/nodemailer.service';
@@ -13,11 +15,12 @@ import { SubscriptionService } from 'src/subscription/subscription.service';
 
 @Module({
   controllers: [BookingController],
-  imports: [],
+  imports: [BookingFinanceModule],
   exports: [BookingService],
   providers: [
     PrismaService,
     BookingService,
+    BookingCompletionJob,
     GoogleCalendarService,
     ConfigService,
     AuthService,
