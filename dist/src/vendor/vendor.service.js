@@ -402,6 +402,52 @@ let VendorService = class VendorService {
             throw new common_1.InternalServerErrorException('Failed to update vendor profile', error.message);
         }
     }
+    async updateVendorProfile(userId, dto) {
+        try {
+            const exists = await this.prisma.vendor.findUnique({
+                where: { userId },
+            });
+            const userExists = await this.prisma.user.findUnique({
+                where: { id: userId },
+            });
+            if (!exists) {
+                throw new common_1.BadRequestException('Vendor profile does not exist');
+            }
+            if (!userExists) {
+                throw new common_1.BadRequestException('User does not exist');
+            }
+            const data = Object.fromEntries(Object.entries({
+                businessName: dto?.businessName,
+                city: dto?.city,
+                state: dto?.state,
+                country: dto?.country,
+            }).filter(([_, value]) => {
+                if (value === undefined || value === null)
+                    return false;
+                if (typeof value === 'string' && value.trim() === '')
+                    return false;
+                return true;
+            }));
+            console.log({ data });
+            const vendor = await this.prisma.vendor.update({
+                where: { userId },
+                data,
+            });
+            await this.prisma.user.update({
+                where: { id: userId },
+                data: {
+                    phone: dto.phone,
+                },
+            });
+            return (0, response_1.successResponse)({ vendor }, 'Vendor profile updated successfully', 200);
+        }
+        catch (error) {
+            if (error instanceof common_1.HttpException) {
+                throw error;
+            }
+            throw new common_1.InternalServerErrorException('Failed to update vendor profile', error.message);
+        }
+    }
     async bulkUpdateServices(userId, updates) {
         try {
             const vendor = await this.prisma.vendor.findUnique({

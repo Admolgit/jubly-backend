@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'prisma/prisma.service';
-import { CreateVendorDto, QueryVendorsDto } from './dto/create-vendor.dto';
+import { CreateVendorDto, QueryVendorsDto, UpdateVendorDto } from './dto/create-vendor.dto';
 import { successResponse } from 'src/utils/response';
 import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { Prisma } from '@prisma/client';
@@ -569,6 +569,66 @@ export class VendorService {
         { vendor },
         'Vendor profile updated successfully',
         201,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to update vendor profile',
+        error.message,
+      );
+    }
+  }
+
+  async updateVendorProfile(userId: string, dto: UpdateVendorDto) {
+    try {
+      const exists = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+      const userExists = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!exists) {
+        throw new BadRequestException('Vendor profile does not exist');
+      }
+      if (!userExists) {
+        throw new BadRequestException('User does not exist');
+      }
+
+      const data = Object.fromEntries(
+        Object.entries({
+          businessName: dto?.businessName,
+          city: dto?.city,
+          state: dto?.state,
+          country: dto?.country,
+        }).filter(([_, value]) => {
+          if (value === undefined || value === null) return false;
+          if (typeof value === 'string' && value.trim() === '') return false;
+
+          return true;
+        }),
+      );
+
+      console.log({ data });
+
+      const vendor = await this.prisma.vendor.update({
+        where: { userId },
+        data,
+      });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          phone: dto.phone,
+        },
+      });
+
+      return successResponse(
+        { vendor },
+        'Vendor profile updated successfully',
+        200,
       );
     } catch (error: any) {
       if (error instanceof HttpException) {
