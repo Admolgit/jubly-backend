@@ -76,10 +76,7 @@ export class VendorController {
 
     try {
       parsedDto = {
-        profile: JSON.parse(body.profile),
         services: JSON.parse(body.services),
-        subaccount: JSON.parse(body.subaccount),
-        identityType: body.identityType,
       };
     } catch (err: any) {
       throw new BadRequestException(
@@ -161,6 +158,15 @@ export class VendorController {
   updateProfile(@Req() req: { user: { id: string } }, @Body() dto: any) {
     const userId = req.user.id;
     return this.vendorService.updateProfile(userId, dto);
+  }
+
+  @Patch('onboarding/vendor-profile-update')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  updateVendorProfile(@Req() req: { user: { id: string } }, @Body() dto: any) {
+    console.log({dto})
+    const userId = req.user.id;
+    return this.vendorService.updateVendorProfile(userId, dto);
   }
 
   @Post('onboarding/create-subaccount')

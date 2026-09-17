@@ -34,10 +34,7 @@ let VendorController = class VendorController {
         let parsedDto;
         try {
             parsedDto = {
-                profile: JSON.parse(body.profile),
                 services: JSON.parse(body.services),
-                subaccount: JSON.parse(body.subaccount),
-                identityType: body.identityType,
             };
         }
         catch (err) {
@@ -72,6 +69,11 @@ let VendorController = class VendorController {
     updateProfile(req, dto) {
         const userId = req.user.id;
         return this.vendorService.updateProfile(userId, dto);
+    }
+    updateVendorProfile(req, dto) {
+        console.log({ dto });
+        const userId = req.user.id;
+        return this.vendorService.updateVendorProfile(userId, dto);
     }
     createSubaccount(req, dto) {
         const userId = req.user.id;
@@ -207,6 +209,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "updateProfile", null);
+__decorate([
+    (0, common_1.Patch)('onboarding/vendor-profile-update'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "updateVendorProfile", null);
 __decorate([
     (0, common_1.Post)('onboarding/create-subaccount'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
