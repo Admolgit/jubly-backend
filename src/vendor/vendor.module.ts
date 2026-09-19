@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { VendorController } from './vendor.controller';
 import { VendorService } from './vendor.service';
 import { PrismaService } from 'prisma/prisma.service';
-import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
-import { PaystackService } from 'src/paystack/paystack.service';
-import { ActivityService } from 'src/activity/activityLog.service';
+import { CloudinaryService } from '../../src/infrastructure/cloudinary.service';
+import { PaystackService } from '../../src/paystack/paystack.service';
+import { ActivityService } from '../../src/activity/activityLog.service';
+import { NodemailerService } from '../../src/nodemailer/nodemailer.service';
 
 @Module({
   controllers: [VendorController],
@@ -14,6 +15,7 @@ import { ActivityService } from 'src/activity/activityLog.service';
     CloudinaryService,
     PaystackService,
     ActivityService,
+    NodemailerService,
   ],
   imports: [],
 })
