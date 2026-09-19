@@ -11,9 +11,10 @@ const common_1 = require("@nestjs/common");
 const vendor_controller_1 = require("./vendor.controller");
 const vendor_service_1 = require("./vendor.service");
 const prisma_service_1 = require("../../prisma/prisma.service");
-const cloudinary_service_1 = require("../infrastructure/cloudinary.service");
-const paystack_service_1 = require("../paystack/paystack.service");
-const activityLog_service_1 = require("../activity/activityLog.service");
+const cloudinary_service_1 = require("../../src/infrastructure/cloudinary.service");
+const paystack_service_1 = require("../../src/paystack/paystack.service");
+const activityLog_service_1 = require("../../src/activity/activityLog.service");
+const nodemailer_service_1 = require("../../src/nodemailer/nodemailer.service");
 let VendorModule = class VendorModule {
 };
 exports.VendorModule = VendorModule;
@@ -26,6 +27,7 @@ exports.VendorModule = VendorModule = __decorate([
             cloudinary_service_1.CloudinaryService,
             paystack_service_1.PaystackService,
             activityLog_service_1.ActivityService,
+            nodemailer_service_1.NodemailerService,
         ],
         imports: [],
     })
