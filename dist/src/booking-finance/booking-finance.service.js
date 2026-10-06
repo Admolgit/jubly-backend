@@ -67,10 +67,12 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             throw new Error('Payment has no trustworthy checkout snapshot');
         }
         const principal = (0, financial_allocation_1.exactKobo)(payment.servicePrincipalKobo);
+        const paymentPrincipal = (0, financial_allocation_1.kobo)(payment.amount);
         const gross = (0, financial_allocation_1.exactKobo)(payment.expectedGrossChargeKobo);
+        const processingMarkup = (0, financial_allocation_1.exactKobo)(payment.processingMarkupKobo);
         if (!principal ||
-            (0, financial_allocation_1.kobo)(payment.amount) !== principal ||
-            gross - principal !== (0, financial_allocation_1.exactKobo)(payment.processingMarkupKobo) ||
+            !paymentPrincipal ||
+            gross - paymentPrincipal !== processingMarkup ||
             snapshot.vendorId !== payment.vendorId ||
             snapshot.currency !== 'NGN' ||
             payment.currency !== 'NGN' ||
@@ -105,6 +107,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             this.validateCharge(payment, verified);
         }
         catch (error) {
+            console.log(error);
             await this.prisma.transaction.update({
                 where: { id: payment.id },
                 data: { paymentEvidenceState: 'REQUIRES_REVIEW' },
@@ -593,6 +596,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             await this.applyRefundOutcome(payment, claimed.id, response);
         }
         catch (_error) {
+            console.log(_error);
             await this.markRefundUnknown(payment.id, claimed.id);
         }
     }
@@ -603,6 +607,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 this.validateCharge(payment, charge);
             }
             catch (_error) {
+                console.log(_error);
                 await this.review(plan.bookingId, 'Payment evidence changed after financial allocation');
                 return false;
             }
@@ -623,6 +628,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             return true;
         }
         catch (_error) {
+            console.log(_error);
             return false;
         }
     }
@@ -767,6 +773,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             await this.review(payment.bookingId, 'Refund submission outcome is unproven; do not submit another refund');
         }
         catch (_error) {
+            console.log(_error);
             await this.markRefundUnknown(payment.id, op.id);
         }
     }
@@ -859,6 +866,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             await this.applyTransferOutcome(claimed, transfer);
         }
         catch (_error) {
+            console.log(_error);
             await this.prisma.settlement.updateMany({
                 where: {
                     id: claimed.id,
@@ -1010,6 +1018,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             });
         }
         catch (_error) {
+            console.log(_error);
             await this.prisma.settlement.updateMany({
                 where: {
                     id: settlement.id,
