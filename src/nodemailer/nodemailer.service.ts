@@ -11,6 +11,7 @@ export class NodemailerService {
   private readonly resend = new Resend(process.env.RESEND_API_KEY);
   private readonly fromAddress =
     process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+  private readonly loginUrl = process.env.FRONTEND_BASE_URL + '/login';
 
   private async sendMail(params: {
     to?: string;
@@ -97,8 +98,6 @@ export class NodemailerService {
   }
 
   async sendTempPassword(email: string, password: string) {
-    const loginUrl = process.env.FRONTEND_BASE_URL + '/login';
-
     await this.sendMail({
       to: email,
       subject: 'Your Jubly Temporary Password',
@@ -123,7 +122,7 @@ export class NodemailerService {
             </p>
 
             <div style="text-align: center; margin: 28px 0;">
-                <a href="${loginUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                <a href="${this.loginUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
                     Log in to Jubly
                 </a>
             </div>
@@ -139,7 +138,46 @@ export class NodemailerService {
              </p>
         </div>
         `,
-      text: `Your Jubly temporary password is: ${password}\n\nLog in here: ${loginUrl}\n\nPlease change your password after logging in.`,
+      text: `Your Jubly temporary password is: ${password}\n\nLog in here: ${this.loginUrl}\n\nPlease change your password after logging in.`,
+    });
+  }
+
+  async vendorApprovalMail(email: string) {
+    await this.sendMail({
+      to: email,
+      subject: 'Your Jubly vendor account has been approved',
+      html: `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff;">
+            <h1 style="font-size: 20px; color: #111827; margin-bottom: 4px;">Welcome to Jubly 👋</h1>
+            <p style="font-size: 14px; color: #4b5563; margin-top: 0;">
+                Thanks for going through the onboarding process.
+            </p>
+
+            <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                Please proceed to the login page using the button link below. to login to your account using your email and password.
+            </p>
+            <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                To login, use the email and password used when creating account.
+            </p>
+
+            <div style="text-align: center; margin: 28px 0;">
+                <a href="${this.loginUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                    Log in to Jubly
+                </a>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 16px 0;" />
+
+            <p style="font-size: 12px; color: #9ca3af; margin: 0;">
+                Sent by Jubly. Please do not reply to this email.
+            </p>
+
+            <p style="font-size:12px;color:#888">
+              Powered by Jubly
+             </p>
+        </div>
+        `,
+      text: `Log in here: ${this.loginUrl}.`,
     });
   }
 

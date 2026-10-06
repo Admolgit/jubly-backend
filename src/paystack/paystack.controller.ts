@@ -418,6 +418,7 @@ export class PaystackController {
           vendorEmail,
           city,
           state,
+          amountPaid,
           country,
           vendorUserId,
           phone,
@@ -429,6 +430,7 @@ export class PaystackController {
           !serviceId ||
           !clientId ||
           !email ||
+          !amountPaid ||
           dayOfWeek == null ||
           !startTime ||
           !endTime
@@ -452,6 +454,7 @@ export class PaystackController {
             endTime: new Date(endTime),
             status: 'CONFIRMED',
             phone: phone || '',
+            amount: amountPaid,
           },
           {
             reference: event.data.reference,

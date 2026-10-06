@@ -23,12 +23,14 @@ const paystack_service_1 = require("../paystack/paystack.service");
 const json2csv_1 = require("json2csv");
 const dayjs_1 = __importDefault(require("dayjs"));
 const activityLog_service_1 = require("../activity/activityLog.service");
+const nodemailer_service_1 = require("../nodemailer/nodemailer.service");
 let VendorService = class VendorService {
-    constructor(prisma, cloudinaryService, paystackService, activityService) {
+    constructor(prisma, cloudinaryService, paystackService, activityService, mailService) {
         this.prisma = prisma;
         this.cloudinaryService = cloudinaryService;
         this.paystackService = paystackService;
         this.activityService = activityService;
+        this.mailService = mailService;
     }
     async completeOnboarding(userId, dto, files) {
         try {
@@ -558,6 +560,14 @@ let VendorService = class VendorService {
                     isActive: true,
                 },
             });
+            const userExists = await db.user.findUnique({
+                where: {
+                    id: vendor.userId,
+                },
+            });
+            if (!userExists) {
+                throw new common_1.NotFoundException('User not found');
+            }
             await db.service.updateMany({
                 where: {
                     userId: vendor.userId,
@@ -567,6 +577,7 @@ let VendorService = class VendorService {
                     vendorId: vendorId,
                 },
             });
+            await this.mailService.vendorApprovalMail(userExists?.email);
             return (0, response_1.successResponse)({ vendor }, 'Vendor approved successfully');
         });
     }
@@ -837,5 +848,6 @@ exports.VendorService = VendorService = __decorate([
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         cloudinary_service_1.CloudinaryService,
         paystack_service_1.PaystackService,
-        activityLog_service_1.ActivityService])
+        activityLog_service_1.ActivityService,
+        nodemailer_service_1.NodemailerService])
 ], VendorService);

@@ -21,7 +21,6 @@ export function vendorAllocation(gross: number, rate: number) {
   if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
     throw new Error('Invalid captured commission rate');
   }
-  // Keep the existing net-payout rounding and commission cap implementation.
   const net = kobo(gross / 100 - calculateJublyCommission(gross / 100, rate));
   return { net, commission: gross - net };
 }

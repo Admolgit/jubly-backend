@@ -13,7 +13,11 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'prisma/prisma.service';
-import { CreateVendorDto, QueryVendorsDto, UpdateVendorDto } from './dto/create-vendor.dto';
+import {
+  CreateVendorDto,
+  QueryVendorsDto,
+  UpdateVendorDto,
+} from './dto/create-vendor.dto';
 import { successResponse } from 'src/utils/response';
 import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { Prisma } from '@prisma/client';
@@ -28,6 +32,7 @@ import { BulkUpdateItemDto, ServiceItemDto } from './dto/services.dto';
 import { Parser } from 'json2csv';
 import dayjs from 'dayjs';
 import { ActivityService } from 'src/activity/activityLog.service';
+import { NodemailerService } from 'src/nodemailer/nodemailer.service';
 
 @Injectable()
 export class VendorService {
@@ -36,6 +41,7 @@ export class VendorService {
     private cloudinaryService: CloudinaryService,
     private paystackService: PaystackService,
     private activityService: ActivityService,
+    private mailService: NodemailerService,
   ) {}
 
   async completeOnboarding(userId: string, dto, files) {
@@ -792,6 +798,17 @@ export class VendorService {
           isActive: true,
         },
       });
+      
+      // Find user
+      const userExists = await db.user.findUnique({
+        where: {
+          id: vendor.userId,
+        },
+      });
+
+      if (!userExists) {
+        throw new NotFoundException('User not found');
+      }
 
       // 2. Assign vendor to ALL user's services safely
       await db.service.updateMany({
@@ -803,6 +820,9 @@ export class VendorService {
           vendorId: vendorId,
         },
       });
+
+      // Send mail to vendor
+      await this.mailService.vendorApprovalMail(userExists?.email);
 
       return successResponse({ vendor }, 'Vendor approved successfully');
     });

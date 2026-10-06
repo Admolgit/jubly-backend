@@ -142,8 +142,6 @@ export class AuthService {
         where: { email: dto.email },
       });
 
-      // Email is already registered — skip registration and continue with
-      // the existing account rather than failing the caller's flow.
       if (existingUser) {
         return successResponse(
           { client: this.sanitizeUser(existingUser) },
@@ -169,10 +167,6 @@ export class AuthService {
           },
         });
       } catch (createError: any) {
-        // Two concurrent requests raced to register the same email — the
-        // loser hits the unique index. Treat that the same as "already
-        // registered" and continue with the winner's account instead of
-        // failing the request.
         if (createError?.code === 'P2002') {
           const raceWinner = await this.prisma.user.findUnique({
             where: { email: dto.email },
@@ -189,9 +183,7 @@ export class AuthService {
 
         throw createError;
       }
-
-      // Registration itself already succeeded at this point — a flaky
-      // temp-password email must not be reported as a registration failure.
+      
       try {
         await this.nodemailService.sendTempPassword(
           dto.email,
