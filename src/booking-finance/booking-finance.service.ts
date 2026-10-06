@@ -122,6 +122,8 @@ export class BookingFinanceService {
     const gross = exactKobo(payment.expectedGrossChargeKobo);
     const processingMarkup = exactKobo(payment.processingMarkupKobo);
 
+    console.log({ payment, charge });
+
     if (
       !principal ||
       !paymentPrincipal ||

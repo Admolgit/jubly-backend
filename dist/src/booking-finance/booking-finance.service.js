@@ -70,6 +70,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         const paymentPrincipal = (0, financial_allocation_1.kobo)(payment.amount);
         const gross = (0, financial_allocation_1.exactKobo)(payment.expectedGrossChargeKobo);
         const processingMarkup = (0, financial_allocation_1.exactKobo)(payment.processingMarkupKobo);
+        console.log({ payment, charge });
         if (!principal ||
             !paymentPrincipal ||
             gross - paymentPrincipal !== processingMarkup ||
