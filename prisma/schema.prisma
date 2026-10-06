@@ -385,7 +385,8 @@ model Transaction {
   id                        String               @id @default(auto()) @map("_id") @db.ObjectId
   senderDetailsId           String?              @db.ObjectId
   vendorId                  String               @db.ObjectId
-  bookingId                 String?
+  bookingId                 String?              @db.ObjectId
+  name                      String?
   amount                    Float
   currency                  String               @default("NGN")
   providerRef               String               @unique
@@ -401,6 +402,8 @@ model Transaction {
   vendor        Vendor         @relation("Transaction", fields: [vendorId], references: [id])
   senderDetails SenderDetails? @relation(fields: [senderDetailsId], references: [id])
   booking       Booking?       @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
 }
 
 model vendorCalendar {

@@ -300,12 +300,13 @@ let PaystackController = class PaystackController {
                 return { status: true };
             }
             {
-                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, amountPaid, country, vendorUserId, phone, } = event.data.metadata;
                 if (!vendorId ||
                     !vendorUserId ||
                     !serviceId ||
                     !clientId ||
                     !email ||
+                    !amountPaid ||
                     dayOfWeek == null ||
                     !startTime ||
                     !endTime) {
@@ -323,6 +324,7 @@ let PaystackController = class PaystackController {
                     endTime: new Date(endTime),
                     status: 'CONFIRMED',
                     phone: phone || '',
+                    amount: amountPaid,
                 }, {
                     reference: event.data.reference,
                     slotLockId: event.data.metadata.slotLockId,

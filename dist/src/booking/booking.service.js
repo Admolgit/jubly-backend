@@ -202,7 +202,7 @@ let BookingService = class BookingService {
                         clientName: dto.clientName,
                         clientAddress: dto.clientAddress,
                         clientId: dto.clientId,
-                        amount: service.price,
+                        amount: dto.amount,
                         name: service.name,
                         startTime,
                         endTime,
@@ -266,34 +266,36 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Internal server error', error.message);
         }
     }
+    checkAmountIsAtleast50Percent(amount, bookingAmount) {
+        if (amount < 0) {
+            throw new common_1.BadRequestException('Amount must be a positive number');
+        }
+        const minimumAmount = bookingAmount * 0.5;
+        if (amount < minimumAmount) {
+            throw new common_1.BadRequestException('Amount must be at least 50% of the booking amount');
+        }
+    }
     async initializeBookingPayment(bookingId, dto) {
         let slotLockId;
         try {
-            const startTime = this.parseDateInput(dto.startTime, 'startTime');
-            const endTime = this.parseDateInput(dto.endTime, 'endTime');
-            if (endTime <= startTime) {
-                throw new common_1.BadRequestException('endTime must be later than startTime');
-            }
-            if (startTime < new Date()) {
-                throw new common_1.BadRequestException('Cannot book a past date or time');
-            }
+            const isExistingBooking = Boolean(bookingId);
             const services = await this.prisma.service.findUnique({
                 where: { id: dto.serviceId },
             });
             if (!services) {
                 throw new common_1.NotFoundException('Service not found');
             }
-            const vendorUser = await this.prisma.user.findFirst({
-                where: {
-                    id: services.userId,
-                },
-            });
             const vendor = await this.prisma.vendor.findFirst({
                 where: { userId: services.userId },
             });
             if (!vendor) {
                 throw new common_1.NotFoundException('Vendor not found');
             }
+            const vendorUser = await this.prisma.user.findFirst({
+                where: {
+                    id: services.userId,
+                },
+            });
             if (vendorUser &&
                 dto.clientEmail &&
                 vendorUser.email.toLowerCase() === String(dto.clientEmail).toLowerCase()) {
@@ -314,29 +316,83 @@ let BookingService = class BookingService {
                 });
                 savedClientId = saved.data.client.id;
             }
-            const amount = services.price;
-            const pastackAmount = (0, paystackCalculation_1.addPaystackFee)(amount);
-            const calculatedAmount = pastackAmount.totalAmount;
-            const lock = await (0, booking_slot_util_1.withVendorScheduleLock)(this.prisma, vendor.id, async (tx) => {
-                await (0, booking_slot_util_1.assertBookingSlotAvailable)(tx, {
-                    vendorId: vendor.id,
-                    start: startTime,
-                    end: endTime,
-                });
-                await tx.slotLock.deleteMany({
-                    where: { vendorId: vendor.id, expiresAt: { lte: new Date() } },
-                });
-                return tx.slotLock.create({
-                    data: {
-                        vendorId: vendor.id,
-                        date: this.toBookingDate(startTime),
-                        startTime: startTime.toISOString(),
-                        endTime: endTime.toISOString(),
-                        expiresAt: new Date(Date.now() + this.vendorBookingPaymentExpiryMs),
+            if (isExistingBooking) {
+                const booking = await this.prisma.booking.findUnique({
+                    where: {
+                        id: bookingId,
+                    },
+                    include: {
+                        Transaction: {
+                            where: {
+                                status: 'SUCCESS',
+                            },
+                        },
                     },
                 });
-            });
-            slotLockId = lock.id;
+                if (!booking) {
+                    throw new common_1.NotFoundException('Booking not found');
+                }
+                const totalPaid = booking.Transaction.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+                const totalPayable = Number(booking.amount);
+                if (!Number.isFinite(totalPayable) || totalPayable <= 0) {
+                    throw new common_1.BadRequestException('Invalid booking payment amount');
+                }
+                const remainingBalance = Math.max(0, totalPayable - totalPaid);
+                if (remainingBalance <= 0) {
+                    throw new common_1.BadRequestException('This booking has already been fully paid');
+                }
+                const paymentAmount = Number(dto.amount);
+                if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+                    throw new common_1.BadRequestException('Payment amount must be greater than zero');
+                }
+                if (paymentAmount > remainingBalance) {
+                    throw new common_1.BadRequestException(`Payment amount cannot exceed the remaining balance of ₦${remainingBalance.toLocaleString()}`);
+                }
+                dto.amount = paymentAmount;
+            }
+            const startTime = this.parseDateInput(dto.startTime, 'startTime');
+            const endTime = this.parseDateInput(dto.endTime, 'endTime');
+            if (endTime <= startTime) {
+                throw new common_1.BadRequestException('endTime must be later than startTime');
+            }
+            if (startTime < new Date()) {
+                throw new common_1.BadRequestException('Cannot book a past date or time');
+            }
+            const amount = Number(dto.amount);
+            const mainAmount = Number(services?.price);
+            if (!isExistingBooking) {
+                if (amount < 0) {
+                    throw new common_1.BadRequestException('Amount must be a positive number');
+                }
+                const minimumAmount = mainAmount * 0.5;
+                if (amount < minimumAmount) {
+                    throw new common_1.BadRequestException('Amount must be at least 50% of the booking amount');
+                }
+            }
+            const pastackAmount = (0, paystackCalculation_1.addPaystackFee)(amount);
+            const calculatedAmount = pastackAmount.totalAmount;
+            if (!isExistingBooking) {
+                const lock = await (0, booking_slot_util_1.withVendorScheduleLock)(this.prisma, vendor.id, async (tx) => {
+                    await (0, booking_slot_util_1.assertBookingSlotAvailable)(tx, {
+                        vendorId: vendor.id,
+                        start: startTime,
+                        end: endTime,
+                    });
+                    await tx.slotLock.deleteMany({
+                        where: { vendorId: vendor.id, expiresAt: { lte: new Date() } },
+                    });
+                    return tx.slotLock.create({
+                        data: {
+                            vendorId: vendor.id,
+                            date: this.toBookingDate(startTime),
+                            startTime: startTime.toISOString(),
+                            endTime: endTime.toISOString(),
+                            expiresAt: new Date(Date.now() + this.vendorBookingPaymentExpiryMs),
+                        },
+                    });
+                });
+                slotLockId = lock.id;
+            }
             const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendor.id);
             const { authorizationUrl, reference } = await this.paystackService.initializeTransaction(dto.clientEmail, calculatedAmount, {
                 slug: vendorUser?.slug,
@@ -358,6 +414,7 @@ let BookingService = class BookingService {
                 phone: dto.phone,
                 endTime: dto.endTime,
                 type: 'JUBLY_BOOKING',
+                amountPaid: dto.amount,
                 slotLockId,
                 vendorUserId: vendorUser?.id,
                 userId: vendorUser?.id,
@@ -365,18 +422,46 @@ let BookingService = class BookingService {
             await this.prisma.transaction.create({
                 data: {
                     vendorId: vendor.id,
-                    amount,
-                    ...this.bookingFinance.checkoutSnapshot(amount, calculatedAmount, percentageFee, { vendorId: vendor.id, serviceId: dto.serviceId }),
+                    amount: Number(amount),
+                    ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), calculatedAmount, percentageFee, { vendorId: vendor.id, serviceId: dto.serviceId }),
                     providerRef: reference,
                     status: 'PENDING',
                 },
             });
+            let totalPaid = 0;
+            let totalPayable;
+            let remainingBalance;
+            if (isExistingBooking) {
+                const booking = await this.prisma.booking.findUnique({
+                    where: {
+                        id: bookingId,
+                    },
+                    include: {
+                        Transaction: {
+                            where: {
+                                status: 'SUCCESS',
+                            },
+                        },
+                    },
+                });
+                if (!booking) {
+                    throw new common_1.NotFoundException('Booking not found');
+                }
+                totalPaid = booking.Transaction.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+                totalPayable = Number(services?.price);
+                remainingBalance = Math.max(0, totalPayable - totalPaid);
+            }
             return (0, response_1.successResponse)({
                 authorizationUrl,
                 reference,
+                paymentAmount: amount,
+                totalPayable,
+                totalPaid,
+                remainingBalance,
             }, 'Successful', 201);
         }
         catch (error) {
+            console.error('Error initializing payment:', error);
             if (slotLockId) {
                 await this.prisma.slotLock
                     .deleteMany({ where: { id: slotLockId } })
@@ -399,6 +484,21 @@ let BookingService = class BookingService {
             const isManualBookingEnabled = await this.platformSettingsService.isManualBookingEnabled(vendor.id);
             if (!isManualBookingEnabled) {
                 throw new common_1.ForbiddenException('Vendor-created bookings are currently disabled.');
+            }
+            let existingClient = await this.prisma.user.findFirst({
+                where: { email: dto.clientEmail },
+            });
+            if (existingClient && existingClient.role !== client_1.UserRole.CLIENT) {
+                throw new common_1.BadRequestException('The provided email is already associated with a vendor account. Please use a different email for the client.');
+            }
+            if (!existingClient) {
+                const saved = await this.authService.registerClient({
+                    clientName: dto.clientName,
+                    email: dto.clientEmail,
+                    phone: dto.clientPhone || '',
+                    clientVendorId: vendor.id,
+                });
+                existingClient = saved?.data?.client;
             }
             const startTime = this.parseDateInput(dto.startTime, 'startTime');
             const service = await this.prisma.service.findFirst({
@@ -435,9 +535,7 @@ let BookingService = class BookingService {
                 throw new common_1.BadRequestException('Requested time is outside vendor availability hours');
             }
             const amount = service.price;
-            const existingClient = await this.prisma.user.findFirst({
-                where: { email: dto.clientEmail },
-            });
+            const calendarIntegration = await this.getVendorCalendar(userId);
             if (dto.paymentOption === 'PAID_BY_HAND') {
                 const canUsePaidByHand = await this.platformSettingsService.canUsePaidByHand(vendor.id);
                 if (!canUsePaidByHand) {
@@ -485,6 +583,28 @@ let BookingService = class BookingService {
                         paidAt: new Date(),
                     },
                 });
+                if (calendarIntegration) {
+                    try {
+                        await this.googleCalendarService.verifyBooking({
+                            calendar: calendarIntegration,
+                            startTime,
+                            endTime,
+                        });
+                        await this.googleCalendarService.createCalendarEvent(calendarIntegration, {
+                            title: service.name,
+                            description: service.description ?? 'No description',
+                            startTime,
+                            endTime,
+                            attendeeEmail: dto.clientEmail,
+                            attendeeName: dto.clientName,
+                            vendorEmail: existingClient?.email,
+                            bookingId: booking.id,
+                        });
+                    }
+                    catch (err) {
+                        console.error('Google Calendar failed:', err.message);
+                    }
+                }
                 await this.activityService.createLog({
                     vendorId: vendor.id,
                     userId,
@@ -554,6 +674,7 @@ let BookingService = class BookingService {
             await this.prisma.transaction.create({
                 data: {
                     vendorId: vendor.id,
+                    name: booking.clientName,
                     amount,
                     ...this.bookingFinance.checkoutSnapshot(amount, calculatedAmount, percentageFee, {
                         vendorId: vendor.id,
@@ -565,6 +686,28 @@ let BookingService = class BookingService {
                     status: 'PENDING',
                 },
             });
+            if (calendarIntegration) {
+                try {
+                    await this.googleCalendarService.verifyBooking({
+                        calendar: calendarIntegration,
+                        startTime,
+                        endTime,
+                    });
+                    await this.googleCalendarService.createCalendarEvent(calendarIntegration, {
+                        title: service.name,
+                        description: service.description ?? 'No description',
+                        startTime,
+                        endTime,
+                        attendeeEmail: dto.clientEmail,
+                        attendeeName: dto.clientName,
+                        vendorEmail: existingClient?.email,
+                        bookingId: booking.id,
+                    });
+                }
+                catch (err) {
+                    console.error('Google Calendar failed:', err.message);
+                }
+            }
             await this.activityService.createLog({
                 vendorId: vendor.id,
                 userId,

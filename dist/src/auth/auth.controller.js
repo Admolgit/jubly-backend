@@ -48,13 +48,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
+const google_app_auth_1 = require("./google-app-auth");
 const authDto = __importStar(require("./dto/auth.dto"));
-const passport_1 = require("@nestjs/passport");
 const vendor_service_1 = require("../vendor/vendor.service");
 const public_decorator_1 = require("./public.decorator");
 let AuthController = class AuthController {
-    constructor(authService, vendorServices) {
+    constructor(authService, googleAppAuth, vendorServices) {
         this.authService = authService;
+        this.googleAppAuth = googleAppAuth;
         this.vendorServices = vendorServices;
     }
     register(dto) {
@@ -80,6 +81,21 @@ let AuthController = class AuthController {
             throw new common_1.BadRequestException('Missing redirect URL in OAuth state');
         }
         const authResult = await this.authService.handleGoogleLoginOrRegister(googleProfileInfo, requestedRedirectUrl);
+        const appRequest = req.session?.jublyAppAuth;
+        if (appRequest) {
+            delete req.session.jublyAppAuth;
+            const profile = await this.authService.getUserById(authResult.data.user.id);
+            const user = profile.data.user;
+            const vendor = user?.vendor;
+            const payload = {
+                ...authResult.data,
+                user: {
+                    ...user,
+                    needsOnboarding: user?.role === 'VENDOR' && (!vendor || vendor.kycStatus === 'NOT_SUBMITTED'),
+                },
+            };
+            return res.redirect(this.googleAppAuth.redirect(appRequest, payload));
+        }
         const params = new URLSearchParams();
         if (authResult?.meta?.isSignup) {
             params.append('email', authResult.data.user.email);
@@ -94,6 +110,9 @@ let AuthController = class AuthController {
         const basePath = `${process.env.FRONTEND_BASE_URL}/oauth?${params.toString()}&auth=${JSON.stringify(data)}`;
         const finalRedirect = basePath;
         return res.redirect(finalRedirect);
+    }
+    exchangeGoogleAppCode(body) {
+        return this.googleAppAuth.exchange(body?.code, body?.codeVerifier);
     }
     verifyEmail(dto) {
         return this.authService.verifyEmailOtp(dto);
@@ -161,7 +180,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('google/login'),
     (0, public_decorator_1.Public)(),
-    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google-login')),
+    (0, common_1.UseGuards)(google_app_auth_1.GoogleAppAuthGuard),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -169,13 +188,21 @@ __decorate([
 __decorate([
     (0, common_1.Get)('google/callback'),
     (0, public_decorator_1.Public)(),
-    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google-login')),
+    (0, common_1.UseGuards)(google_app_auth_1.GoogleAppAuthGuard),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "googleCallback", null);
+__decorate([
+    (0, common_1.Post)('google/app-exchange'),
+    (0, public_decorator_1.Public)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "exchangeGoogleAppCode", null);
 __decorate([
     (0, common_1.Post)('verify-email'),
     (0, public_decorator_1.Public)(),
@@ -226,5 +253,6 @@ __decorate([
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService,
+        google_app_auth_1.GoogleAppAuthService,
         vendor_service_1.VendorService])
 ], AuthController);

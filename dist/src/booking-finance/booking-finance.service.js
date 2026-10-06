@@ -39,7 +39,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         const principalKobo = (0, financial_allocation_1.kobo)(principal);
         const grossKobo = (0, financial_allocation_1.kobo)(gross);
         (0, financial_allocation_1.vendorAllocation)(principalKobo, rate);
-        if (grossKobo < principalKobo)
+        if (grossKobo > principalKobo)
             throw new common_1.ConflictException('Invalid checkout amount');
         return {
             servicePrincipalKobo: BigInt(principalKobo),

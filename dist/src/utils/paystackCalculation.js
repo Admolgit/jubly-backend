@@ -22,7 +22,7 @@ function addPaystackFee(amount) {
     };
 }
 function calculateJublyCommission(amount, commissionRate) {
-    const JUBLY_COMMISSION_CAP = 10_000;
+    const JUBLY_COMMISSION_CAP = 4_000;
     const percentageFee = amount * commissionRate;
     return Math.min(percentageFee, JUBLY_COMMISSION_CAP);
 }

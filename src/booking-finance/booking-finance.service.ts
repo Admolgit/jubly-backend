@@ -59,8 +59,6 @@ export class BookingFinanceService {
     private readonly policies: CancellationPolicyService,
   ) {}
 
-  // Explicit rollout gate: enable only after ALL old payout/refund processes
-  // have been replaced. A database claim cannot fence an old binary.
   private get dispatchEnabled() {
     return process.env.JUBLY_FINANCIAL_DISPATCH_ENABLED === 'true';
   }
@@ -78,7 +76,7 @@ export class BookingFinanceService {
     const principalKobo = kobo(principal);
     const grossKobo = kobo(gross);
     vendorAllocation(principalKobo, rate);
-    if (grossKobo < principalKobo)
+    if (grossKobo > principalKobo)
       throw new ConflictException('Invalid checkout amount');
     return {
       servicePrincipalKobo: BigInt(principalKobo),
@@ -212,7 +210,7 @@ export class BookingFinanceService {
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.prisma.$transaction(work);
-      } catch (error) {
+      } catch (error: any) {
         if (error.code === 'P2034' && attempt < 3) continue;
         if (error.code === 'P2034' || error.code === 'P2002')
           throw new ConflictException(
@@ -507,7 +505,7 @@ export class BookingFinanceService {
       let verified: Awaited<ReturnType<BookingFinanceService['evidence']>>;
       try {
         verified = await this.evidence(booking);
-      } catch (error) {
+      } catch (error: any) {
         await this.review(bookingId, error.message);
         throw new ConflictException('Payment requires financial review');
       }
@@ -642,7 +640,7 @@ export class BookingFinanceService {
     try {
       await this.processRefund(bookingId);
       await this.processTransfer(bookingId);
-    } catch (error) {
+    } catch (error: any) {
       // Durable PENDING/PROCESSING claims survive every worker exception.
       this.logger.warn(
         `Financial processing deferred for booking ${bookingId}: ${error.message}`,
