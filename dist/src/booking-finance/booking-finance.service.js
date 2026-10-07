@@ -35,16 +35,22 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
     get dispatchEnabled() {
         return process.env.JUBLY_FINANCIAL_DISPATCH_ENABLED === 'true';
     }
-    checkoutSnapshot(principal, gross, rate, identity) {
-        const principalKobo = (0, financial_allocation_1.kobo)(principal);
+    checkoutSnapshot(servicePrincipal, paymentPrincipal, gross, rate, identity) {
+        const servicePrincipalKobo = (0, financial_allocation_1.kobo)(servicePrincipal);
+        const paymentPrincipalKobo = (0, financial_allocation_1.kobo)(paymentPrincipal);
         const grossKobo = (0, financial_allocation_1.kobo)(gross);
-        (0, financial_allocation_1.vendorAllocation)(principalKobo, rate);
-        if (grossKobo > principalKobo)
+        (0, financial_allocation_1.vendorAllocation)(paymentPrincipalKobo, rate);
+        if (paymentPrincipalKobo > servicePrincipalKobo) {
+            throw new common_1.ConflictException('Payment exceeds service balance');
+        }
+        if (grossKobo < paymentPrincipalKobo) {
             throw new common_1.ConflictException('Invalid checkout amount');
+        }
         return {
-            servicePrincipalKobo: BigInt(principalKobo),
+            servicePrincipalKobo: BigInt(servicePrincipalKobo),
+            paymentPrincipalKobo: BigInt(paymentPrincipalKobo),
             expectedGrossChargeKobo: BigInt(grossKobo),
-            processingMarkupKobo: BigInt(grossKobo - principalKobo),
+            processingMarkupKobo: BigInt(grossKobo - paymentPrincipalKobo),
             percentageFee: rate,
             paymentEvidenceState: 'AWAITING_VERIFICATION',
             checkoutSnapshot: json({

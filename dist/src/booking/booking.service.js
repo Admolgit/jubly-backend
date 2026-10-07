@@ -423,7 +423,10 @@ let BookingService = class BookingService {
                 data: {
                     vendorId: vendor.id,
                     amount: Number(amount),
-                    ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), calculatedAmount, percentageFee, { vendorId: vendor.id, serviceId: dto.serviceId }),
+                    ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), Number(amount), calculatedAmount, percentageFee, {
+                        vendorId: vendor.id,
+                        serviceId: dto.serviceId,
+                    }),
                     providerRef: reference,
                     status: 'PENDING',
                 },
@@ -535,6 +538,7 @@ let BookingService = class BookingService {
                 throw new common_1.BadRequestException('Requested time is outside vendor availability hours');
             }
             const amount = service.price;
+            const mainAmount = service.price;
             const calendarIntegration = await this.getVendorCalendar(userId);
             if (dto.paymentOption === 'PAID_BY_HAND') {
                 const canUsePaidByHand = await this.platformSettingsService.canUsePaidByHand(vendor.id);
@@ -676,10 +680,9 @@ let BookingService = class BookingService {
                     vendorId: vendor.id,
                     name: booking.clientName,
                     amount,
-                    ...this.bookingFinance.checkoutSnapshot(amount, calculatedAmount, percentageFee, {
+                    ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), Number(amount), calculatedAmount, percentageFee, {
                         vendorId: vendor.id,
                         serviceId: dto.serviceId,
-                        bookingId: booking.id,
                     }),
                     currency: 'NGN',
                     providerRef: reference,

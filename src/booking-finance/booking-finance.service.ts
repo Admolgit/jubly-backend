@@ -68,7 +68,8 @@ export class BookingFinanceService {
   }
 
   checkoutSnapshot(
-    principal: number,
+    servicePrincipal: number,
+    paymentPrincipal: number,
     gross: number,
     rate: number,
     identity: {
@@ -77,15 +78,25 @@ export class BookingFinanceService {
       bookingId?: string;
     },
   ) {
-    const principalKobo = kobo(principal);
+    const servicePrincipalKobo = kobo(servicePrincipal);
+    const paymentPrincipalKobo = kobo(paymentPrincipal);
     const grossKobo = kobo(gross);
-    vendorAllocation(principalKobo, rate);
-    if (grossKobo > principalKobo)
+
+    vendorAllocation(paymentPrincipalKobo, rate);
+
+    if (paymentPrincipalKobo > servicePrincipalKobo) {
+      throw new ConflictException('Payment exceeds service balance');
+    }
+
+    if (grossKobo < paymentPrincipalKobo) {
       throw new ConflictException('Invalid checkout amount');
+    }
+
     return {
-      servicePrincipalKobo: BigInt(principalKobo),
+      servicePrincipalKobo: BigInt(servicePrincipalKobo),
+      paymentPrincipalKobo: BigInt(paymentPrincipalKobo),
       expectedGrossChargeKobo: BigInt(grossKobo),
-      processingMarkupKobo: BigInt(grossKobo - principalKobo),
+      processingMarkupKobo: BigInt(grossKobo - paymentPrincipalKobo),
       percentageFee: rate,
       paymentEvidenceState: 'AWAITING_VERIFICATION',
       checkoutSnapshot: json({
