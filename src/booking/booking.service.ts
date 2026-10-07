@@ -256,7 +256,7 @@ export class BookingService {
               clientName: dto.clientName,
               clientAddress: dto.clientAddress,
               clientId: dto.clientId,
-              amount: dto.amount,
+              amount: Number(dto.amount),
               name: service.name,
               startTime,
               endTime,
