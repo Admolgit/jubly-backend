@@ -553,9 +553,13 @@ export class BookingService {
           amount: Number(amount),
           ...this.bookingFinance.checkoutSnapshot(
             Number(mainAmount),
+            Number(amount),
             calculatedAmount,
             percentageFee,
-            { vendorId: vendor.id, serviceId: dto.serviceId },
+            {
+              vendorId: vendor.id,
+              serviceId: dto.serviceId,
+            },
           ),
           providerRef: reference,
           status: 'PENDING',
@@ -719,6 +723,7 @@ export class BookingService {
       }
 
       const amount = service.price;
+      const mainAmount = service.price;
 
       const calendarIntegration = await this.getVendorCalendar(userId);
 
@@ -909,13 +914,13 @@ export class BookingService {
           name: booking.clientName,
           amount,
           ...this.bookingFinance.checkoutSnapshot(
-            amount,
-            calculatedAmount,
+            Number(mainAmount), // total service price: ₦14,000
+            Number(amount), // this payment: ₦7,000
+            calculatedAmount, // gross Paystack charge: ₦7,208.13
             percentageFee,
             {
               vendorId: vendor.id,
               serviceId: dto.serviceId,
-              bookingId: booking.id,
             },
           ),
           currency: 'NGN',
