@@ -67,10 +67,13 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             throw new Error('Payment has no trustworthy checkout snapshot');
         }
         const principal = (0, financial_allocation_1.exactKobo)(payment.servicePrincipalKobo);
+        console.log('principal OK:', principal);
         const paymentPrincipal = (0, financial_allocation_1.kobo)(payment.amount);
+        console.log('paymentPrincipal OK:', paymentPrincipal);
         const gross = (0, financial_allocation_1.exactKobo)(payment.expectedGrossChargeKobo);
+        console.log('gross OK:', gross);
         const processingMarkup = (0, financial_allocation_1.exactKobo)(payment.processingMarkupKobo);
-        console.log({ payment, charge });
+        console.log('processingMarkup OK:', processingMarkup);
         if (!principal ||
             !paymentPrincipal ||
             gross - paymentPrincipal !== processingMarkup ||

@@ -117,12 +117,26 @@ export class BookingFinanceService {
     ) {
       throw new Error('Payment has no trustworthy checkout snapshot');
     }
+    // const principal = exactKobo(payment.servicePrincipalKobo);
+    // const paymentPrincipal = kobo(payment.amount);
+    // const gross = exactKobo(payment.expectedGrossChargeKobo);
+    // const processingMarkup = exactKobo(payment.processingMarkupKobo);
+
     const principal = exactKobo(payment.servicePrincipalKobo);
+
+    console.log('principal OK:', principal);
+
     const paymentPrincipal = kobo(payment.amount);
+
+    console.log('paymentPrincipal OK:', paymentPrincipal);
+
     const gross = exactKobo(payment.expectedGrossChargeKobo);
+
+    console.log('gross OK:', gross);
+
     const processingMarkup = exactKobo(payment.processingMarkupKobo);
 
-    console.log({ payment, charge });
+    console.log('processingMarkup OK:', processingMarkup);
 
     if (
       !principal ||
