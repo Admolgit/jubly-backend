@@ -372,6 +372,7 @@ model SenderDetails {
 }
 
 model Transaction {
+  paymentPrincipalKobo      BigInt?
   servicePrincipalKobo      BigInt?
   expectedGrossChargeKobo   BigInt?
   verifiedChargedAmountKobo BigInt?
