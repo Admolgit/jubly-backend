@@ -195,7 +195,8 @@ let PaystackController = class PaystackController {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
             await this.bookingFinance.recordVerifiedCharge(event.data.reference);
-            if (transactionExists.bookingId) {
+            if (transactionExists.bookingId &&
+                event.data.metadata?.type !== 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
                 return { status: true };
             }
             if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
