@@ -2938,10 +2938,22 @@ export class BookingService {
           id: bookingId,
         },
         include: {
-          services: true,
+          services: {
+            select: {
+              id: true,
+              price: true,
+            },
+          },
           vendor: {
             include: {
-              user: true,
+              user: {
+                select: {
+                  email: true,
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
             },
           },
         },
@@ -3036,6 +3048,7 @@ export class BookingService {
           'Failed to initialize payment transaction.',
         );
       }
+
       // 6. Save the transaction against this existing booking.
       const mainAmount = booking.services.price;
       await this.prisma.transaction.create({

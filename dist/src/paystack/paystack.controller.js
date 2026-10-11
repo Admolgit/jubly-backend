@@ -300,10 +300,12 @@ let PaystackController = class PaystackController {
                 return { status: true };
             }
             if (event.data.metadata?.type === 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
+                console.log('Processing outstanding payment webhook:', event.data.metadata);
                 const { bookingId, vendorId, clientName, clientEmail, amountPaid, outstandingBalance, percentageFee, } = event.data.metadata;
                 if (!bookingId) {
                     throw new common_1.BadRequestException('Incomplete booking metadata for link');
                 }
+                console.log('GET PAST BOOKINGID CHECK');
                 const booking = await this.prisma.booking.findUnique({
                     where: { id: bookingId },
                     include: {
@@ -314,14 +316,17 @@ let PaystackController = class PaystackController {
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
                 }
+                console.log('GET PAST BOOKING CHECK - FOUND');
                 const vendorUser = await this.prisma.vendor.findUnique({
                     where: { id: vendorId },
                     include: { user: true },
                 });
+                console.log('GET PAST VENDOR CHECK - FOUND', vendorUser);
                 const updatedBooking = await this.prisma.booking.update({
                     where: { id: bookingId },
                     data: { amount: booking?.amount + amountPaid },
                 });
+                console.log('GET PAST BOOKING CHECK - UPDATED', updatedBooking);
                 const senderDetails = await this.prisma.senderDetails.create({
                     data: {
                         vendorId: booking.vendorId,
@@ -332,6 +337,7 @@ let PaystackController = class PaystackController {
                         senderDescription: 'Payment via Paystack (outstanding payment)',
                     },
                 });
+                console.log('GET PAST SENDER DETAILS - CREATED', senderDetails);
                 await this.prisma.transaction.update({
                     where: { providerRef: event.data.reference },
                     data: {
@@ -343,6 +349,7 @@ let PaystackController = class PaystackController {
                         senderDetailsId: senderDetails.id,
                     },
                 });
+                console.log('GET PAST TRANSACTION CHECK - UPDATED');
                 await this.activityService.createLog({
                     vendorId: booking.vendorId,
                     action: 'PAYMENT_RECEIVED',
@@ -351,6 +358,7 @@ let PaystackController = class PaystackController {
                     actorType: 'SYSTEM',
                     color: 'yellow',
                 });
+                console.log('GET PAST ACTIVITY LOG - CREATED');
                 setImmediate(() => {
                     void (async () => {
                         try {

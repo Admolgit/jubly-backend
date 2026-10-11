@@ -263,7 +263,7 @@ export class BookingController {
     @Param('bookingId') bookingId: string,
     @Param('clientId') clientId: string,
     @Param('vendorId') vendorId: string,
-    @Body() dto: any,
+    @Body() dto: { amount: number },
   ) {
     return this.bookingService.payOutstanding(
       bookingId,

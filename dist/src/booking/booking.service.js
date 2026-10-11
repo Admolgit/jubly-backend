@@ -2187,10 +2187,22 @@ let BookingService = class BookingService {
                     id: bookingId,
                 },
                 include: {
-                    services: true,
+                    services: {
+                        select: {
+                            id: true,
+                            price: true,
+                        },
+                    },
                     vendor: {
                         include: {
-                            user: true,
+                            user: {
+                                select: {
+                                    email: true,
+                                    id: true,
+                                    firstName: true,
+                                    lastName: true,
+                                },
+                            },
                         },
                     },
                 },

@@ -407,6 +407,10 @@ export class PaystackController {
       }
 
       if (event.data.metadata?.type === 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
+        console.log(
+          'Processing outstanding payment webhook:',
+          event.data.metadata,
+        );
         const {
           bookingId,
           vendorId,
@@ -421,6 +425,8 @@ export class PaystackController {
           throw new BadRequestException('Incomplete booking metadata for link');
         }
 
+        console.log('GET PAST BOOKINGID CHECK');
+
         const booking = await this.prisma.booking.findUnique({
           where: { id: bookingId },
           include: {
@@ -433,15 +439,21 @@ export class PaystackController {
           throw new BadRequestException('Vendor-created booking was not found');
         }
 
+        console.log('GET PAST BOOKING CHECK - FOUND');
+
         const vendorUser = await this.prisma.vendor.findUnique({
           where: { id: vendorId },
           include: { user: true },
         });
 
+        console.log('GET PAST VENDOR CHECK - FOUND', vendorUser);
+
         const updatedBooking = await this.prisma.booking.update({
           where: { id: bookingId },
           data: { amount: booking?.amount + amountPaid },
         });
+
+        console.log('GET PAST BOOKING CHECK - UPDATED', updatedBooking);
 
         const senderDetails = await this.prisma.senderDetails.create({
           data: {
@@ -453,6 +465,8 @@ export class PaystackController {
             senderDescription: 'Payment via Paystack (outstanding payment)',
           },
         });
+
+        console.log('GET PAST SENDER DETAILS - CREATED', senderDetails);
 
         await this.prisma.transaction.update({
           where: { providerRef: event.data.reference },
@@ -466,6 +480,8 @@ export class PaystackController {
           },
         });
 
+        console.log('GET PAST TRANSACTION CHECK - UPDATED');
+
         await this.activityService.createLog({
           vendorId: booking.vendorId,
           action: 'PAYMENT_RECEIVED',
@@ -474,6 +490,8 @@ export class PaystackController {
           actorType: 'SYSTEM',
           color: 'yellow',
         });
+
+        console.log('GET PAST ACTIVITY LOG - CREATED');
 
         setImmediate(() => {
           void (async () => {
