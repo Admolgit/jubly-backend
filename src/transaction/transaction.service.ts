@@ -483,7 +483,7 @@ export class TransactionService {
 
       throw new InternalServerErrorException(
         'Failed to fetch analytics',
-        error.message,
+        error.message as string,
       );
     }
   }

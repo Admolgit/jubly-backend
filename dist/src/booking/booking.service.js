@@ -2274,6 +2274,7 @@ let BookingService = class BookingService {
                     vendorId: booking.vendorId,
                     clientId: client.id,
                     amount: Number(dto.amount),
+                    paymentType: 'BOOKING_OUTSTANDING',
                     ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), Number(dto.amount), calculatedAmount, percentageFee, {
                         vendorId: booking.vendorId,
                         serviceId: booking.services.id,

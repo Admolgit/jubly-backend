@@ -3065,13 +3065,13 @@ export class BookingService {
       }
 
       // 6. Save the transaction against this existing booking.
-
       await this.prisma.transaction.create({
         data: {
           bookingId: booking.id,
           vendorId: booking.vendorId,
           clientId: client.id,
           amount: Number(dto.amount),
+          paymentType: 'BOOKING_OUTSTANDING',
           ...this.bookingFinance.checkoutSnapshot(
             Number(mainAmount),
             Number(dto.amount),
