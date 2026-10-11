@@ -2217,8 +2217,8 @@ let BookingService = class BookingService {
             if (!eligibleStatuses.includes(booking.status)) {
                 throw new common_1.BadRequestException('This booking is not eligible for payment.');
             }
-            const bookingTotal = Number(booking.amount);
-            if (!Number.isFinite(bookingTotal) || bookingTotal <= 0) {
+            const mainAmount = booking.services.price;
+            if (!Number.isFinite(mainAmount) || mainAmount <= 0) {
                 throw new common_1.BadRequestException('Invalid booking amount.');
             }
             const verifiedPayments = await this.prisma.transaction.findMany({
@@ -2226,10 +2226,14 @@ let BookingService = class BookingService {
                     bookingId: booking.id,
                     clientId,
                     paymentEvidenceState: 'VERIFIED',
+                    paymentStatus: true,
                 },
             });
+            console.log({ verifiedPayments });
             const totalPaid = verifiedPayments.reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0);
-            const outstandingBalance = Math.max(0, bookingTotal - totalPaid);
+            console.log({ totalPaid });
+            const outstandingBalance = Math.max(0, mainAmount - totalPaid);
+            console.log({ outstandingBalance, mainAmount });
             if (outstandingBalance <= 0) {
                 throw new common_1.BadRequestException('Booking is already fully paid.');
             }
@@ -2253,11 +2257,17 @@ let BookingService = class BookingService {
                 outstandingBalance,
                 percentageFee,
             };
+            console.log('Outstanding payment checkout:', {
+                bookingId: booking.id,
+                requestedAmount,
+                outstandingBalance,
+                calculatedAmount,
+                amountType: typeof calculatedAmount,
+            });
             const paystackResponse = await this.paystackService.initializeTransaction(client.email, calculatedAmount, metadata);
             if (!paystackResponse) {
                 throw new common_1.InternalServerErrorException('Failed to initialize payment transaction.');
             }
-            const mainAmount = booking.services.price;
             await this.prisma.transaction.create({
                 data: {
                     bookingId: booking.id,
@@ -2270,6 +2280,7 @@ let BookingService = class BookingService {
                     }),
                     providerRef: paystackResponse.reference,
                     status: 'PENDING',
+                    paymentStatus: false,
                 },
             });
             return (0, response_1.successResponse)({

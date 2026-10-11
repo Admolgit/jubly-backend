@@ -395,6 +395,7 @@ model Transaction {
   title                     String?
   category                  String?
   paymentMethod             String?
+  paymentStatus             Boolean?
   status                    String               @default("pending")
   paidAt                    DateTime?
   createdAt                 DateTime             @default(now())
