@@ -94,7 +94,7 @@ let PaystackReconciliationService = class PaystackReconciliationService {
         if (chargeData.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
             return this.finalizeVendorCreatedBookingLinkCharge(chargeData);
         }
-        const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = chargeData.metadata ?? {};
+        const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, amountPaid, } = chargeData.metadata ?? {};
         if (!vendorId ||
             !vendorUserId ||
             !serviceId ||
@@ -122,6 +122,7 @@ let PaystackReconciliationService = class PaystackReconciliationService {
             startTime: new Date(startTime),
             endTime: new Date(endTime),
             status: 'CONFIRMED',
+            amountPaid: amountPaid,
         }, {
             reference: chargeData.reference,
             slotLockId: chargeData.metadata?.slotLockId,
@@ -202,7 +203,7 @@ let PaystackReconciliationService = class PaystackReconciliationService {
         }
     }
     async finalizeVendorCreatedBookingLinkCharge(chargeData) {
-        const { bookingId, percentageFee, clientName, clientEmail, title } = chargeData.metadata ?? {};
+        const { bookingId, percentageFee, clientName, clientEmail, title, amountPaid, } = chargeData.metadata ?? {};
         if (!bookingId) {
             console.error(`[PaystackReconciliation] Incomplete vendor-created-link metadata for transaction ${chargeData.reference}`);
             return;
@@ -225,7 +226,7 @@ let PaystackReconciliationService = class PaystackReconciliationService {
         const accountName = auth?.account_name || null;
         const accountNumber = auth?.account_number || null;
         const paymentChannel = chargeData.channel || auth?.channel || 'unknown';
-        const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, chargeData.reference);
+        const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, chargeData.reference, amountPaid);
         const senderDetails = await this.prisma.senderDetails.create({
             data: {
                 vendorId: booking.vendorId,

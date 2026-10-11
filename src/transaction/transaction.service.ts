@@ -205,7 +205,7 @@ export class TransactionService {
       const total = await this.prisma.transaction.count({ where });
 
       return successResponse(
-        { transactions },
+        { transactions: this.serializeBigInt(transactions) },
         'Successfully fetched transactions.',
         200,
         {
@@ -224,6 +224,14 @@ export class TransactionService {
         error.message as string,
       );
     }
+  }
+
+  serializeBigInt<T>(value: T): T {
+    return JSON.parse(
+      JSON.stringify(value, (_key, item) =>
+        typeof item === 'bigint' ? item.toString() : item,
+      ),
+    );
   }
 
   async getTotalTransactionsAmountByVendorId(
@@ -518,17 +526,18 @@ export class TransactionService {
       },
     });
 
-    const currentProcessingTransactions = await this.prisma.transaction.findMany({
-      where: {
-        vendorId: vendor.id,
-        status: {
-          in: ['PENDING'],
+    const currentProcessingTransactions =
+      await this.prisma.transaction.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: {
+            in: ['PENDING'],
+          },
+          createdAt: {
+            gte: currentMonthStart,
+          },
         },
-        createdAt: {
-          gte: currentMonthStart,
-        },
-      },
-    });
+      });
 
     const previousTransactions = await this.prisma.transaction.findMany({
       where: {
@@ -542,18 +551,19 @@ export class TransactionService {
         },
       },
     });
-    const previousProcessedTransactions = await this.prisma.transaction.findMany({
-      where: {
-        vendorId: vendor.id,
-        status: {
-          in: ['PENDING'],
+    const previousProcessedTransactions =
+      await this.prisma.transaction.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: {
+            in: ['PENDING'],
+          },
+          createdAt: {
+            gte: previousMonthStart,
+            lte: previousMonthEnd,
+          },
         },
-        createdAt: {
-          gte: previousMonthStart,
-          lte: previousMonthEnd,
-        },
-      },
-    });
+      });
 
     const calculateAmount = (transactions: any[]) => {
       return transactions.reduce(

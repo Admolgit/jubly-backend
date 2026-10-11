@@ -526,6 +526,7 @@ export class BookingFinanceService {
         'Booking cannot authorize completion settlement',
       );
     }
+
     if (booking.paymentMethod === 'PAID_BY_HAND') {
       await this.review(
         bookingId,
@@ -538,9 +539,11 @@ export class BookingFinanceService {
         settlement: null,
       };
     }
+
     let settlement = await this.prisma.settlement.findUnique({
       where: { bookingId },
     });
+
     if (!settlement) {
       let verified: Awaited<ReturnType<BookingFinanceService['evidence']>>;
       try {
@@ -617,6 +620,7 @@ export class BookingFinanceService {
         });
       });
     }
+
     if (!settlement.purpose || settlement.purpose !== 'NORMAL_COMPLETION') {
       await this.review(
         bookingId,
@@ -624,13 +628,16 @@ export class BookingFinanceService {
       );
       throw new ConflictException('Settlement requires financial review');
     }
+
     await this.processBooking(bookingId);
     settlement = await this.prisma.settlement.findUniqueOrThrow({
       where: { bookingId },
     });
+
     booking = await this.prisma.booking.findUniqueOrThrow({
       where: { id: bookingId },
     });
+
     if (booking.financialMode !== 'COMPLETION')
       throw new ConflictException('Financial decision changed');
     return {

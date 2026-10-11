@@ -399,6 +399,7 @@ model Transaction {
   paidAt                    DateTime?
   createdAt                 DateTime             @default(now())
   updatedAt                 DateTime             @updatedAt
+  clientId                  String?              @db.ObjectId
 
   vendor        Vendor         @relation("Transaction", fields: [vendorId], references: [id])
   senderDetails SenderDetails? @relation(fields: [senderDetailsId], references: [id])

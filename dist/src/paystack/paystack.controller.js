@@ -198,7 +198,7 @@ let PaystackController = class PaystackController {
                 return { status: true };
             }
             if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
-                const { bookingId, percentageFee, clientName, clientEmail, title } = event.data.metadata;
+                const { bookingId, percentageFee, clientName, clientEmail, title, amountPaid, } = event.data.metadata;
                 if (!bookingId) {
                     throw new common_1.BadRequestException('Incomplete booking metadata for link');
                 }
@@ -211,7 +211,7 @@ let PaystackController = class PaystackController {
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
                 }
-                const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, event.data.reference);
+                const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, event.data.reference, amountPaid);
                 const senderDetails = await this.prisma.senderDetails.create({
                     data: {
                         vendorId: booking.vendorId,
@@ -298,6 +298,46 @@ let PaystackController = class PaystackController {
                     })();
                 });
                 return { status: true };
+            }
+            if (event.data.metadata?.type === 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
+                const { bookingId, percentageFee, clientName, clientEmail, title, amountPaid, } = event.data.metadata;
+                if (!bookingId) {
+                    throw new common_1.BadRequestException('Incomplete booking metadata for link');
+                }
+                const booking = await this.prisma.booking.findUnique({
+                    where: { id: bookingId },
+                    include: {
+                        services: true,
+                    },
+                });
+                if (!booking) {
+                    throw new common_1.BadRequestException('Vendor-created booking was not found');
+                }
+                const updatedBooking = await this.prisma.booking.update({
+                    where: { id: bookingId },
+                    data: { amount: booking?.amount + amountPaid },
+                });
+                const senderDetails = await this.prisma.senderDetails.create({
+                    data: {
+                        vendorId: booking.vendorId,
+                        email: clientEmail,
+                        senderName: accountName ?? clientName,
+                        senderAccountNumber: accountNumber,
+                        senderBankName: bank,
+                        senderDescription: 'Payment via Paystack (outstanding payment)',
+                    },
+                });
+                await this.prisma.transaction.update({
+                    where: { providerRef: event.data.reference },
+                    data: {
+                        bookingId: updatedBooking.id,
+                        status: transactionExists.checkoutSnapshot ? undefined : 'PENDING',
+                        paidAt: new Date(),
+                        percentageFee: transactionExists.percentageFee ?? percentageFee,
+                        paymentMethod: paymentChannel,
+                        senderDetailsId: senderDetails.id,
+                    },
+                });
             }
             {
                 const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, amountPaid, country, vendorUserId, phone, } = event.data.metadata;
