@@ -181,6 +181,7 @@ export class PaystackController {
       }
 
       const event = req.body;
+      console.log('METADATA', event.data.metadata?.type);
       if (typeof event?.event !== 'string' || !event.data)
         throw new BadRequestException('Invalid Paystack webhook payload');
       if (
