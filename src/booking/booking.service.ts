@@ -2918,7 +2918,12 @@ export class BookingService {
     }
   }
 
-  async payOutstanding(bookingId: string, clientId: string, dto: any) {
+  async payOutstanding(
+    bookingId: string,
+    clientId: string,
+    vendorId: string,
+    dto: any,
+  ) {
     try {
       const client = await this.prisma.user.findUnique({
         where: { id: clientId },
@@ -2947,7 +2952,7 @@ export class BookingService {
       }
 
       // 1. Verify that this client owns the booking.
-      if (booking.clientId !== clientId) {
+      if (booking.clientId !== clientId || booking.vendor.id !== vendorId) {
         throw new ForbiddenException('You are not the owner of this booking.');
       }
 

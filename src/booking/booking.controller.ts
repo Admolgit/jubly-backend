@@ -256,15 +256,21 @@ export class BookingController {
     );
   }
 
-  @Post(':bookingId/pay-outstanding/:clientId')
+  @Post(':bookingId/pay-outstanding/:clientId/:vendorId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR', 'CLIENT')
   payOutstanding(
     @Param('bookingId') bookingId: string,
     @Param('clientId') clientId: string,
+    @Param('vendorId') vendorId: string,
     @Body() dto: any,
   ) {
-    return this.bookingService.payOutstanding(bookingId, clientId, dto);
+    return this.bookingService.payOutstanding(
+      bookingId,
+      clientId,
+      vendorId,
+      dto,
+    );
   }
 
   @Get('business-categories')

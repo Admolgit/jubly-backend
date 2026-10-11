@@ -2174,7 +2174,7 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to fetch client booking history.', error.message);
         }
     }
-    async payOutstanding(bookingId, clientId, dto) {
+    async payOutstanding(bookingId, clientId, vendorId, dto) {
         try {
             const client = await this.prisma.user.findUnique({
                 where: { id: clientId },
@@ -2198,7 +2198,7 @@ let BookingService = class BookingService {
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
             }
-            if (booking.clientId !== clientId) {
+            if (booking.clientId !== clientId || booking.vendor.id !== vendorId) {
                 throw new common_1.ForbiddenException('You are not the owner of this booking.');
             }
             const eligibleStatuses = ['CONFIRMED', 'COMPLETED'];
@@ -2233,9 +2233,13 @@ let BookingService = class BookingService {
             const metadata = {
                 type: 'JUBLY_BOOKING_OUTSTANDING_PAYMENT',
                 bookingId: booking.id,
-                clientId: client.id,
+                clientName: client.firstName + ' ' + client.lastName,
+                clientEmail: client.email,
                 vendorId: booking.vendorId,
                 serviceId: booking.serviceId,
+                amountPaid: dto.amount,
+                outstandingBalance,
+                percentageFee,
             };
             const paystackResponse = await this.paystackService.initializeTransaction(client.email, calculatedAmount, metadata);
             if (!paystackResponse) {

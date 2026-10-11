@@ -300,7 +300,7 @@ let PaystackController = class PaystackController {
                 return { status: true };
             }
             if (event.data.metadata?.type === 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
-                const { bookingId, percentageFee, clientName, clientEmail, title, amountPaid, } = event.data.metadata;
+                const { bookingId, vendorId, clientName, clientEmail, amountPaid, outstandingBalance, percentageFee, } = event.data.metadata;
                 if (!bookingId) {
                     throw new common_1.BadRequestException('Incomplete booking metadata for link');
                 }
@@ -308,11 +308,16 @@ let PaystackController = class PaystackController {
                     where: { id: bookingId },
                     include: {
                         services: true,
+                        vendor: true,
                     },
                 });
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
                 }
+                const vendorUser = await this.prisma.vendor.findUnique({
+                    where: { id: vendorId },
+                    include: { user: true },
+                });
                 const updatedBooking = await this.prisma.booking.update({
                     where: { id: bookingId },
                     data: { amount: booking?.amount + amountPaid },
@@ -338,6 +343,57 @@ let PaystackController = class PaystackController {
                         senderDetailsId: senderDetails.id,
                     },
                 });
+                await this.activityService.createLog({
+                    vendorId: booking.vendorId,
+                    action: 'PAYMENT_RECEIVED',
+                    description: `Outstanding payment of ₦${amountPaid.toLocaleString()} received for booking #${booking.id}.`,
+                    actor: 'System',
+                    actorType: 'SYSTEM',
+                    color: 'yellow',
+                });
+                setImmediate(() => {
+                    void (async () => {
+                        try {
+                            await this.mailService.outstandingPaymentMail({
+                                recipientEmail: clientEmail,
+                                recipientName: clientName,
+                                serviceName: booking.services.name,
+                                vendorName: booking.vendor.businessName,
+                                amountDue: Number(outstandingBalance),
+                                amountPaid: Number(amountPaid),
+                                remainingBalance: Number(outstandingBalance) - Number(amountPaid),
+                                installmentAmount: Number(amountPaid),
+                                dueDate: updatedBooking.startTime,
+                                nextRepaymentDate: updatedBooking.startTime,
+                                bookingId: booking.id,
+                            });
+                        }
+                        catch (err) {
+                            console.error('sendClientReceiptMail failed:', err);
+                        }
+                        if (vendorUser?.user?.email) {
+                            try {
+                                await this.mailService.vendorOutstandingPaymentMail({
+                                    recipientEmail: vendorUser.user.email,
+                                    recipientName: vendorUser.businessName,
+                                    clientName: clientName,
+                                    serviceName: booking.services.name,
+                                    amountDue: Number(outstandingBalance),
+                                    amountPaid: Number(amountPaid),
+                                    remainingBalance: Number(outstandingBalance) - Number(amountPaid),
+                                    installmentAmount: Number(amountPaid),
+                                    dueDate: updatedBooking.startTime,
+                                    nextRepaymentDate: updatedBooking.startTime,
+                                    bookingId: booking.id,
+                                });
+                            }
+                            catch (err) {
+                                console.error('sendVendorReceiptMail failed:', err);
+                            }
+                        }
+                    })();
+                });
+                return { status: true };
             }
             {
                 const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, amountPaid, country, vendorUserId, phone, } = event.data.metadata;
