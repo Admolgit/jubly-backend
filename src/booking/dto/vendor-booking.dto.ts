@@ -2,6 +2,7 @@ import {
   IsEmail,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
 } from 'class-validator';
@@ -39,6 +40,10 @@ export class CreateVendorBookingDto {
   @IsOptional()
   @IsString()
   endTime?: string;
+
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
 
   @IsNotEmpty()
   @IsIn(['PAY_BY_LINK', 'PAID_BY_HAND'])
