@@ -138,10 +138,14 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         if (booking.paymentMethod === 'PAID_BY_HAND')
             throw new Error('Cash payment requires manual financial handling');
         const payments = await this.prisma.transaction.findMany({
-            where: { bookingId: booking.id },
+            where: {
+                bookingId: booking.id,
+                paymentType: 'BOOKING_INITIAL',
+            },
         });
-        if (payments.length !== 1)
-            throw new Error('Missing or ambiguous booking payment');
+        if (payments.length !== 1) {
+            throw new Error('Missing or ambiguous initial booking payment');
+        }
         const payment = payments[0];
         if (payment.vendorId !== booking.vendorId ||
             payment.checkoutSnapshot?.serviceId !== booking.serviceId ||
@@ -396,6 +400,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 booking.updatedAt.getTime() !== expected.updatedAt.getTime())) {
             throw new common_1.ConflictException('Completion request changed; retry with the current booking');
         }
+        console.log({ booking });
         if (!active.includes(booking.status) ||
             ['CANCELLATION', 'REVIEW'].includes(booking.financialMode ?? '')) {
             throw new common_1.ConflictException('Booking cannot authorize completion settlement');

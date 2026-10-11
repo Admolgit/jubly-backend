@@ -210,12 +210,20 @@ export class BookingFinanceService {
   private async evidence(booking: Booking) {
     if (booking.paymentMethod === 'PAID_BY_HAND')
       throw new Error('Cash payment requires manual financial handling');
+
     const payments = await this.prisma.transaction.findMany({
-      where: { bookingId: booking.id },
+      where: {
+        bookingId: booking.id,
+        paymentType: 'BOOKING_INITIAL',
+      },
     });
-    if (payments.length !== 1)
-      throw new Error('Missing or ambiguous booking payment');
+
+    if (payments.length !== 1) {
+      throw new Error('Missing or ambiguous initial booking payment');
+    }
+
     const payment = payments[0];
+
     if (
       payment.vendorId !== booking.vendorId ||
       (payment.checkoutSnapshot as any)?.serviceId !== booking.serviceId ||
@@ -224,13 +232,17 @@ export class BookingFinanceService {
       payment.paymentEvidenceState === 'REQUIRES_REVIEW'
     )
       throw new Error('Payment identity requires review');
+
     const charge = (await this.paystack.verifyTransaction(payment.providerRef))
       .data;
+
     const principal = this.validateCharge(payment, charge);
+
     const [refunds, disputes] = await Promise.all([
       this.paystack.listRefunds(String(charge.id)),
       this.paystack.listTransactionDisputes(String(charge.id)),
     ]);
+
     if (
       refunds.length ||
       disputes.length ||
@@ -241,6 +253,7 @@ export class BookingFinanceService {
     ) {
       throw new Error('Existing refund, reversal or dispute requires review');
     }
+
     return { payment, principal, charge };
   }
 
@@ -518,6 +531,7 @@ export class BookingFinanceService {
         'Completion request changed; retry with the current booking',
       );
     }
+    console.log({ booking });
     if (
       !active.includes(booking.status) ||
       ['CANCELLATION', 'REVIEW'].includes(booking.financialMode ?? '')

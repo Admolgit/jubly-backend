@@ -372,6 +372,7 @@ model SenderDetails {
 }
 
 model Transaction {
+  paymentType               String               @default("BOOKING_INITIAL")
   paymentPrincipalKobo      BigInt?
   servicePrincipalKobo      BigInt?
   expectedGrossChargeKobo   BigInt?
