@@ -299,6 +299,7 @@ export class PaystackController {
             percentageFee: transactionExists.percentageFee ?? percentageFee,
             paymentMethod: paymentChannel,
             senderDetailsId: senderDetails.id,
+            paymentStatus: true,
           },
         });
 
@@ -477,6 +478,7 @@ export class PaystackController {
             percentageFee: transactionExists.percentageFee ?? percentageFee,
             paymentMethod: paymentChannel,
             senderDetailsId: senderDetails.id,
+            paymentStatus: true,
           },
         });
 

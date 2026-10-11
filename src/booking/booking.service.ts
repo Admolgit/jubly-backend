@@ -2976,9 +2976,9 @@ export class BookingService {
         );
       }
       // 3. Calculate the outstanding balance from verified payments.
-      const bookingTotal = Number(booking.amount);
+      const mainAmount = booking.services.price;
 
-      if (!Number.isFinite(bookingTotal) || bookingTotal <= 0) {
+      if (!Number.isFinite(mainAmount) || mainAmount <= 0) {
         throw new BadRequestException('Invalid booking amount.');
       }
 
@@ -2987,15 +2987,22 @@ export class BookingService {
           bookingId: booking.id,
           clientId,
           paymentEvidenceState: 'VERIFIED',
+          paymentStatus: true,
         },
       });
+
+      console.log({ verifiedPayments });
 
       const totalPaid = verifiedPayments.reduce(
         (sum, payment) => sum + Number(payment.amount ?? 0),
         0,
       );
 
-      const outstandingBalance = Math.max(0, bookingTotal - totalPaid);
+      console.log({ totalPaid });
+
+      const outstandingBalance = Math.max(0, mainAmount - totalPaid);
+
+      console.log({ outstandingBalance, mainAmount });
 
       if (outstandingBalance <= 0) {
         throw new BadRequestException('Booking is already fully paid.');
@@ -3037,6 +3044,14 @@ export class BookingService {
         percentageFee,
       };
 
+      console.log('Outstanding payment checkout:', {
+        bookingId: booking.id,
+        requestedAmount,
+        outstandingBalance,
+        calculatedAmount,
+        amountType: typeof calculatedAmount,
+      });
+
       const paystackResponse = await this.paystackService.initializeTransaction(
         client.email,
         calculatedAmount,
@@ -3050,7 +3065,7 @@ export class BookingService {
       }
 
       // 6. Save the transaction against this existing booking.
-      const mainAmount = booking.services.price;
+
       await this.prisma.transaction.create({
         data: {
           bookingId: booking.id,
@@ -3069,6 +3084,7 @@ export class BookingService {
           ),
           providerRef: paystackResponse.reference,
           status: 'PENDING',
+          paymentStatus: false,
         },
       });
       // 7. Return the Paystack authorization URL.

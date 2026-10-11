@@ -231,6 +231,7 @@ let PaystackController = class PaystackController {
                         percentageFee: transactionExists.percentageFee ?? percentageFee,
                         paymentMethod: paymentChannel,
                         senderDetailsId: senderDetails.id,
+                        paymentStatus: true,
                     },
                 });
                 await this.activityService.createLog({
@@ -347,6 +348,7 @@ let PaystackController = class PaystackController {
                         percentageFee: transactionExists.percentageFee ?? percentageFee,
                         paymentMethod: paymentChannel,
                         senderDetailsId: senderDetails.id,
+                        paymentStatus: true,
                     },
                 });
                 console.log('GET PAST TRANSACTION CHECK - UPDATED');

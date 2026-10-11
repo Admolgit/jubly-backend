@@ -86,6 +86,7 @@ let TransactionService = class TransactionService {
                         : dto.percentageFee,
                     paymentMethod: dto.paymentMethod,
                     providerRef: dto.providerRef,
+                    paymentStatus: true,
                 },
             });
             const convertedAmount = transaction.amount;
