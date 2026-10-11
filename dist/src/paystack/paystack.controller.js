@@ -146,6 +146,7 @@ let PaystackController = class PaystackController {
                 throw new common_1.HttpException('Invalid signature', common_1.HttpStatus.UNAUTHORIZED);
             }
             const event = req.body;
+            console.log('METADATA', event.data.metadata?.type);
             if (typeof event?.event !== 'string' || !event.data)
                 throw new common_1.BadRequestException('Invalid Paystack webhook payload');
             if (event.event.startsWith('transfer.') ||
