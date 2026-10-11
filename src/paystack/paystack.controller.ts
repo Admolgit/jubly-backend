@@ -244,7 +244,10 @@ export class PaystackController {
 
       await this.bookingFinance.recordVerifiedCharge(event.data.reference);
 
-      if (transactionExists.bookingId) {
+      if (
+        transactionExists.bookingId &&
+        event.data.metadata?.type !== 'JUBLY_BOOKING_OUTSTANDING_PAYMENT'
+      ) {
         return { status: true };
       }
 
