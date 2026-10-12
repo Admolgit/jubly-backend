@@ -437,6 +437,7 @@ let PaystackController = class PaystackController {
                     reference: event.data.reference,
                     slotLockId: event.data.metadata.slotLockId,
                 });
+                console.log('Book', { book });
                 await this.prisma.transaction.update({
                     where: { providerRef: event.data.reference },
                     data: { bookingId: book.id },
