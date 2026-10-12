@@ -1680,6 +1680,7 @@ let BookingService = class BookingService {
         }
     }
     async settleBookingPayment(booking) {
+        console.log('SETTLE BOOKING', booking);
         return this.bookingFinance.settleCompletion(booking.id, booking);
     }
     async completeBookingNow(booking, user) {
