@@ -143,6 +143,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 paymentType: 'BOOKING_INITIAL',
             },
         });
+        console.log({ payments });
         if (payments.length !== 1) {
             throw new Error('Missing or ambiguous initial booking payment');
         }
@@ -400,9 +401,9 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 booking.updatedAt.getTime() !== expected.updatedAt.getTime())) {
             throw new common_1.ConflictException('Completion request changed; retry with the current booking');
         }
-        console.log({ booking });
+        console.log({ booking, expected });
         if (!active.includes(booking.status) ||
-            ['CANCELLATION', 'REVIEW'].includes(booking.financialMode ?? '')) {
+            ['CANCELLATION'].includes(booking.financialMode ?? '')) {
             throw new common_1.ConflictException('Booking cannot authorize completion settlement');
         }
         if (booking.paymentMethod === 'PAID_BY_HAND') {

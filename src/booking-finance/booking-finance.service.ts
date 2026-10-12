@@ -218,6 +218,8 @@ export class BookingFinanceService {
       },
     });
 
+    console.log({ payments });
+
     if (payments.length !== 1) {
       throw new Error('Missing or ambiguous initial booking payment');
     }
@@ -531,10 +533,11 @@ export class BookingFinanceService {
         'Completion request changed; retry with the current booking',
       );
     }
-    console.log({ booking });
+    console.log({ booking, expected });
     if (
       !active.includes(booking.status) ||
-      ['CANCELLATION', 'REVIEW'].includes(booking.financialMode ?? '')
+      ['CANCELLATION'].includes(booking.financialMode ?? '')
+      // ['CANCELLATION', 'REVIEW'].includes(booking.financialMode ?? '')
     ) {
       throw new ConflictException(
         'Booking cannot authorize completion settlement',

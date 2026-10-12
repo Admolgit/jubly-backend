@@ -421,6 +421,7 @@ let BookingService = class BookingService {
                         serviceId: dto.serviceId,
                     }),
                     providerRef: reference,
+                    paymentType: 'BOOKING_INITIAL',
                     status: 'PENDING',
                 },
             });
