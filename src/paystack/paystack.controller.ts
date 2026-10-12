@@ -608,6 +608,8 @@ export class PaystackController {
           },
         );
 
+        console.log('Book', { book });
+
         await this.prisma.transaction.update({
           where: { providerRef: event.data.reference },
           data: { bookingId: book.id },
