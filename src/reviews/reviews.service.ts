@@ -43,14 +43,18 @@ export class ReviewsService {
 
   private async eligibleBooking(customerId: string, bookingId: string) {
     if (!isMongoId(customerId)) throw new UnauthorizedException();
+
     const customer = await this.prisma.user.findUnique({
       where: { id: customerId },
       select: { id: true, role: true },
     });
+
     if (!customer) throw new UnauthorizedException();
+
     if (customer.role !== UserRole.CLIENT) {
       throw new ForbiddenException('Only clients can access booking reviews');
     }
+
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       select: {
@@ -61,6 +65,7 @@ export class ReviewsService {
         status: true,
       },
     });
+
     if (!booking) throw new NotFoundException('Booking not found');
 
     // Both legacy owner fields must agree when present. Never fall back to email.
@@ -78,12 +83,16 @@ export class ReviewsService {
       where: { id: booking.vendorId },
       select: { id: true, userId: true },
     });
+
     if (!vendor) throw new NotFoundException('Vendor not found');
+
     if (vendor.userId === customer.id)
       throw new ForbiddenException('Self-reviews are not allowed');
+
     if (booking.status !== BookingStatus.COMPLETED) {
       throw new BadRequestException('Only completed bookings can be reviewed');
     }
+
     return booking;
   }
 
@@ -144,13 +153,13 @@ export class ReviewsService {
       });
 
       if (!vendor) throw new NotFoundException('Vendor profile not found');
-      
+
       const { page, limit } = query;
       const skip = (page - 1) * limit;
 
       if (!Number.isSafeInteger(skip))
         throw new BadRequestException('Page is too large');
-      
+
       const [rows, aggregate] = await this.prisma.$transaction([
         this.prisma.review.findMany({
           where: { vendorId },

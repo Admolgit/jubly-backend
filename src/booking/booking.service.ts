@@ -563,6 +563,7 @@ export class BookingService {
             },
           ),
           providerRef: reference,
+          paymentType: 'BOOKING_INITIAL',
           status: 'PENDING',
         },
       });
