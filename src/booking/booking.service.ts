@@ -2264,6 +2264,7 @@ export class BookingService {
   }
 
   private async settleBookingPayment(booking: any) {
+    console.log('SETTLE BOOKING', booking);
     return this.bookingFinance.settleCompletion(booking.id, booking);
   }
 
