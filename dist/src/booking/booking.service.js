@@ -213,7 +213,7 @@ let BookingService = class BookingService {
                 if (payment) {
                     await tx.transaction.update({
                         where: { providerRef: payment.reference },
-                        data: { bookingId: booking.id },
+                        data: { bookingId: booking.id, paymentType: 'BOOKING_INITIAL' },
                     });
                     if (payment.slotLockId) {
                         await tx.slotLock.deleteMany({
@@ -369,6 +369,7 @@ let BookingService = class BookingService {
                     ...this.bookingFinance.checkoutSnapshot(amount, calculatedAmount, percentageFee, { vendorId: vendor.id, serviceId: dto.serviceId }),
                     providerRef: reference,
                     status: 'PENDING',
+                    paymentType: 'BOOKING_INITIAL',
                 },
             });
             return (0, response_1.successResponse)({
@@ -1508,7 +1509,7 @@ let BookingService = class BookingService {
                 !payload.bookingId) {
                 throw new common_1.BadRequestException('This approval link is invalid.');
             }
-            console.log("VERIFY ID", { payload });
+            console.log('VERIFY ID', { payload });
             return { bookingId: payload.bookingId };
         }
         catch (error) {
@@ -1518,7 +1519,6 @@ let BookingService = class BookingService {
         }
     }
     async settleBookingPayment(booking) {
-        console.log('settleBookingPayment', { booking });
         return this.bookingFinance.settleCompletion(booking.id, booking);
     }
     async completeBookingNow(booking, user) {
@@ -1650,7 +1650,7 @@ let BookingService = class BookingService {
             if (booking.status !== client_1.BookingStatus.COMPLETION_PENDING_APPROVAL) {
                 return (0, response_1.successResponse)(booking, 'This completion request is no longer pending.');
             }
-            console.log("APPROVE", { booking });
+            console.log('APPROVE', { booking });
             const { transaction, settlement } = await this.settleBookingPayment(booking);
             const payoutAmount = settlement?.amount ?? transaction?.amount;
             const updatedBooking = await this.prisma.booking.update({

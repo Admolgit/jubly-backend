@@ -261,13 +261,14 @@ export class BookingService {
               startTime,
               endTime,
               status: 'CONFIRMED',
+
               clientPhone: dto.phone,
             },
           });
           if (payment) {
             await tx.transaction.update({
               where: { providerRef: payment.reference },
-              data: { bookingId: booking.id },
+              data: { bookingId: booking.id, paymentType: 'BOOKING_INITIAL' },
             });
             if (payment.slotLockId) {
               await tx.slotLock.deleteMany({
@@ -470,6 +471,7 @@ export class BookingService {
           ),
           providerRef: reference,
           status: 'PENDING',
+          paymentType: 'BOOKING_INITIAL',
         },
       });
 
@@ -2005,7 +2007,7 @@ export class BookingService {
         throw new BadRequestException('This approval link is invalid.');
       }
 
-      console.log("VERIFY ID", { payload });
+      console.log('VERIFY ID', { payload });
 
       return { bookingId: payload.bookingId };
     } catch (error: any) {
@@ -2017,7 +2019,6 @@ export class BookingService {
   }
 
   private async settleBookingPayment(booking: any) {
-    console.log('settleBookingPayment', { booking });
     return this.bookingFinance.settleCompletion(booking.id, booking);
   }
 
@@ -2203,7 +2204,7 @@ export class BookingService {
         );
       }
 
-      console.log("APPROVE", { booking });
+      console.log('APPROVE', { booking });
 
       const { transaction, settlement } =
         await this.settleBookingPayment(booking);

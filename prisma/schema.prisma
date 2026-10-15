@@ -372,6 +372,7 @@ model SenderDetails {
 }
 
 model Transaction {
+  paymentType               String? // BOOKING_INITIAL or BOOKING_OUTSTANDING_PAYMENT
   servicePrincipalKobo      BigInt?
   expectedGrossChargeKobo   BigInt?
   verifiedChargedAmountKobo BigInt?
@@ -414,6 +415,7 @@ model vendorCalendar {
 }
 
 model Settlement {
+  paymentTransactionIds     String[]             @default([])
   purpose                   SettlementPurpose?
   transactionId             String?              @db.ObjectId
   currency                  String?

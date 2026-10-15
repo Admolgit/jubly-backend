@@ -170,40 +170,169 @@ export class BookingFinanceService {
   }
 
   private async evidence(booking: Booking) {
-    if (booking.paymentMethod === 'PAID_BY_HAND')
+    if (booking.paymentMethod === 'PAID_BY_HAND') {
       throw new Error('Cash payment requires manual financial handling');
+    }
+
     const payments = await this.prisma.transaction.findMany({
       where: { bookingId: booking.id },
+      orderBy: { createdAt: 'asc' },
     });
-    if (payments.length !== 1)
-      throw new Error('Missing or ambiguous booking payment');
-    const payment = payments[0];
-    if (
-      payment.vendorId !== booking.vendorId ||
-      (payment.checkoutSnapshot as any)?.serviceId !== booking.serviceId ||
-      ((payment.checkoutSnapshot as any)?.bookingId &&
-        (payment.checkoutSnapshot as any).bookingId !== booking.id) ||
-      payment.paymentEvidenceState === 'REQUIRES_REVIEW'
-    )
-      throw new Error('Payment identity requires review');
-    const charge = (await this.paystack.verifyTransaction(payment.providerRef))
-      .data;
-    const principal = this.validateCharge(payment, charge);
-    const [refunds, disputes] = await Promise.all([
-      this.paystack.listRefunds(String(charge.id)),
-      this.paystack.listTransactionDisputes(String(charge.id)),
-    ]);
-    if (
-      refunds.length ||
-      disputes.length ||
-      payment.refundOperation ||
-      ['REFUNDED', 'REFUND_PENDING', 'REVERSED'].includes(
-        payment.status.toUpperCase(),
-      )
-    ) {
-      throw new Error('Existing refund, reversal or dispute requires review');
+
+    if (payments.length === 0) {
+      throw new Error('No booking payment records found');
     }
-    return { payment, principal, charge };
+
+    const initialPayments = payments.filter(
+      (payment) => payment.paymentType === 'BOOKING_INITIAL',
+    );
+
+    if (initialPayments.length !== 1) {
+      throw new Error('Missing or ambiguous initial booking payment');
+    }
+
+    const supportedTypes = new Set([
+      'BOOKING_INITIAL',
+      'BOOKING_OUTSTANDING_PAYMENT',
+    ]);
+
+    if (
+      payments.some((payment) => !supportedTypes.has(payment.paymentType ?? ''))
+    ) {
+      throw new Error('Unsupported payment type requires financial review');
+    }
+
+    const verifiedPayments: Array<{
+      payment: (typeof payments)[number];
+      principal: number;
+      charge: any;
+    }> = [];
+
+    const seenReferences = new Set<string>();
+    const seenProviderIds = new Set<string>();
+
+    for (const payment of payments) {
+      const snapshot = payment.checkoutSnapshot as {
+        bookingId?: string;
+        serviceId?: string;
+        vendorId?: string;
+        currency?: string;
+      } | null;
+
+      if (
+        payment.bookingId !== booking.id ||
+        payment.vendorId !== booking.vendorId ||
+        !snapshot ||
+        snapshot.vendorId !== booking.vendorId ||
+        snapshot.serviceId !== booking.serviceId ||
+        snapshot.currency !== payment.currency ||
+        (snapshot.bookingId && snapshot.bookingId !== booking.id)
+      ) {
+        throw new Error(
+          `Payment identity mismatch for transaction ${payment.id}`,
+        );
+      }
+
+      if (
+        payment.paymentEvidenceState === 'REQUIRES_REVIEW' ||
+        payment.refundOperation ||
+        ['REFUNDED', 'REFUND_PENDING', 'REVERSED'].includes(
+          payment.status.toUpperCase(),
+        )
+      ) {
+        throw new Error(`Payment ${payment.id} requires financial review`);
+      }
+
+      if (
+        !payment.providerRef ||
+        payment.providerRef.startsWith('MANUAL-') ||
+        seenReferences.has(payment.providerRef)
+      ) {
+        throw new Error(
+          `Missing or duplicate provider reference for ${payment.id}`,
+        );
+      }
+
+      seenReferences.add(payment.providerRef);
+
+      const charge = (
+        await this.paystack.verifyTransaction(payment.providerRef)
+      ).data;
+
+      const principal = this.validateCharge(payment, charge);
+      const providerId = String(charge.id);
+
+      if (seenProviderIds.has(providerId)) {
+        throw new Error(
+          'Multiple payment records reference the same Paystack charge',
+        );
+      }
+
+      seenProviderIds.add(providerId);
+
+      const [refunds, disputes] = await Promise.all([
+        this.paystack.listRefunds(providerId),
+        this.paystack.listTransactionDisputes(providerId),
+      ]);
+
+      if (
+        refunds.length > 0 ||
+        disputes.length > 0 ||
+        payment.refundOperation ||
+        ['REFUNDED', 'REFUND_PENDING', 'REVERSED'].includes(
+          payment.status.toUpperCase(),
+        )
+      ) {
+        throw new Error(`Refund, reversal or dispute found for ${payment.id}`);
+      }
+
+      verifiedPayments.push({
+        payment,
+        principal,
+        charge,
+      });
+    }
+
+    const initial = verifiedPayments.filter(
+      (item) => item.payment.paymentType === 'BOOKING_INITIAL',
+    );
+
+    const outstanding = verifiedPayments.filter(
+      (item) => item.payment.paymentType === 'BOOKING_OUTSTANDING_PAYMENT',
+    );
+
+    if (initial.length !== 1 || verifiedPayments.length !== payments.length) {
+      throw new Error('Booking payment history is incomplete or ambiguous');
+    }
+
+    const commissionRates = new Set(
+      verifiedPayments.map((item) => item.payment.percentageFee),
+    );
+
+    if (
+      commissionRates.has(null) ||
+      commissionRates.has(undefined as any) ||
+      commissionRates.size !== 1
+    ) {
+      throw new Error('Payment commission rates are inconsistent');
+    }
+
+    const principal = verifiedPayments.reduce(
+      (total, item) => total + item.principal,
+      0,
+    );
+
+    if (!Number.isSafeInteger(principal) || principal <= 0) {
+      throw new Error('Verified booking principal is invalid');
+    }
+
+    return {
+      payments: verifiedPayments,
+      initialPayment: initial[0],
+      outstandingPayments: outstanding,
+      principal,
+      percentageFee: initial[0].payment.percentageFee!,
+    };
   }
 
   private async atomic<T>(
@@ -212,7 +341,7 @@ export class BookingFinanceService {
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.prisma.$transaction(work);
-      } catch (error) {
+      } catch (error: any) {
         if (error.code === 'P2034' && attempt < 3) continue;
         if (error.code === 'P2034' || error.code === 'P2002')
           throw new ConflictException(
@@ -228,18 +357,6 @@ export class BookingFinanceService {
     booking: Booking,
     data: Prisma.BookingUpdateManyMutationInput = {},
   ) {
-    if (booking.id) {
-      this.logger.warn("WARNNNNN", {
-        event: 'BOOKING_FINANCIAL_TOUCH',
-        bookingId: booking.id,
-        previousStatus: booking.status,
-        previousFinancialMode: booking.financialMode,
-        nextFinancialMode: data.financialMode,
-        reviewReason: data.financialReviewReason,
-        previousUpdatedAt: booking.updatedAt.toISOString(),
-        caller: new Error().stack,
-      });
-    }
     const result = await tx.booking.updateMany({
       where: {
         id: booking.id,
@@ -262,7 +379,7 @@ export class BookingFinanceService {
       const booking = await tx.booking.findUniqueOrThrow({
         where: { id: bookingId },
       });
-      
+
       await this.touch(tx, booking, {
         financialMode: 'REVIEW',
         financialReviewReason: reason,
@@ -304,6 +421,11 @@ export class BookingFinanceService {
     let reviewReason: string | undefined;
     try {
       evidence = await this.evidence(original);
+      if (evidence.payments.length !== 1) {
+        throw new Error(
+          'Cancellation with multiple payments requires manual financial review',
+        );
+      }
       const service = await this.prisma.service.findUniqueOrThrow({
         where: { id: original.serviceId },
         select: { price: true },
@@ -318,7 +440,7 @@ export class BookingFinanceService {
           tiers: policy.tiers,
           noShowPolicy: policy.noShowPolicy,
         },
-        evidence.payment.percentageFee!,
+        evidence.percentageFee!,
       );
       if (allocation.refund + allocation.gross > evidence.principal) {
         throw new Error(
@@ -394,11 +516,11 @@ export class BookingFinanceService {
         });
       if (!financialReviewReason && evidence && allocation) {
         const current = await tx.transaction.findUniqueOrThrow({
-          where: { id: evidence.payment.id },
+          where: { id: evidence.initialPayment.payment.id },
         });
         if (
           current.updatedAt.getTime() !==
-            evidence.payment.updatedAt.getTime() ||
+            evidence.initialPayment.payment.updatedAt?.getTime() ||
           current.refundOperation
         ) {
           throw new ConflictException('Payment changed; retry cancellation');
@@ -418,8 +540,10 @@ export class BookingFinanceService {
           data: {
             refundState: allocation.refund ? 'PENDING' : 'NOT_REQUIRED',
             refundOperation: json(refund),
-            providerTransactionId: String(evidence.charge.id),
-            verifiedChargedAmountKobo: BigInt(evidence.charge.amount),
+            providerTransactionId: String(evidence.initialPayment.payment.id),
+            verifiedChargedAmountKobo: BigInt(
+              evidence.initialPayment.payment.amount,
+            ),
             paymentEvidenceState: 'VERIFIED',
             paymentVerifiedAt: new Date(),
           },
@@ -479,21 +603,25 @@ export class BookingFinanceService {
 
   async settleCompletion(
     bookingId: string,
-    expected?: Pick<Booking, 'status' | 'updatedAt'>,
+    expected?: Pick<Booking, 'status' | 'completionRequestedAt'>,
   ) {
     let booking = await this.prisma.booking.findUniqueOrThrow({
       where: { id: bookingId },
     });
+
+    // Compare the actual completion request, not updatedAt.
+    // Unrelated booking updates should not invalidate an unchanged request.
     if (
       expected &&
       (booking.status !== expected.status ||
-        booking.updatedAt.getTime() !== expected.updatedAt.getTime())
+        booking.completionRequestedAt?.getTime() !==
+          expected.completionRequestedAt?.getTime())
     ) {
-
       throw new ConflictException(
         'Completion request changed; retry with the current booking',
       );
     }
+
     if (
       !active.includes(booking.status) ||
       ['CANCELLATION', 'REVIEW'].includes(booking.financialMode ?? '')
@@ -502,11 +630,13 @@ export class BookingFinanceService {
         'Booking cannot authorize completion settlement',
       );
     }
+
     if (booking.paymentMethod === 'PAID_BY_HAND') {
       await this.review(
         bookingId,
         'Cash payment; no Jubly-held funds to settle',
       );
+
       return {
         transaction: await this.prisma.transaction.findFirst({
           where: { bookingId },
@@ -514,33 +644,47 @@ export class BookingFinanceService {
         settlement: null,
       };
     }
+
     let settlement = await this.prisma.settlement.findUnique({
       where: { bookingId },
     });
+
     if (!settlement) {
       let verified: Awaited<ReturnType<BookingFinanceService['evidence']>>;
+
       try {
         verified = await this.evidence(booking);
-      } catch (error) {
-        await this.review(bookingId, error.message);
+      } catch (error: unknown) {
+        const reason =
+          error instanceof Error
+            ? error.message
+            : 'Payment evidence could not be verified';
+
+        await this.review(bookingId, reason);
+
         throw new ConflictException('Payment requires financial review');
       }
+
       const allocation = vendorAllocation(
         verified.principal,
-        verified.payment.percentageFee!,
+        verified.percentageFee,
       );
+
       settlement = await this.atomic(async (tx) => {
         const current = await tx.booking.findUniqueOrThrow({
           where: { id: bookingId },
         });
+
         if (
           current.status !== booking.status ||
-          current.updatedAt.getTime() !== booking.updatedAt.getTime()
+          current.completionRequestedAt?.getTime() !==
+            booking.completionRequestedAt?.getTime()
         ) {
           throw new ConflictException(
             'Completion request changed while verifying payment',
           );
         }
+
         if (
           !active.includes(current.status) ||
           (current.financialMode && current.financialMode !== 'UNDECIDED')
@@ -549,43 +693,61 @@ export class BookingFinanceService {
             'Booking already has a financial decision',
           );
         }
-        const payment = await tx.transaction.findUniqueOrThrow({
-          where: { id: verified.payment.id },
-        });
-        console.log({ payment, verified })
-        if (
-          payment.updatedAt.getTime() !== verified.payment.updatedAt.getTime()
-        )
-          throw new ConflictException('Payment changed; retry completion');
+
+        // Re-read and compare every payment verified outside the transaction.
+        for (const item of verified.payments) {
+          const payment = await tx.transaction.findUniqueOrThrow({
+            where: { id: item.payment.id },
+          });
+
+          if (
+            payment.updatedAt.getTime() !== item.payment.updatedAt.getTime() ||
+            payment.bookingId !== bookingId ||
+            payment.vendorId !== current.vendorId ||
+            payment.paymentType !== item.payment.paymentType
+          ) {
+            throw new ConflictException('Payment changed; retry completion');
+          }
+
+          await tx.transaction.update({
+            where: { id: payment.id },
+            data: {
+              paymentEvidenceState: 'VERIFIED',
+              paymentVerifiedAt: new Date(),
+              verifiedChargedAmountKobo: BigInt(item.charge.amount),
+              providerTransactionId: String(item.charge.id),
+            },
+          });
+        }
+
         const version = (current.financialVersion ?? 0) + 1;
+
         await this.touch(tx, current, {
           financialMode: 'COMPLETION',
           financialVersion: version,
+          financialReviewReason: null,
         });
-        await tx.transaction.update({
-          where: { id: payment.id },
-          data: {
-            paymentEvidenceState: 'VERIFIED',
-            paymentVerifiedAt: new Date(),
-            verifiedChargedAmountKobo: BigInt(verified.charge.amount),
-            providerTransactionId: String(verified.charge.id),
-          },
-        });
+
+        const initialPayment = verified.initialPayment.payment;
+
         return tx.settlement.create({
           data: {
             bookingId,
-            transactionId: payment.id,
+            transactionId: initialPayment.id,
+            paymentTransactionIds: verified.payments.map(
+              (item) => item.payment.id,
+            ),
             purpose: 'NORMAL_COMPLETION',
             financialVersion: version,
             amount: allocation.net / 100,
-            currency: payment.currency,
+            currency: initialPayment.currency,
             reference: randomUUID(),
             principalKobo: BigInt(verified.principal),
             refundAllocationKobo: BigInt(0),
             grossVendorAllocationKobo: BigInt(verified.principal),
             commissionKobo: BigInt(allocation.commission),
             netTransferKobo: BigInt(allocation.net),
-            commissionRate: payment.percentageFee,
+            commissionRate: verified.percentageFee,
             operationState: allocation.net ? 'PENDING' : 'NOT_REQUIRED',
             status: allocation.net ? 'PENDING' : 'NOT_REQUIRED',
             attemptHistory: json([]),
@@ -594,26 +756,36 @@ export class BookingFinanceService {
         });
       });
     }
-    if (!settlement.purpose || settlement.purpose !== 'NORMAL_COMPLETION') {
+
+    if (settlement.purpose !== 'NORMAL_COMPLETION') {
       await this.review(
         bookingId,
         'Historical or conflicting vendor settlement requires review',
       );
+
       throw new ConflictException('Settlement requires financial review');
     }
+
     await this.processBooking(bookingId);
+
     settlement = await this.prisma.settlement.findUniqueOrThrow({
       where: { bookingId },
     });
+
     booking = await this.prisma.booking.findUniqueOrThrow({
       where: { id: bookingId },
     });
-    if (booking.financialMode !== 'COMPLETION')
+
+    if (booking.financialMode !== 'COMPLETION') {
       throw new ConflictException('Financial decision changed');
+    }
+
     return {
-      transaction: await this.prisma.transaction.findUnique({
-        where: { id: settlement.transactionId! },
-      }),
+      transaction: settlement.transactionId
+        ? await this.prisma.transaction.findUnique({
+            where: { id: settlement.transactionId },
+          })
+        : null,
       settlement,
     };
   }
@@ -657,7 +829,7 @@ export class BookingFinanceService {
     try {
       await this.processRefund(bookingId);
       await this.processTransfer(bookingId);
-    } catch (error) {
+    } catch (error: any) {
       // Durable PENDING/PROCESSING claims survive every worker exception.
       this.logger.warn(
         `Financial processing deferred for booking ${bookingId}: ${error.message}`,
@@ -995,11 +1167,64 @@ export class BookingFinanceService {
     const payment = await this.prisma.transaction.findUniqueOrThrow({
       where: { id: settlement.transactionId },
     });
+    // if (
+    //   settlement.purpose === 'CANCELLATION_COMPENSATION' &&
+    //   !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
+    // )
+    //   return;
+    const paymentIds = settlement.paymentTransactionIds?.length
+      ? settlement.paymentTransactionIds
+      : settlement.transactionId
+        ? [settlement.transactionId]
+        : [];
+
+    if (paymentIds.length === 0) {
+      await this.review(
+        bookingId,
+        'Settlement has no linked payment transactions',
+      );
+      return;
+    }
+
+    const payments = await this.prisma.transaction.findMany({
+      where: {
+        id: { in: paymentIds },
+        bookingId,
+        vendorId: booking.vendorId,
+      },
+    });
+
+    if (payments.length !== paymentIds.length) {
+      await this.review(
+        bookingId,
+        'Settlement payment records are missing or do not match the booking',
+      );
+      return;
+    }
+
     if (
       settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-      !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
-    )
+      payments.length !== 1
+    ) {
+      await this.review(
+        bookingId,
+        'Multi-payment cancellation settlement requires reconciliation',
+      );
       return;
+    }
+
+    if (
+      settlement.purpose === 'CANCELLATION_COMPENSATION' &&
+      !['SUCCESS', 'NOT_REQUIRED'].includes(payments[0].refundState ?? '')
+    ) {
+      return;
+    }
+
+    for (const payment of payments) {
+      if (!(await this.checkExternalConflicts(settlement, payment))) {
+        return;
+      }
+    }
     if (!(await this.checkExternalConflicts(settlement, payment))) return;
     if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
       await this.review(bookingId, 'Vendor settlement account is missing');
@@ -1184,13 +1409,28 @@ export class BookingFinanceService {
           ),
         },
       });
-      if (
-        state === 'SUCCESS' &&
-        current.purpose === 'NORMAL_COMPLETION' &&
-        current.transactionId
-      ) {
+      if (state === 'SUCCESS' && current.purpose === 'NORMAL_COMPLETION') {
+        const paymentIds = current.paymentTransactionIds?.length
+          ? current.paymentTransactionIds
+          : current.transactionId
+            ? [current.transactionId]
+            : [];
+
+        if (paymentIds.length === 0) {
+          await this.touch(tx, booking, {
+            financialMode: 'REVIEW',
+            financialReviewReason:
+              'Successful transfer has no linked payment transactions',
+          });
+          return;
+        }
+
         await tx.transaction.updateMany({
-          where: { id: current.transactionId, status: 'PENDING' },
+          where: {
+            id: { in: paymentIds },
+            bookingId: current.bookingId,
+            status: { in: ['PENDING', 'SUCCESS', 'success'] },
+          },
           data: { status: 'COMPLETED' },
         });
       }
