@@ -74,6 +74,9 @@ export class TransactionService {
       if (!dto.vendorId) {
         throw new BadRequestException('Vendor ID is required');
       }
+      const original = await this.prisma.transaction.findUniqueOrThrow({
+        where: { providerRef: dto.providerRef },
+      });
       const transaction = await this.prisma.transaction.update({
         where: {
           providerRef: dto.providerRef,
@@ -85,10 +88,15 @@ export class TransactionService {
           senderDetailsId: dto.senderDetailsId,
           currency: 'NGN',
           paidAt: new Date(),
-          status: dto.status,
-          percentageFee: dto.percentageFee,
+          // A delayed payment receipt must not overwrite refund/settlement facts
+          // or change the commission captured before the customer checked out.
+          status: original.checkoutSnapshot ? undefined : dto.status,
+          percentageFee: original.checkoutSnapshot
+            ? undefined
+            : dto.percentageFee,
           paymentMethod: dto.paymentMethod,
           providerRef: dto.providerRef,
+          paymentStatus: true,
         },
       });
 
@@ -198,7 +206,7 @@ export class TransactionService {
       const total = await this.prisma.transaction.count({ where });
 
       return successResponse(
-        { transactions },
+        { transactions: this.serializeBigInt(transactions) },
         'Successfully fetched transactions.',
         200,
         {
@@ -217,6 +225,14 @@ export class TransactionService {
         error.message as string,
       );
     }
+  }
+
+  serializeBigInt<T>(value: T): T {
+    return JSON.parse(
+      JSON.stringify(value, (_key, item) =>
+        typeof item === 'bigint' ? item.toString() : item,
+      ),
+    );
   }
 
   async getTotalTransactionsAmountByVendorId(
@@ -467,7 +483,7 @@ export class TransactionService {
 
       throw new InternalServerErrorException(
         'Failed to fetch analytics',
-        error.message,
+        error.message as string,
       );
     }
   }
@@ -511,17 +527,18 @@ export class TransactionService {
       },
     });
 
-    const currentProcessingTransactions = await this.prisma.transaction.findMany({
-      where: {
-        vendorId: vendor.id,
-        status: {
-          in: ['PENDING'],
+    const currentProcessingTransactions =
+      await this.prisma.transaction.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: {
+            in: ['PENDING'],
+          },
+          createdAt: {
+            gte: currentMonthStart,
+          },
         },
-        createdAt: {
-          gte: currentMonthStart,
-        },
-      },
-    });
+      });
 
     const previousTransactions = await this.prisma.transaction.findMany({
       where: {
@@ -535,18 +552,19 @@ export class TransactionService {
         },
       },
     });
-    const previousProcessedTransactions = await this.prisma.transaction.findMany({
-      where: {
-        vendorId: vendor.id,
-        status: {
-          in: ['PENDING'],
+    const previousProcessedTransactions =
+      await this.prisma.transaction.findMany({
+        where: {
+          vendorId: vendor.id,
+          status: {
+            in: ['PENDING'],
+          },
+          createdAt: {
+            gte: previousMonthStart,
+            lte: previousMonthEnd,
+          },
         },
-        createdAt: {
-          gte: previousMonthStart,
-          lte: previousMonthEnd,
-        },
-      },
-    });
+      });
 
     const calculateAmount = (transactions: any[]) => {
       return transactions.reduce(

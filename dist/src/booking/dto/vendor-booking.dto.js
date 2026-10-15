@@ -15,6 +15,10 @@ class CreateVendorBookingDto {
 }
 exports.CreateVendorBookingDto = CreateVendorBookingDto;
 __decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateVendorBookingDto.prototype, "bookingId", void 0);
+__decorate([
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -49,6 +53,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateVendorBookingDto.prototype, "endTime", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], CreateVendorBookingDto.prototype, "amount", void 0);
 __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsIn)(['PAY_BY_LINK', 'PAID_BY_HAND']),

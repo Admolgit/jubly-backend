@@ -109,6 +109,7 @@ model User {
   updatedAt        DateTime      @updatedAt
   vendor           Vendor?
   bookings         Booking[]
+  reviews          Review[]
   ActivityLog      ActivityLog[]
 }
 
@@ -137,6 +138,7 @@ model Vendor {
   cancellationStrikes Int @default(0)
 
   bookings           Booking[]
+  reviews            Review[]
   vendorAvailability VendorAvailability[]
   transaction        Transaction[]        @relation("Transaction")
 
@@ -222,21 +224,25 @@ model VendorBookingSettings {
 }
 
 model Booking {
-  id            String  @id @default(auto()) @map("_id") @db.ObjectId
-  vendorId      String
-  clientId      String?
-  name          String
-  googleEventId String?
-  serviceId     String
-  clientName    String?
-  clientAddress String?
+  financialMode         FinancialMode?
+  financialVersion      Int?
+  financialReviewReason String?
+  id                    String         @id @default(auto()) @map("_id") @db.ObjectId
+  vendorId              String
+  clientId              String?
+  name                  String
+  googleEventId         String?
+  serviceId             String
+  clientName            String?
+  clientAddress         String?
 
   date        DateTime // booking day
   startTime   DateTime // "10:00"
   endTime     DateTime // "11:30"
   clientEmail String
 
-  status BookingStatus @default(PENDING)
+  status     BookingStatus @default(PENDING)
+  paymentUrl String?
 
   // Cancellation audit
   cancelledBy        String? // userId of whoever cancelled (client or vendor)
@@ -276,6 +282,24 @@ model Booking {
   userId             String?             @db.ObjectId
   Transaction        Transaction[]
   rescheduleRequests RescheduleRequest[]
+  review             Review?
+}
+
+model Review {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId  String   @unique @db.ObjectId
+  vendorId   String   @db.ObjectId
+  customerId String   @db.ObjectId
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor   Vendor  @relation(fields: [vendorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer User    @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([vendorId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([customerId])
 }
 
 model RescheduleRequest {
@@ -348,25 +372,42 @@ model SenderDetails {
 }
 
 model Transaction {
-  id              String    @id @default(auto()) @map("_id") @db.ObjectId
-  senderDetailsId String?   @db.ObjectId
-  vendorId        String    @db.ObjectId
-  bookingId       String?
-  amount          Float
-  currency        String    @default("NGN")
-  providerRef     String    @unique
-  percentageFee   Float?
-  title           String?
-  category        String?
-  paymentMethod   String?
-  status          String    @default("pending")
-  paidAt          DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  paymentType               String               @default("BOOKING_INITIAL")
+  paymentPrincipalKobo      BigInt?
+  servicePrincipalKobo      BigInt?
+  expectedGrossChargeKobo   BigInt?
+  verifiedChargedAmountKobo BigInt?
+  processingMarkupKobo      BigInt?
+  providerTransactionId     String?
+  paymentEvidenceState      String?
+  paymentVerifiedAt         DateTime?
+  checkoutSnapshot          Json?
+  refundState               MoneyOperationState?
+  refundOperation           Json?
+  id                        String               @id @default(auto()) @map("_id") @db.ObjectId
+  senderDetailsId           String?              @db.ObjectId
+  vendorId                  String               @db.ObjectId
+  bookingId                 String?              @db.ObjectId
+  name                      String?
+  amount                    Float
+  currency                  String               @default("NGN")
+  providerRef               String               @unique
+  percentageFee             Float?
+  title                     String?
+  category                  String?
+  paymentMethod             String?
+  paymentStatus             Boolean?
+  status                    String               @default("pending")
+  paidAt                    DateTime?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
+  clientId                  String?              @db.ObjectId
 
   vendor        Vendor         @relation("Transaction", fields: [vendorId], references: [id])
   senderDetails SenderDetails? @relation(fields: [senderDetailsId], references: [id])
   booking       Booking?       @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
 }
 
 model vendorCalendar {
@@ -380,18 +421,59 @@ model vendorCalendar {
 }
 
 model Settlement {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  bookingId     String   @db.ObjectId
-  amount        Float
-  reference     String?
-  transferCode  String?
-  recipientCode String?
-  status        String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  purpose                   SettlementPurpose?
+  transactionId             String?              @db.ObjectId
+  currency                  String?
+  financialVersion          Int?
+  principalKobo             BigInt?
+  refundAllocationKobo      BigInt?
+  grossVendorAllocationKobo BigInt?
+  commissionKobo            BigInt?
+  netTransferKobo           BigInt?
+  commissionRate            Float?
+  policySnapshot            Json?
+  operationState            MoneyOperationState?
+  providerState             String?
+  dispatchStartedAt         DateTime?
+  reconcileAfter            DateTime?
+  attemptHistory            Json?
+  id                        String               @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId                 String               @unique @db.ObjectId
+  amount                    Float
+  // Legacy settlements have no reference; a normal MongoDB unique index
+  // would reject multiple missing/null values. New attempts persist a UUID.
+  reference                 String?
+  transferCode              String?
+  recipientCode             String?
+  status                    String
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
 
-  @@index([bookingId])
   @@index([reference])
+  @@index([operationState, reconcileAfter])
+}
+
+enum FinancialMode {
+  UNDECIDED
+  COMPLETION
+  CANCELLATION
+  REVIEW
+}
+
+enum SettlementPurpose {
+  NORMAL_COMPLETION
+  CANCELLATION_COMPENSATION
+}
+
+enum MoneyOperationState {
+  NOT_REQUIRED
+  PENDING
+  PROCESSING
+  REQUIRES_VERIFICATION
+  SUCCESS
+  FAILED
+  REQUIRES_REVIEW
+  REVERSED
 }
 
 model Enquiry {

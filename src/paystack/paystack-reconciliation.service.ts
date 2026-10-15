@@ -1,5 +1,5 @@
+import { BookingFinanceService } from '../booking-finance/booking-finance.service';
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, OnModuleInit } from '@nestjs/common';
@@ -16,12 +16,12 @@ import { dateConverter, timeConverter } from 'src/utils/dateAndTimeConverter';
 
 const PENDING_TRANSACTION_STALE_AFTER_MS = 20 * 60 * 1000;
 const PENDING_TRANSACTION_ABANDON_AFTER_MS = 48 * 60 * 60 * 1000;
-const SETTLEMENT_RETRY_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 25;
 
 @Injectable()
 export class PaystackReconciliationService implements OnModuleInit {
   constructor(
+    private readonly bookingFinance: BookingFinanceService,
     private readonly prisma: PrismaService,
     private readonly paystackService: PaystackService,
     private readonly bookingService: BookingService,
@@ -123,6 +123,10 @@ export class PaystackReconciliationService implements OnModuleInit {
   }
 
   private async finalizeSuccessfulCharge(chargeData: any) {
+    await this.bookingFinance.recordVerifiedCharge(
+      chargeData.reference,
+      chargeData,
+    );
     const existing = await this.prisma.transaction.findUnique({
       where: { providerRef: chargeData.reference },
     });
@@ -156,6 +160,7 @@ export class PaystackReconciliationService implements OnModuleInit {
       country,
       vendorUserId,
       phone,
+      amountPaid,
     } = chargeData.metadata ?? {};
 
     if (
@@ -180,18 +185,26 @@ export class PaystackReconciliationService implements OnModuleInit {
     const accountNumber = auth?.account_number || null;
     const paymentChannel = chargeData.channel || auth?.channel || 'unknown';
 
-    const book = await this.bookingService.createBooking(vendorUserId, {
-      userId: vendorUserId,
-      clientId,
-      serviceId,
-      date: dayOfWeek,
-      clientName,
-      clientAddress,
-      clientEmail: email,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
-      status: 'CONFIRMED',
-    } as any);
+    const book = await this.bookingService.createBooking(
+      vendorUserId,
+      {
+        userId: vendorUserId,
+        clientId,
+        serviceId,
+        date: dayOfWeek,
+        clientName,
+        clientAddress,
+        clientEmail: email,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        status: 'CONFIRMED',
+        amountPaid: amountPaid,
+      } as any,
+      {
+        reference: chargeData.reference,
+        slotLockId: chargeData.metadata?.slotLockId,
+      },
+    );
 
     await this.prisma.transaction.update({
       where: { providerRef: chargeData.reference },
@@ -210,7 +223,8 @@ export class PaystackReconciliationService implements OnModuleInit {
     });
 
     const percentageFee =
-      await this.platformSettingsService.resolvePlatformPercentage(vendorId);
+      existing.percentageFee ??
+      (await this.platformSettingsService.resolvePlatformPercentage(vendorId));
 
     await this.transactionsService.updateTransaction(userId, {
       senderDetailsId: senderDetails.id,
@@ -323,15 +337,15 @@ export class PaystackReconciliationService implements OnModuleInit {
     // }
   }
 
-  // Fallback path for vendor-created PAY_BY_LINK bookings whose payment
-  // succeeded but whose live webhook delivery never arrived/processed.
-  // Unlike the marketplace flow above, the booking already exists (created
-  // up front to reserve the slot) — so this updates it in place rather than
-  // creating a new one, mirroring exactly what paystackWebhook's
-  // VENDOR_CREATED_BOOKING_LINK branch does.
   private async finalizeVendorCreatedBookingLinkCharge(chargeData: any) {
-    const { bookingId, percentageFee, clientName, clientEmail, title } =
-      chargeData.metadata ?? {};
+    const {
+      bookingId,
+      percentageFee,
+      clientName,
+      clientEmail,
+      title,
+      amountPaid,
+    } = chargeData.metadata ?? {};
 
     if (!bookingId) {
       console.error(
@@ -365,14 +379,12 @@ export class PaystackReconciliationService implements OnModuleInit {
     const accountNumber = auth?.account_number || null;
     const paymentChannel = chargeData.channel || auth?.channel || 'unknown';
 
-    const updatedBooking = await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'CONFIRMED',
-        paymentVerification: 'PAYSTACK_VERIFIED',
-        paymentExpiresAt: null,
-      },
-    });
+    const updatedBooking =
+      await this.bookingService.confirmVendorBookingPayment(
+        bookingId,
+        chargeData.reference,
+        amountPaid,
+      );
 
     const senderDetails = await this.prisma.senderDetails.create({
       data: {
@@ -390,11 +402,20 @@ export class PaystackReconciliationService implements OnModuleInit {
       where: { providerRef: chargeData.reference },
       data: {
         bookingId: updatedBooking.id,
-        // Stays 'PENDING' — see the identical comment in paystackWebhook;
-        // this tracks vendor payout status, not client payment status.
-        status: 'PENDING',
+        status: (
+          await this.prisma.transaction.findUniqueOrThrow({
+            where: { providerRef: chargeData.reference },
+          })
+        ).checkoutSnapshot
+          ? undefined
+          : 'PENDING',
         paidAt: new Date(),
-        percentageFee: percentageFee ?? 0.05,
+        percentageFee:
+          (
+            await this.prisma.transaction.findUniqueOrThrow({
+              where: { providerRef: chargeData.reference },
+            })
+          ).percentageFee ?? percentageFee,
         paymentMethod: paymentChannel,
         senderDetailsId: senderDetails.id,
       },
@@ -517,94 +538,7 @@ export class PaystackReconciliationService implements OnModuleInit {
   }
 
   async retryFailedSettlements() {
-    const retryThreshold = new Date(Date.now() - SETTLEMENT_RETRY_MAX_AGE_MS);
-
-    const failedSettlements = await this.prisma.settlement.findMany({
-      where: {
-        status: 'FAILED',
-        createdAt: {
-          gte: retryThreshold,
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-      take: BATCH_SIZE,
-    });
-
-    for (const settlement of failedSettlements) {
-      if (!settlement.recipientCode) {
-        continue;
-      }
-
-      const reference = `booking-${settlement.bookingId}-retry-${Date.now()}`;
-
-      try {
-        await this.prisma.settlement.update({
-          where: {
-            id: settlement.id,
-          },
-          data: {
-            reference,
-            status: 'PENDING',
-          },
-        });
-
-        const transfer = await this.paystackService.initiateTransfer({
-          amount: settlement.amount,
-          recipientCode: settlement.recipientCode,
-          reason: `Settlement retry for booking ${settlement.bookingId}`,
-          reference,
-        });
-
-        const transferStatus = transfer.status?.toUpperCase() || 'PENDING';
-
-        await this.prisma.settlement.update({
-          where: {
-            id: settlement.id,
-          },
-          data: {
-            transferCode: transfer.transfer_code ?? settlement.transferCode,
-
-            status: transferStatus,
-          },
-        });
-
-        // Paystack may occasionally return SUCCESS immediately.
-        // Handle that here instead of waiting for the webhook.
-        if (transferStatus === 'SUCCESS') {
-          await this.prisma.transaction.updateMany({
-            where: {
-              bookingId: settlement.bookingId,
-
-              status: {
-                not: 'COMPLETED',
-              },
-            },
-            data: {
-              status: 'COMPLETED',
-            },
-          });
-        }
-      } catch (error) {
-        console.error(
-          `[PaystackReconciliation] Settlement retry failed for settlement ${settlement.id}:`,
-          error instanceof Error ? error.message : error,
-        );
-
-        // Important:
-        // If initiateTransfer itself failed, return the settlement
-        // to FAILED so the cron can retry it again later.
-        await this.prisma.settlement.update({
-          where: {
-            id: settlement.id,
-          },
-          data: {
-            status: 'FAILED',
-          },
-        });
-      }
-    }
+    await this.bookingFinance.reconcile();
   }
 
   async cleanupExpiredSlotLocks() {

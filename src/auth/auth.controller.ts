@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -15,6 +16,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { GoogleAppAuthGuard, GoogleAppAuthService } from './google-app-auth';
 import * as authDto from './dto/auth.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { VendorService } from 'src/vendor/vendor.service';
@@ -26,6 +28,7 @@ import { Public } from './public.decorator';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly googleAppAuth: GoogleAppAuthService,
     private readonly vendorServices: VendorService,
   ) {}
 
@@ -55,14 +58,28 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Post('forgot-password')
+  @Public()
+  @HttpCode(200)
+  forgotPassword(@Body() dto: authDto.ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @Public()
+  @HttpCode(200)
+  resetPassword(@Body() dto: authDto.PasswordResetDTO) {
+    return this.authService.resetPassword(dto);
+  }
+
   @Get('google/login')
   @Public()
-  @UseGuards(AuthGuard('google-login'))
+  @UseGuards(GoogleAppAuthGuard)
   async googleLogin() {}
 
   @Get('google/callback')
   @Public()
-  @UseGuards(AuthGuard('google-login'))
+  @UseGuards(GoogleAppAuthGuard)
   async googleCallback(@Req() req: Request & { user: any }, @Res() res: any) {
     const googleProfileInfo = req.user;
     const requestedRedirectUrl = googleProfileInfo.requestedRedirectUrl;
@@ -75,6 +92,22 @@ export class AuthController {
       googleProfileInfo,
       requestedRedirectUrl as string,
     );
+
+    const appRequest = (req as any).session?.jublyAppAuth;
+    if (appRequest) {
+      delete (req as any).session.jublyAppAuth;
+      const profile = await this.authService.getUserById(authResult.data.user.id);
+      const user = profile.data.user;
+      const vendor = user?.vendor;
+      const payload = {
+        ...authResult.data,
+        user: {
+          ...user,
+          needsOnboarding: user?.role === 'VENDOR' && (!vendor || vendor.kycStatus === 'NOT_SUBMITTED'),
+        },
+      };
+      return res.redirect(this.googleAppAuth.redirect(appRequest, payload));
+    }
 
     const params = new URLSearchParams();
 
@@ -96,6 +129,12 @@ export class AuthController {
     const finalRedirect = basePath;
 
     return res.redirect(finalRedirect);
+  }
+
+  @Post('google/app-exchange')
+  @Public()
+  exchangeGoogleAppCode(@Body() body: { code?: string; codeVerifier?: string }) {
+    return this.googleAppAuth.exchange(body?.code, body?.codeVerifier);
   }
 
   @Post('verify-email')

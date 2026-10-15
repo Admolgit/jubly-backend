@@ -66,6 +66,9 @@ let TransactionService = class TransactionService {
             if (!dto.vendorId) {
                 throw new common_1.BadRequestException('Vendor ID is required');
             }
+            const original = await this.prisma.transaction.findUniqueOrThrow({
+                where: { providerRef: dto.providerRef },
+            });
             const transaction = await this.prisma.transaction.update({
                 where: {
                     providerRef: dto.providerRef,
@@ -77,10 +80,13 @@ let TransactionService = class TransactionService {
                     senderDetailsId: dto.senderDetailsId,
                     currency: 'NGN',
                     paidAt: new Date(),
-                    status: dto.status,
-                    percentageFee: dto.percentageFee,
+                    status: original.checkoutSnapshot ? undefined : dto.status,
+                    percentageFee: original.checkoutSnapshot
+                        ? undefined
+                        : dto.percentageFee,
                     paymentMethod: dto.paymentMethod,
                     providerRef: dto.providerRef,
+                    paymentStatus: true,
                 },
             });
             const convertedAmount = transaction.amount;
@@ -166,7 +172,7 @@ let TransactionService = class TransactionService {
                 },
             });
             const total = await this.prisma.transaction.count({ where });
-            return (0, response_1.successResponse)({ transactions }, 'Successfully fetched transactions.', 200, {
+            return (0, response_1.successResponse)({ transactions: this.serializeBigInt(transactions) }, 'Successfully fetched transactions.', 200, {
                 total,
                 page,
                 limit,
@@ -178,6 +184,9 @@ let TransactionService = class TransactionService {
             }
             throw new common_1.InternalServerErrorException('Failed to fetch this transactions', error.message);
         }
+    }
+    serializeBigInt(value) {
+        return JSON.parse(JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item));
     }
     async getTotalTransactionsAmountByVendorId(userId, vendorId, view) {
         try {

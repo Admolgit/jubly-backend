@@ -2,6 +2,7 @@ import {
   IsEmail,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
 } from 'class-validator';
@@ -9,6 +10,9 @@ import {
 export type VendorBookingPaymentOption = 'PAY_BY_LINK' | 'PAID_BY_HAND';
 
 export class CreateVendorBookingDto {
+  @IsString()
+  bookingId?: string;
+
   @IsNotEmpty()
   @IsString()
   serviceId!: string;
@@ -36,6 +40,10 @@ export class CreateVendorBookingDto {
   @IsOptional()
   @IsString()
   endTime?: string;
+
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
 
   @IsNotEmpty()
   @IsIn(['PAY_BY_LINK', 'PAID_BY_HAND'])

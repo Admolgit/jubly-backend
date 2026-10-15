@@ -9,6 +9,7 @@ import { Roles, RolesGuard } from 'src/auth/role.guard';
 import { PaystackService } from 'src/paystack/paystack.service';
 import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 import { SubscriptionService } from './subscription.service';
+import { successResponse } from 'src/utils/response';
 
 @Controller('subscription')
 export class SubscriptionController {
@@ -32,6 +33,27 @@ export class SubscriptionController {
     }
 
     return this.subscriptionService.getStatus(vendor.id);
+  }
+
+  @Get('fee')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR')
+  async getSubscriptionFee(@Req() req: { user: { id: string } }) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { userId: req.user.id },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor not found');
+    }
+
+    const { priceNaira, durationDays } =
+      await this.platformSettingsService.getSubscriptionPricing(vendor.id);
+
+    return successResponse({
+      priceNaira,
+      durationDays,
+    }, 'Subscription fee retrieved successfully');
   }
 
   @Post('upgrade')

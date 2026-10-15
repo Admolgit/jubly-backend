@@ -43,6 +43,15 @@ export class CancellationPolicyService {
     return this.toEffectiveTiers(setting);
   }
 
+  async getFinancialPolicySnapshot() {
+    const setting = await this.repository.getSetting();
+    return {
+      ...this.toEffectiveTiers(setting),
+      policyId: setting?.id ?? null,
+      policyUpdatedAt: setting?.updatedAt.toISOString() ?? null,
+    };
+  }
+
   async getPolicy() {
     try {
       const setting = await this.repository.getSetting();

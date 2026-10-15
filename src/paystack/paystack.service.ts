@@ -130,8 +130,9 @@ export class PaystackService {
   async verifyTransaction(reference: string) {
     try {
       const response: any = await axios.get(
-        `${process.env.PAYSTACK_BASE_URL}/transaction/verify/${reference}`,
+        `${this.baseUrl}/transaction/verify/${encodeURIComponent(reference)}`,
         {
+          timeout: 30_000,
           headers: {
             Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           },
@@ -150,7 +151,7 @@ export class PaystackService {
         'Transaction verified successfully',
       );
     } catch (error: any) {
-      console.error('Paystack verification error:', error);
+      this.logSanitizedError('verifyTransaction', error);
       throw new HttpException(
         (error.response?.data?.message as string) ||
           ('Paystack verification error' as string),
@@ -355,6 +356,7 @@ export class PaystackService {
           currency: 'NGN',
         },
         {
+          timeout: 30_000,
           headers: this.getAuthHeaders(),
         },
       );
@@ -370,6 +372,43 @@ export class PaystackService {
           error.message ||
           'Failed to create transfer recipient',
         error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async verifyTransfer(reference: string) {
+    try {
+      const response = await axios.get<{
+        status: boolean;
+        data?: {
+          status: string;
+          reference: string;
+          amount: number;
+          currency: string;
+          recipient: { recipient_code: string };
+          transfer_code: string;
+        };
+      }>(`${this.baseUrl}/transfer/verify/${encodeURIComponent(reference)}`, {
+        timeout: 30_000,
+        headers: this.getAuthHeaders(),
+      });
+      if (!response.data.status || !response.data.data?.status) {
+        throw new Error('Invalid transfer verification response');
+      }
+      return response.data.data;
+    } catch (error: any) {
+      if (
+        error.response?.status === HttpStatus.NOT_FOUND ||
+        (error.response?.status === HttpStatus.BAD_REQUEST &&
+          /^transfer( reference)? not found\.?$/i.test(
+            String(error.response?.data?.message || ''),
+          ))
+      ) {
+        return null;
+      }
+      throw new HttpException(
+        'Unable to verify settlement transfer',
+        error.response?.status || HttpStatus.BAD_GATEWAY,
       );
     }
   }
@@ -391,6 +430,7 @@ export class PaystackService {
           reference: payload.reference,
         },
         {
+          timeout: 30_000,
           headers: this.getAuthHeaders(),
         },
       );
@@ -431,6 +471,7 @@ export class PaystackService {
           merchant_note: payload.merchantNote,
         },
         {
+          timeout: 30_000,
           headers: this.getAuthHeaders(),
         },
       );
@@ -448,5 +489,47 @@ export class PaystackService {
         error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  async fetchRefund(id: string): Promise<any> {
+    const response = await axios.get<any>(
+      `${this.baseUrl}/refund/${encodeURIComponent(id)}`,
+      {
+        headers: this.getAuthHeaders(),
+        timeout: 30_000,
+      },
+    );
+    if (!response.data?.status || !response.data.data)
+      throw new Error('Invalid refund verification response');
+    return response.data.data;
+  }
+
+  private async listFinancialRecords(
+    path: string,
+    transactionId: string,
+  ): Promise<any[]> {
+    if (!transactionId || !/^\d+$/.test(transactionId))
+      throw new Error('Missing verified provider transaction ID');
+    const records: any[] = [];
+    for (let page = 1; page <= 100; page++) {
+      const response = await axios.get<any>(`${this.baseUrl}/${path}`, {
+        headers: this.getAuthHeaders(),
+        timeout: 30_000,
+        params: { transaction: transactionId, page, perPage: 100 },
+      });
+      if (!response.data?.status || !Array.isArray(response.data.data))
+        throw new Error('Invalid provider financial history');
+      records.push(...response.data.data);
+      if (response.data.data.length < 100) return records;
+    }
+    throw new Error('Provider financial history requires manual review');
+  }
+
+  listRefunds(transactionId: string) {
+    return this.listFinancialRecords('refund', transactionId);
+  }
+
+  listTransactionDisputes(transactionId: string) {
+    return this.listFinancialRecords('dispute', transactionId);
   }
 }

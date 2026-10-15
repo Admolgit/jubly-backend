@@ -26,6 +26,32 @@ export class CreateVendorDto {
   @IsString()
   bio?: string;
 }
+export class UpdateVendorDto {
+  @IsString()
+  businessName?: string;
+
+  @IsString()
+  category?: string;
+
+  @IsString()
+  city?: string;
+
+  @IsString()
+  state?: string;
+
+  @IsString()
+  country?: string;
+
+  @IsString()
+  phone?: string;
+
+  @IsString()
+  vendorId?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+}
 
 export class CreateVendorProfileDto {
   @IsString()
@@ -49,10 +75,7 @@ export class CreateVendorProfileDto {
 }
 
 export interface CompleteVendorOnboardingDto {
-  profile: CreateVendorDto;
   services: ServiceItemDto[];
-  subaccount: CreateSubaccountDto;
-  identityType: string;
 }
 
 export class QueryVendorsDto {

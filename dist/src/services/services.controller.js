@@ -25,6 +25,9 @@ let ServicesController = class ServicesController {
         const { page = 1, limit = 10, search, isActive } = query;
         return this.servicesService.getAllServices(req.user.id, page, limit, search, isActive);
     }
+    async getAllServicesAdmin(page = 1, limit = 10, search, isActive, date, month, year) {
+        return this.servicesService.getAllServicesAdmin(Number(page), Number(limit), search, isActive, date, month ? Number(month) : undefined, year ? Number(year) : undefined);
+    }
     updateServiceActive(req, serviceId, dto) {
         return this.servicesService.updateServiceActive(serviceId, req.user.id, dto.active);
     }
@@ -43,6 +46,21 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], ServicesController.prototype, "getAllServices", null);
+__decorate([
+    (0, common_1.Get)('admin/all'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('ADMIN'),
+    __param(0, (0, common_1.Query)('page')),
+    __param(1, (0, common_1.Query)('limit')),
+    __param(2, (0, common_1.Query)('search')),
+    __param(3, (0, common_1.Query)('isActive')),
+    __param(4, (0, common_1.Query)('date')),
+    __param(5, (0, common_1.Query)('month')),
+    __param(6, (0, common_1.Query)('year')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, String, String, String, Number, Number]),
+    __metadata("design:returntype", Promise)
+], ServicesController.prototype, "getAllServicesAdmin", null);
 __decorate([
     (0, common_1.Patch)('update/:serviceId'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),

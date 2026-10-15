@@ -46,6 +46,8 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaystackController = void 0;
+const booking_finance_service_1 = require("../booking-finance/booking-finance.service");
+const reschedule_service_1 = require("../reschedule/reschedule.service");
 const common_1 = require("@nestjs/common");
 const crypto = __importStar(require("crypto"));
 const prisma_service_1 = require("../../prisma/prisma.service");
@@ -62,7 +64,9 @@ const platform_settings_service_1 = require("../platform-settings/platform-setti
 const subscription_service_1 = require("../subscription/subscription.service");
 const dateAndTimeConverter_1 = require("../utils/dateAndTimeConverter");
 let PaystackController = class PaystackController {
-    constructor(paystackService, prisma, transactionsService, mailService, bookingService, activityService, platformSettingsService, subscriptionService) {
+    constructor(bookingFinance, reschedules, paystackService, prisma, transactionsService, mailService, bookingService, activityService, platformSettingsService, subscriptionService) {
+        this.bookingFinance = bookingFinance;
+        this.reschedules = reschedules;
         this.paystackService = paystackService;
         this.prisma = prisma;
         this.transactionsService = transactionsService;
@@ -102,61 +106,26 @@ let PaystackController = class PaystackController {
             transaction.vendor.userId !== req.user.id) {
             throw new common_1.ForbiddenException('Not allowed to refund this transaction');
         }
-        if (transaction.status === 'COMPLETED') {
-            throw new common_1.BadRequestException('This payment has already been settled to the vendor');
+        if (!transaction.bookingId) {
+            throw new common_1.BadRequestException('A booking cancellation is required before refund processing');
         }
-        if (transaction.status === 'REFUNDED') {
-            throw new common_1.BadRequestException('This payment has already been refunded');
-        }
-        if (transaction.status === 'REFUND_PENDING') {
-            throw new common_1.BadRequestException('A refund is already pending');
-        }
-        if (['failed', 'CANCELLED'].includes(transaction.status)) {
-            throw new common_1.BadRequestException('Only successful payments can be refunded');
-        }
-        const activeSettlement = await this.prisma.settlement.findFirst({
-            where: {
-                bookingId: transaction.bookingId || '',
-                status: {
-                    in: ['PENDING', 'SUCCESS'],
-                },
-            },
+        const booking = await this.prisma.booking.findUniqueOrThrow({
+            where: { id: transaction.bookingId },
         });
-        if (activeSettlement) {
-            throw new common_1.BadRequestException('This payment has already been sent to vendor settlement');
-        }
-        if (dto.amount !== undefined && dto.amount > transaction.amount) {
-            throw new common_1.BadRequestException('Refund amount cannot be more than transaction amount');
-        }
-        if (dto.amount !== undefined && dto.amount <= 0) {
-            throw new common_1.BadRequestException('Refund amount must be greater than zero');
-        }
-        const refund = await this.paystackService.createRefund({
-            transaction: transaction.providerRef,
-            amount: dto.amount,
-            customerNote: dto.customerNote,
-            merchantNote: dto.merchantNote,
-        });
-        await this.prisma.transaction.update({
-            where: {
-                id: transaction.id,
-            },
-            data: {
-                status: refund.status?.toLowerCase?.() === 'processed'
-                    ? 'REFUNDED'
-                    : 'REFUND_PENDING',
-            },
-        });
-        if (transaction.bookingId) {
-            await this.prisma.booking.update({
-                where: {
-                    id: transaction.bookingId,
-                },
-                data: {
-                    status: 'CANCELLED',
-                },
+        const isCancelled = [
+            'CANCELLED',
+            'CANCELLED_BY_CLIENT',
+            'CANCELLED_BY_VENDOR',
+        ].includes(booking.status);
+        if (!isCancelled) {
+            if (req.user.role !== 'VENDOR') {
+                throw new common_1.BadRequestException('Cancel the booking as its client or vendor before processing its policy refund');
+            }
+            await this.reschedules.cancelBooking(booking.id, req.user.id, {
+                reason: dto.merchantNote || dto.customerNote,
             });
         }
+        const refund = await this.bookingFinance.refundResponse(booking.id);
         return (0, response_1.successResponse)(refund, 'Refund initiated successfully', 201);
     }
     async paystackWebhook(req, headers) {
@@ -177,71 +146,19 @@ let PaystackController = class PaystackController {
                 throw new common_1.HttpException('Invalid signature', common_1.HttpStatus.UNAUTHORIZED);
             }
             const event = req.body;
-            if (!event?.data?.reference) {
+            console.log('METADATA', event.data.metadata?.type);
+            if (typeof event?.event !== 'string' || !event.data)
                 throw new common_1.BadRequestException('Invalid Paystack webhook payload');
-            }
-            if (event.event === 'transfer.success' ||
-                event.event === 'transfer.failed' ||
-                event.event === 'transfer.reversed') {
-                const transferData = event.data;
-                const reference = transferData?.reference;
-                const transferCode = transferData?.transfer_code;
-                const settlement = await this.prisma.settlement.findFirst({
-                    where: {
-                        OR: [
-                            ...(reference ? [{ reference }] : []),
-                            ...(transferCode ? [{ transferCode }] : []),
-                        ],
-                    },
-                });
-                if (!settlement) {
-                    console.error(`Settlement not found for transfer ${reference ?? transferCode ?? 'unknown'}`);
-                    return { status: true };
-                }
-                if (event.event === 'transfer.success') {
-                    if (settlement.status === 'SUCCESS') {
-                        return { status: true };
-                    }
-                    await this.prisma.$transaction([
-                        this.prisma.settlement.update({
-                            where: {
-                                id: settlement.id,
-                            },
-                            data: {
-                                status: 'SUCCESS',
-                                transferCode: transferCode ?? settlement.transferCode,
-                            },
-                        }),
-                        this.prisma.transaction.updateMany({
-                            where: {
-                                bookingId: settlement.bookingId,
-                                status: {
-                                    not: 'COMPLETED',
-                                },
-                            },
-                            data: {
-                                status: 'COMPLETED',
-                            },
-                        }),
-                    ]);
-                    console.log(`✅ Settlement ${settlement.id} completed successfully`);
-                    return { status: true };
-                }
-                await this.prisma.settlement.update({
-                    where: {
-                        id: settlement.id,
-                    },
-                    data: {
-                        status: 'FAILED',
-                        transferCode: transferCode ?? settlement.transferCode,
-                    },
-                });
-                console.error(`❌ Settlement ${settlement.id} changed to FAILED (${event.event})`);
+            if (event.event.startsWith('transfer.') ||
+                event.event.startsWith('refund.') ||
+                event.event.startsWith('charge.dispute.')) {
+                await this.bookingFinance.handleWebhook(event.event, event.data);
                 return { status: true };
             }
-            if (event.event !== 'charge.success') {
+            if (event.event !== 'charge.success')
                 return { status: true };
-            }
+            if (!event.data.reference)
+                throw new common_1.BadRequestException('Invalid Paystack webhook payload');
             const paymentChannel = event.data.channel || event.data.authorization?.channel || 'unknown';
             const auth = event.data.authorization;
             const bank = auth?.bank || null;
@@ -277,11 +194,13 @@ let PaystackController = class PaystackController {
             if (!transactionExists) {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
-            if (transactionExists.bookingId) {
+            await this.bookingFinance.recordVerifiedCharge(event.data.reference);
+            if (transactionExists.bookingId &&
+                event.data.metadata?.type !== 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
                 return { status: true };
             }
             if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
-                const { bookingId, percentageFee, clientName, clientEmail, title } = event.data.metadata;
+                const { bookingId, percentageFee, clientName, clientEmail, title, amountPaid, } = event.data.metadata;
                 if (!bookingId) {
                     throw new common_1.BadRequestException('Incomplete booking metadata for link');
                 }
@@ -294,14 +213,7 @@ let PaystackController = class PaystackController {
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
                 }
-                const updatedBooking = await this.prisma.booking.update({
-                    where: { id: bookingId },
-                    data: {
-                        status: 'CONFIRMED',
-                        paymentVerification: 'PAYSTACK_VERIFIED',
-                        paymentExpiresAt: null,
-                    },
-                });
+                const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, event.data.reference, amountPaid);
                 const senderDetails = await this.prisma.senderDetails.create({
                     data: {
                         vendorId: booking.vendorId,
@@ -316,11 +228,12 @@ let PaystackController = class PaystackController {
                     where: { providerRef: event.data.reference },
                     data: {
                         bookingId: updatedBooking.id,
-                        status: 'PENDING',
+                        status: transactionExists.checkoutSnapshot ? undefined : 'PENDING',
                         paidAt: new Date(),
-                        percentageFee: percentageFee ?? 0.05,
+                        percentageFee: transactionExists.percentageFee ?? percentageFee,
                         paymentMethod: paymentChannel,
                         senderDetailsId: senderDetails.id,
+                        paymentStatus: true,
                     },
                 });
                 await this.activityService.createLog({
@@ -389,13 +302,119 @@ let PaystackController = class PaystackController {
                 });
                 return { status: true };
             }
+            if (event.data.metadata?.type === 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
+                console.log('Processing outstanding payment webhook:', event.data.metadata);
+                const { bookingId, vendorId, clientName, clientEmail, amountPaid, outstandingBalance, percentageFee, } = event.data.metadata;
+                if (!bookingId) {
+                    throw new common_1.BadRequestException('Incomplete booking metadata for link');
+                }
+                console.log('GET PAST BOOKINGID CHECK');
+                const booking = await this.prisma.booking.findUnique({
+                    where: { id: bookingId },
+                    include: {
+                        services: true,
+                        vendor: true,
+                    },
+                });
+                if (!booking) {
+                    throw new common_1.BadRequestException('Vendor-created booking was not found');
+                }
+                console.log('GET PAST BOOKING CHECK - FOUND');
+                const vendorUser = await this.prisma.vendor.findUnique({
+                    where: { id: vendorId },
+                    include: { user: true },
+                });
+                console.log('GET PAST VENDOR CHECK - FOUND', vendorUser);
+                const updatedBooking = await this.prisma.booking.update({
+                    where: { id: bookingId },
+                    data: { amount: booking?.amount + amountPaid },
+                });
+                console.log('GET PAST BOOKING CHECK - UPDATED', updatedBooking);
+                const senderDetails = await this.prisma.senderDetails.create({
+                    data: {
+                        vendorId: booking.vendorId,
+                        email: clientEmail,
+                        senderName: accountName ?? clientName,
+                        senderAccountNumber: accountNumber,
+                        senderBankName: bank,
+                        senderDescription: 'Payment via Paystack (outstanding payment)',
+                    },
+                });
+                console.log('GET PAST SENDER DETAILS - CREATED', senderDetails);
+                await this.prisma.transaction.update({
+                    where: { providerRef: event.data.reference },
+                    data: {
+                        bookingId: updatedBooking.id,
+                        status: transactionExists.checkoutSnapshot ? undefined : 'PENDING',
+                        paidAt: new Date(),
+                        percentageFee: transactionExists.percentageFee ?? percentageFee,
+                        paymentMethod: paymentChannel,
+                        senderDetailsId: senderDetails.id,
+                        paymentStatus: true,
+                    },
+                });
+                console.log('GET PAST TRANSACTION CHECK - UPDATED');
+                await this.activityService.createLog({
+                    vendorId: booking.vendorId,
+                    action: 'PAYMENT_RECEIVED',
+                    description: `Outstanding payment of ₦${amountPaid.toLocaleString()} received for booking #${booking.id}.`,
+                    actor: 'System',
+                    actorType: 'SYSTEM',
+                    color: 'yellow',
+                });
+                console.log('GET PAST ACTIVITY LOG - CREATED');
+                setImmediate(() => {
+                    void (async () => {
+                        try {
+                            await this.mailService.outstandingPaymentMail({
+                                recipientEmail: clientEmail,
+                                recipientName: clientName,
+                                serviceName: booking.services.name,
+                                vendorName: booking.vendor.businessName,
+                                amountDue: Number(outstandingBalance),
+                                amountPaid: Number(amountPaid),
+                                remainingBalance: Number(outstandingBalance) - Number(amountPaid),
+                                installmentAmount: Number(amountPaid),
+                                dueDate: updatedBooking.startTime,
+                                nextRepaymentDate: updatedBooking.startTime,
+                                bookingId: booking.id,
+                            });
+                        }
+                        catch (err) {
+                            console.error('sendClientReceiptMail failed:', err);
+                        }
+                        if (vendorUser?.user?.email) {
+                            try {
+                                await this.mailService.vendorOutstandingPaymentMail({
+                                    recipientEmail: vendorUser.user.email,
+                                    recipientName: vendorUser.businessName,
+                                    clientName: clientName,
+                                    serviceName: booking.services.name,
+                                    amountDue: Number(outstandingBalance),
+                                    amountPaid: Number(amountPaid),
+                                    remainingBalance: Number(outstandingBalance) - Number(amountPaid),
+                                    installmentAmount: Number(amountPaid),
+                                    dueDate: updatedBooking.startTime,
+                                    nextRepaymentDate: updatedBooking.startTime,
+                                    bookingId: booking.id,
+                                });
+                            }
+                            catch (err) {
+                                console.error('sendVendorReceiptMail failed:', err);
+                            }
+                        }
+                    })();
+                });
+                return { status: true };
+            }
             {
-                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, amountPaid, country, vendorUserId, phone, } = event.data.metadata;
                 if (!vendorId ||
                     !vendorUserId ||
                     !serviceId ||
                     !clientId ||
                     !email ||
+                    !amountPaid ||
                     dayOfWeek == null ||
                     !startTime ||
                     !endTime) {
@@ -413,7 +432,12 @@ let PaystackController = class PaystackController {
                     endTime: new Date(endTime),
                     status: 'CONFIRMED',
                     phone: phone || '',
+                    amount: amountPaid,
+                }, {
+                    reference: event.data.reference,
+                    slotLockId: event.data.metadata.slotLockId,
                 });
+                console.log('Book', { book });
                 await this.prisma.transaction.update({
                     where: { providerRef: event.data.reference },
                     data: { bookingId: book.id },
@@ -428,10 +452,11 @@ let PaystackController = class PaystackController {
                         senderDescription: 'Payment via Paystack',
                     },
                 });
-                const percentageFee = await this.platformSettingsService.resolvePlatformPercentage(vendorId);
+                const percentageFee = transactionExists.percentageFee ??
+                    (await this.platformSettingsService.resolvePlatformPercentage(vendorId));
                 const dto = {
                     senderDetailsId: senderDetails.id,
-                    status: 'PENDING',
+                    status: transactionExists.checkoutSnapshot ? undefined : 'PENDING',
                     providerRef: event.data.reference,
                     paidAt: event.data.paid_at,
                     percentageFee,
@@ -560,7 +585,9 @@ __decorate([
 ], PaystackController.prototype, "getBankList", null);
 exports.PaystackController = PaystackController = __decorate([
     (0, common_1.Controller)('paystack'),
-    __metadata("design:paramtypes", [paystack_service_1.PaystackService,
+    __metadata("design:paramtypes", [booking_finance_service_1.BookingFinanceService,
+        reschedule_service_1.RescheduleService,
+        paystack_service_1.PaystackService,
         prisma_service_1.PrismaService,
         transaction_service_1.TransactionService,
         nodemailer_service_1.NodemailerService,
