@@ -267,7 +267,7 @@ export class BookingService {
           if (payment) {
             await tx.transaction.update({
               where: { providerRef: payment.reference },
-              data: { bookingId: booking.id },
+              data: { bookingId: booking.id, paymentType: 'BOOKING_INITIAL' },
             });
             if (payment.slotLockId) {
               await tx.slotLock.deleteMany({
@@ -329,19 +329,6 @@ export class BookingService {
       );
     }
   }
-
-  // checkAmountIsAtleast50Percent(amount: number, bookingAmount: number) {
-  //   if (amount < 0) {
-  //     throw new BadRequestException('Amount must be a positive number');
-  //   }
-
-  //   const minimumAmount = bookingAmount * 0.5;
-  //   if (amount < minimumAmount) {
-  //     throw new BadRequestException(
-  //       'Amount must be at least 50% of the booking amount',
-  //     );
-  //   }
-  // }
 
   async initializeBookingPayment(bookingId: string, dto: any) {
     let slotLockId: string | undefined;
@@ -614,7 +601,6 @@ export class BookingService {
         201,
       );
     } catch (error: any) {
-      console.error('Error initializing payment:', error);
       if (slotLockId) {
         await this.prisma.slotLock
           .deleteMany({ where: { id: slotLockId } })
@@ -631,7 +617,11 @@ export class BookingService {
     }
   }
 
-  async createVendorBooking(userId: string, dto: CreateVendorBookingDto) {
+  async createVendorBooking(
+    userId: string,
+    email: string,
+    dto: CreateVendorBookingDto,
+  ) {
     try {
       const isExistingBooking = Boolean(dto.bookingId);
       const vendor = await this.prisma.vendor.findFirst({
@@ -641,6 +631,8 @@ export class BookingService {
       if (!vendor) {
         throw new NotFoundException('Vendor not found');
       }
+
+      const calendarIntegration = await this.getVendorCalendar(userId);
 
       const isManualBookingEnabled =
         await this.platformSettingsService.isManualBookingEnabled(vendor.id);
@@ -727,8 +719,6 @@ export class BookingService {
 
       let amount = Number(dto.amount);
       const mainAmount = service.price;
-
-      const calendarIntegration = await this.getVendorCalendar(userId);
 
       if (dto.paymentOption === 'PAID_BY_HAND') {
         const canUsePaidByHand =
@@ -833,6 +823,32 @@ export class BookingService {
         ).catch((err: any) =>
           console.error('Vendor-created booking email failed:', err?.message),
         );
+
+        if (calendarIntegration) {
+          try {
+            await this.googleCalendarService.verifyBooking({
+              calendar: calendarIntegration,
+              startTime,
+              endTime,
+            });
+
+            await this.googleCalendarService.createCalendarEvent(
+              calendarIntegration,
+              {
+                title: service.name,
+                description: service.description ?? 'No description',
+                startTime,
+                endTime,
+                attendeeEmail: dto.clientEmail,
+                attendeeName: dto.clientName,
+                vendorEmail: email,
+                bookingId: booking.id,
+              },
+            );
+          } catch (err: any) {
+            console.error('Google Calendar failed:', err.message);
+          }
+        }
 
         return { booking };
       }
@@ -994,6 +1010,7 @@ export class BookingService {
             {
               vendorId: vendor.id,
               serviceId: dto.serviceId,
+              bookingId: booking.id,
             },
           ),
           currency: 'NGN',
@@ -2254,6 +2271,8 @@ export class BookingService {
         throw new BadRequestException('This approval link is invalid.');
       }
 
+      console.log('VERIFY ID', { payload });
+
       return { bookingId: payload.bookingId };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
@@ -2264,7 +2283,6 @@ export class BookingService {
   }
 
   private async settleBookingPayment(booking: any) {
-    console.log('SETTLE BOOKING', booking);
     return this.bookingFinance.settleCompletion(booking.id, booking);
   }
 
@@ -2450,6 +2468,8 @@ export class BookingService {
         );
       }
 
+      console.log('APPROVE', { booking });
+
       const { transaction, settlement } =
         await this.settleBookingPayment(booking);
       const payoutAmount = settlement?.amount ?? transaction?.amount;
@@ -2599,6 +2619,8 @@ export class BookingService {
     try {
       const { bookingId } = this.verifyCompletionToken(token);
       const booking = await this.loadBookingForCompletion(bookingId);
+
+      console.log({ booking });
 
       return successResponse(
         {

@@ -421,6 +421,7 @@ model vendorCalendar {
 }
 
 model Settlement {
+  paymentTransactionIds     String[]             @default([])
   purpose                   SettlementPurpose?
   transactionId             String?              @db.ObjectId
   currency                  String?

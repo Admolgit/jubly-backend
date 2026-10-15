@@ -611,6 +611,7 @@ export class VendorService {
           state: dto?.state,
           country: dto?.country,
         }).filter(([_, value]) => {
+          console.log(_);
           if (value === undefined || value === null) return false;
           if (typeof value === 'string' && value.trim() === '') return false;
 
@@ -798,7 +799,7 @@ export class VendorService {
           isActive: true,
         },
       });
-      
+
       // Find user
       const userExists = await db.user.findUnique({
         where: {

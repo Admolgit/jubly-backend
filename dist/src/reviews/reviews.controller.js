@@ -25,8 +25,8 @@ let ReviewsController = class ReviewsController {
     constructor(reviewsService) {
         this.reviewsService = reviewsService;
     }
-    create(clientId, dto) {
-        return this.reviewsService.create(clientId, dto);
+    create(dto) {
+        return this.reviewsService.create(dto);
     }
     getVendorReviews(params, query) {
         return this.reviewsService.getVendorReviews(params.vendorId, query);
@@ -40,12 +40,11 @@ let ReviewsController = class ReviewsController {
 };
 exports.ReviewsController = ReviewsController;
 __decorate([
-    (0, common_1.Post)(':clientId'),
+    (0, common_1.Post)(''),
     (0, public_decorator_1.Public)(),
-    __param(0, (0, common_1.Param)('clientId')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, create_review_dto_1.CreateReviewDto]),
+    __metadata("design:paramtypes", [create_review_dto_1.CreateReviewDto]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "create", null);
 __decorate([

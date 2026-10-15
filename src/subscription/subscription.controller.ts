@@ -80,10 +80,7 @@ export class SubscriptionController {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.id },
     });
-
-    // Price and duration always come from admin-managed platform settings
-    // (global, or this vendor's override if one exists) — never from the
-    // frontend.
+    
     const { priceNaira, durationDays } =
       await this.platformSettingsService.getSubscriptionPricing(vendor.id);
 
