@@ -1,3 +1,5 @@
+import { RescheduleModule } from '../reschedule/reschedule.module';
+import { BookingFinanceModule } from '../booking-finance/booking-finance.module';
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Module } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
@@ -31,6 +33,6 @@ import { SubscriptionService } from 'src/subscription/subscription.service';
   ],
   exports: [PaystackService],
   controllers: [PaystackController],
-  imports: [],
+  imports: [BookingFinanceModule, RescheduleModule],
 })
 export class PaystackModule {}

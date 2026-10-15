@@ -66,6 +66,9 @@ let TransactionService = class TransactionService {
             if (!dto.vendorId) {
                 throw new common_1.BadRequestException('Vendor ID is required');
             }
+            const original = await this.prisma.transaction.findUniqueOrThrow({
+                where: { providerRef: dto.providerRef },
+            });
             const transaction = await this.prisma.transaction.update({
                 where: {
                     providerRef: dto.providerRef,
@@ -77,8 +80,10 @@ let TransactionService = class TransactionService {
                     senderDetailsId: dto.senderDetailsId,
                     currency: 'NGN',
                     paidAt: new Date(),
-                    status: dto.status,
-                    percentageFee: dto.percentageFee,
+                    status: original.checkoutSnapshot ? undefined : dto.status,
+                    percentageFee: original.checkoutSnapshot
+                        ? undefined
+                        : dto.percentageFee,
                     paymentMethod: dto.paymentMethod,
                     providerRef: dto.providerRef,
                 },
@@ -378,7 +383,18 @@ let TransactionService = class TransactionService {
             where: {
                 vendorId: vendor.id,
                 status: {
-                    in: ['COMPLETED', 'PENDING'],
+                    in: ['COMPLETED'],
+                },
+                createdAt: {
+                    gte: currentMonthStart,
+                },
+            },
+        });
+        const currentProcessingTransactions = await this.prisma.transaction.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: {
+                    in: ['PENDING'],
                 },
                 createdAt: {
                     gte: currentMonthStart,
@@ -389,7 +405,19 @@ let TransactionService = class TransactionService {
             where: {
                 vendorId: vendor.id,
                 status: {
-                    in: ['COMPLETED', 'PENDING'],
+                    in: ['COMPLETED'],
+                },
+                createdAt: {
+                    gte: previousMonthStart,
+                    lte: previousMonthEnd,
+                },
+            },
+        });
+        const previousProcessedTransactions = await this.prisma.transaction.findMany({
+            where: {
+                vendorId: vendor.id,
+                status: {
+                    in: ['PENDING'],
                 },
                 createdAt: {
                     gte: previousMonthStart,
@@ -413,8 +441,8 @@ let TransactionService = class TransactionService {
         const previousCompletedTransactions = previousTransactions.filter((item) => item.status === 'COMPLETED');
         const completed = calculateAmount(completedTransactions);
         const previousCompleted = calculateAmount(previousCompletedTransactions);
-        const processingTransactions = currentTransactions.filter((item) => item.status === 'PENDING');
-        const previousProcessingTransactions = previousTransactions.filter((item) => item.status === 'PENDING');
+        const processingTransactions = currentProcessingTransactions.filter((item) => item.status === 'PENDING');
+        const previousProcessingTransactions = previousProcessedTransactions.filter((item) => item.status === 'PENDING');
         const processing = calculateAmount(processingTransactions);
         const previousProcessing = calculateAmount(previousProcessingTransactions);
         const failedTransactions = currentTransactions.filter((item) => item.status === 'failed');

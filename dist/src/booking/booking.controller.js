@@ -29,7 +29,7 @@ let BookingController = class BookingController {
         return this.bookingService.createBooking(userId, dto);
     }
     createVendorBooking(req, dto) {
-        return this.bookingService.createVendorBooking(req.user.id, dto);
+        return this.bookingService.createVendorBooking(req.user.id, req.user.email, dto);
     }
     paymentInitialize(dto) {
         return this.bookingService.initializeBookingPayment(dto.bookingId, dto);

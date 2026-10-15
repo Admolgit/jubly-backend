@@ -18,30 +18,30 @@ export interface IPaystackBank {
 export class CreateSubaccountDto {
   @IsNotEmpty()
   @IsString()
-  businessName: string;
+  businessName!: string;
 
   @IsNotEmpty()
   @IsString()
-  settlementBank: string;
+  settlementBank!: string;
 
   @IsNotEmpty()
   @IsString()
-  accountNumber: string;
+  accountNumber!: string;
 }
 
 export class UpdateBankDetailsDto {
   @IsNotEmpty()
   @IsString()
-  settlementBank: string;
+  settlementBank!: string;
 
   @IsNotEmpty()
   @IsString()
-  accountNumber: string;
+  accountNumber!: string;
 }
 
 export class UpdateSubAccountFeeDto {
   @IsNumber()
   @Min(0)
   @Max(1)
-  percentageFee: number;
+  percentageFee!: number;
 }

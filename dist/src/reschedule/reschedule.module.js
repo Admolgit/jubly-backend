@@ -7,6 +7,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RescheduleModule = void 0;
+const booking_finance_module_1 = require("../booking-finance/booking-finance.module");
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../prisma/prisma.service");
@@ -23,7 +24,7 @@ let RescheduleModule = class RescheduleModule {
 exports.RescheduleModule = RescheduleModule;
 exports.RescheduleModule = RescheduleModule = __decorate([
     (0, common_1.Module)({
-        imports: [cancellation_policy_module_1.CancellationPolicyModule],
+        imports: [cancellation_policy_module_1.CancellationPolicyModule, booking_finance_module_1.BookingFinanceModule],
         controllers: [reschedule_controller_1.RescheduleController],
         providers: [
             prisma_service_1.PrismaService,

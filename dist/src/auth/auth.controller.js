@@ -66,6 +66,12 @@ let AuthController = class AuthController {
     login(dto) {
         return this.authService.login(dto);
     }
+    forgotPassword(dto) {
+        return this.authService.forgotPassword(dto.email);
+    }
+    resetPassword(dto) {
+        return this.authService.resetPassword(dto);
+    }
     async googleLogin() { }
     async googleCallback(req, res) {
         const googleProfileInfo = req.user;
@@ -134,6 +140,24 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "login", null);
+__decorate([
+    (0, common_1.Post)('forgot-password'),
+    (0, public_decorator_1.Public)(),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [authDto.ForgotPasswordDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "forgotPassword", null);
+__decorate([
+    (0, common_1.Post)('reset-password'),
+    (0, public_decorator_1.Public)(),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [authDto.PasswordResetDTO]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.Get)('google/login'),
     (0, public_decorator_1.Public)(),

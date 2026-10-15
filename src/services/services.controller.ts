@@ -34,6 +34,29 @@ export class ServicesController {
     );
   }
 
+  @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async getAllServicesAdmin(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('search') search?: string,
+    @Query('isActive') isActive?: string,
+    @Query('date') date?: string,
+    @Query('month') month?: number,
+    @Query('year') year?: number,
+  ) {
+    return this.servicesService.getAllServicesAdmin(
+      Number(page),
+      Number(limit),
+      search,
+      isActive,
+      date,
+      month ? Number(month) : undefined,
+      year ? Number(year) : undefined,
+    );
+  }
+
   @Patch('update/:serviceId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')

@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -53,6 +54,20 @@ export class AuthController {
   @Public()
   login(@Body() dto: authDto.LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Post('forgot-password')
+  @Public()
+  @HttpCode(200)
+  forgotPassword(@Body() dto: authDto.ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @Public()
+  @HttpCode(200)
+  resetPassword(@Body() dto: authDto.PasswordResetDTO) {
+    return this.authService.resetPassword(dto);
   }
 
   @Get('google/login')

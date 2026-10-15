@@ -74,6 +74,9 @@ export class TransactionService {
       if (!dto.vendorId) {
         throw new BadRequestException('Vendor ID is required');
       }
+      const original = await this.prisma.transaction.findUniqueOrThrow({
+        where: { providerRef: dto.providerRef },
+      });
       const transaction = await this.prisma.transaction.update({
         where: {
           providerRef: dto.providerRef,
@@ -85,8 +88,12 @@ export class TransactionService {
           senderDetailsId: dto.senderDetailsId,
           currency: 'NGN',
           paidAt: new Date(),
-          status: dto.status,
-          percentageFee: dto.percentageFee,
+          // A delayed payment receipt must not overwrite refund/settlement facts
+          // or change the commission captured before the customer checked out.
+          status: original.checkoutSnapshot ? undefined : dto.status,
+          percentageFee: original.checkoutSnapshot
+            ? undefined
+            : dto.percentageFee,
           paymentMethod: dto.paymentMethod,
           providerRef: dto.providerRef,
         },
@@ -503,7 +510,19 @@ export class TransactionService {
       where: {
         vendorId: vendor.id,
         status: {
-          in: ['COMPLETED', 'PENDING'],
+          in: ['COMPLETED'],
+        },
+        createdAt: {
+          gte: currentMonthStart,
+        },
+      },
+    });
+
+    const currentProcessingTransactions = await this.prisma.transaction.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: {
+          in: ['PENDING'],
         },
         createdAt: {
           gte: currentMonthStart,
@@ -515,7 +534,19 @@ export class TransactionService {
       where: {
         vendorId: vendor.id,
         status: {
-          in: ['COMPLETED', 'PENDING'],
+          in: ['COMPLETED'],
+        },
+        createdAt: {
+          gte: previousMonthStart,
+          lte: previousMonthEnd,
+        },
+      },
+    });
+    const previousProcessedTransactions = await this.prisma.transaction.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: {
+          in: ['PENDING'],
         },
         createdAt: {
           gte: previousMonthStart,
@@ -554,11 +585,11 @@ export class TransactionService {
 
     const previousCompleted = calculateAmount(previousCompletedTransactions);
 
-    const processingTransactions = currentTransactions.filter(
+    const processingTransactions = currentProcessingTransactions.filter(
       (item) => item.status === 'PENDING',
     );
 
-    const previousProcessingTransactions = previousTransactions.filter(
+    const previousProcessingTransactions = previousProcessedTransactions.filter(
       (item) => item.status === 'PENDING',
     );
 

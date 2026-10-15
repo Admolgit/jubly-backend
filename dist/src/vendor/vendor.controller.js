@@ -34,10 +34,7 @@ let VendorController = class VendorController {
         let parsedDto;
         try {
             parsedDto = {
-                profile: JSON.parse(body.profile),
                 services: JSON.parse(body.services),
-                subaccount: JSON.parse(body.subaccount),
-                identityType: body.identityType,
             };
         }
         catch (err) {
@@ -56,6 +53,13 @@ let VendorController = class VendorController {
     createServices(req, body) {
         return this.vendorService.createServices(req.user.id, body.vendorId, body.services);
     }
+    submitProfileImage(req, file) {
+        const profileImage = file.profileImage?.[0];
+        if (!profileImage) {
+            throw new common_1.BadRequestException('Profile image is required');
+        }
+        return this.vendorService.submitProfileImage(req.user.id, profileImage);
+    }
     bulkUpdateServices(req, body) {
         return this.vendorService.bulkUpdateServices(req.user.id, body.updates);
     }
@@ -65,6 +69,11 @@ let VendorController = class VendorController {
     updateProfile(req, dto) {
         const userId = req.user.id;
         return this.vendorService.updateProfile(userId, dto);
+    }
+    updateVendorProfile(req, dto) {
+        console.log({ dto });
+        const userId = req.user.id;
+        return this.vendorService.updateVendorProfile(userId, dto);
     }
     createSubaccount(req, dto) {
         const userId = req.user.id;
@@ -80,6 +89,9 @@ let VendorController = class VendorController {
     }
     submitPortfolioImages(req, files) {
         return this.vendorService.uploadPortfolio(req.user.id, files);
+    }
+    replacePortfolio(req, files) {
+        return this.vendorService.replacePortfolio(req.user.id, files);
     }
     getStatus(req) {
         return this.vendorService.getVendorStatus(req.user.id);
@@ -159,6 +171,17 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "createServices", null);
 __decorate([
+    (0, common_1.Patch)('onboarding/profile-image'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)([{ name: 'profileImage', maxCount: 1 }], cloudinary_middleware_1.cloudinaryMulterOptions)),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.UploadedFiles)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "submitProfileImage", null);
+__decorate([
     (0, common_1.Patch)('onboarding/update-services'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
     (0, role_guard_1.Roles)('VENDOR'),
@@ -186,6 +209,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "updateProfile", null);
+__decorate([
+    (0, common_1.Patch)('onboarding/vendor-profile-update'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "updateVendorProfile", null);
 __decorate([
     (0, common_1.Post)('onboarding/create-subaccount'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
@@ -232,6 +265,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, Array]),
     __metadata("design:returntype", void 0)
 ], VendorController.prototype, "submitPortfolioImages", null);
+__decorate([
+    (0, common_1.Patch)('onboarding/update-portfolio-images'),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FilesInterceptor)('files', 10)),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.UploadedFiles)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Array]),
+    __metadata("design:returntype", void 0)
+], VendorController.prototype, "replacePortfolio", null);
 __decorate([
     (0, common_1.Get)('onboarding/status'),
     (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),

@@ -33,6 +33,30 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
             throw new Error(error.message);
         }
     }
+    async sendPasswordReset(email, resetUrl) {
+        const escapedUrl = resetUrl
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/'/g, '&#39;');
+        await this.sendMail({
+            to: email,
+            subject: 'Reset your Jubly password',
+            html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+          <h1>Reset your Jubly password</h1>
+          <p>Use the link below to choose a new password. This link expires in 15 minutes and can only be used once.</p>
+          <div style="text-align: center; margin: 28px 0;">
+                <a href="${escapedUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                    Reset password
+                </a>
+            </div>
+          <p>If you did not request this, you can ignore this email. Your password has not changed.</p>
+        </div>`,
+            text: `Reset your Jubly password: ${resetUrl}\n\nThis link expires in 15 minutes and can only be used once. If you did not request this, ignore this email. Your password has not changed.`,
+        });
+    }
     async sendOTP(email, otp) {
         await this.sendMail({
             to: email,

@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from 'prisma/prisma.service';
-import { CreateVendorDto, QueryVendorsDto } from './dto/create-vendor.dto';
+import { CreateVendorDto, QueryVendorsDto, UpdateVendorDto } from './dto/create-vendor.dto';
 import { successResponse } from 'src/utils/response';
 import { CloudinaryService } from 'src/infrastructure/cloudinary.service';
 import { Prisma } from '@prisma/client';
@@ -40,29 +40,36 @@ export class VendorService {
 
   async completeOnboarding(userId: string, dto, files) {
     try {
-      await this.createServices(userId, dto.profile.vendorId, dto.services);
-
-      const createdVendor = await this.submitIdentity(
-        userId,
-        dto.identityType,
-        files,
-      );
-
-      await this.createPaystackSubaccount(userId, dto.subaccount);
-
-      await this.submitProfileImage(userId, files.profileImage);
-      await this.uploadPortfolio(userId, files.portfolio);
-
-      await this.prisma.service.updateMany({
+      const vendor = await this.prisma.vendor.findFirst({
         where: { userId },
-        data: { vendorId: dto.profile.vendorId },
       });
 
+      await this.createServices(userId, vendor?.id ?? '', dto.services);
+
+      await this.uploadPortfolio(userId, files.portfolio);
+
       return successResponse(
-        { createdVendor },
+        { vendor },
         'Onboarding completed successfully',
         201,
       );
+
+      // const createdVendor = await this.submitIdentity(
+      //   userId,
+      //   dto.identityType,
+      //   files,
+      // );
+
+      // await this.createPaystackSubaccount(userId, dto.subaccount);
+
+      // await this.submitProfileImage(userId, files.profileImage);
+
+      // if (vendor) {
+      //   await this.prisma.service.updateMany({
+      //     where: { userId },
+      //     data: { vendorId: vendor.id },
+      //   });
+      // }
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
@@ -170,7 +177,6 @@ export class VendorService {
             description: service.description,
             price: service.price,
             durationMins: service.durationMins,
-            vendorId,
           },
           create: {
             userId,
@@ -189,6 +195,10 @@ export class VendorService {
 
   async createPaystackSubaccount(userId: string, dto: CreateSubaccountDto) {
     try {
+      if (!/^\d{10}$/.test(dto.accountNumber)) {
+        throw new BadRequestException('Account number must contain 10 digits');
+      }
+
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
       if (!user) throw new NotFoundException('User not found');
@@ -198,49 +208,50 @@ export class VendorService {
       });
       if (!vendor) throw new NotFoundException('Vendor not found');
 
-      const doesAccountExists = await this.prisma.subAccount.findFirst({
-        where: {
-          userId: user.id,
-          accountNumber: dto.accountNumber,
-        },
-      });
-
-      if (doesAccountExists) {
-        throw new BadRequestException(
-          'This bank account is already linked to your vendor profile.',
-        );
-      }
-
       const verifyAccount = await this.paystackService.resolveBankAccount(
         dto.accountNumber,
         dto.settlementBank,
       );
 
-      if (!verifyAccount.status) {
-        throw new BadRequestException('Account details does not match.');
+      if (!verifyAccount?.status || !verifyAccount?.data?.account_name) {
+        throw new BadRequestException('Unable to verify these bank details');
       }
 
-      const pastackUserAccount = await this.prisma.subAccount.create({
-        data: {
-          userId,
-          paystackAccountId: `local_${randomUUID()}`,
+      const payoutAccount = await this.prisma.$transaction(async (tx) => {
+        const existingAccount = await tx.subAccount.findFirst({
+          where: { userId },
+        });
+        const accountData = {
           bankName: dto.settlementBank,
           accountNumber: dto.accountNumber,
-          accountName: dto.businessName,
-          limit: 5000000,
-        },
-      });
+          accountName: verifyAccount.data.account_name,
+        };
+        const account = existingAccount
+          ? await tx.subAccount.update({
+              where: { id: existingAccount.id },
+              data: accountData,
+            })
+          : await tx.subAccount.create({
+              data: {
+                ...accountData,
+                userId,
+                paystackAccountId: `local_${randomUUID()}`,
+                limit: 5000000,
+              },
+            });
 
-      await this.prisma.vendor.update({
-        where: { userId },
-        data: {
-          bankAccountNumber: dto.accountNumber,
-          bankCode: dto.settlementBank,
-        },
+        await tx.vendor.update({
+          where: { id: vendor.id },
+          data: {
+            bankAccountNumber: dto.accountNumber,
+            bankCode: dto.settlementBank,
+          },
+        });
+        return account;
       });
 
       return successResponse(
-        pastackUserAccount,
+        payoutAccount,
         'Payout account created and verified successfully',
         201,
       );
@@ -488,6 +499,59 @@ export class VendorService {
     }
   }
 
+  async replacePortfolio(userId: string, files: Express.Multer.File[]) {
+    try {
+      if (!files?.length) {
+        throw new BadRequestException('At least one image is required');
+      }
+
+      const vendor = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+
+      if (!vendor) {
+        throw new NotFoundException('Vendor not found');
+      }
+
+      const uploads = await Promise.all(
+        files.map((file) => this.cloudinaryService.uploadImage(file)),
+      );
+
+      const updatedVendor = await this.prisma.vendor.update({
+        where: { userId },
+        data: {
+          portfolioImages: uploads,
+        },
+      });
+
+      await this.activityService.createLog({
+        vendorId: vendor.id,
+        userId: vendor.userId,
+        action: 'PORTFOLIO_UPDATED',
+        description: 'Vendor portfolio was replaced successfully.',
+        actor: 'Vendor',
+        actorType: 'VENDOR',
+        color: 'orange',
+      });
+
+      return successResponse(
+        {
+          portfolioImages: updatedVendor.portfolioImages,
+        },
+        'Portfolio updated successfully',
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to update portfolio.',
+        error.message,
+      );
+    }
+  }
+
   async updateProfile(userId: string, dto: CreateVendorDto) {
     try {
       const exists = await this.prisma.vendor.findUnique({ where: { userId } });
@@ -505,6 +569,66 @@ export class VendorService {
         { vendor },
         'Vendor profile updated successfully',
         201,
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to update vendor profile',
+        error.message,
+      );
+    }
+  }
+
+  async updateVendorProfile(userId: string, dto: UpdateVendorDto) {
+    try {
+      const exists = await this.prisma.vendor.findUnique({
+        where: { userId },
+      });
+      const userExists = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!exists) {
+        throw new BadRequestException('Vendor profile does not exist');
+      }
+      if (!userExists) {
+        throw new BadRequestException('User does not exist');
+      }
+
+      const data = Object.fromEntries(
+        Object.entries({
+          businessName: dto?.businessName,
+          city: dto?.city,
+          state: dto?.state,
+          country: dto?.country,
+        }).filter(([_, value]) => {
+          if (value === undefined || value === null) return false;
+          if (typeof value === 'string' && value.trim() === '') return false;
+
+          return true;
+        }),
+      );
+
+      console.log({ data });
+
+      const vendor = await this.prisma.vendor.update({
+        where: { userId },
+        data,
+      });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          phone: dto.phone,
+        },
+      });
+
+      return successResponse(
+        { vendor },
+        'Vendor profile updated successfully',
+        200,
       );
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -805,7 +929,7 @@ export class VendorService {
       const vendor = await this.prisma.vendor.findUnique({
         where: {
           userId: user.id,
-          kycStatus: 'APPROVED',
+          OR: [{ kycStatus: 'APPROVED' }, { isApproved: true }],
         },
         include: {
           user: {

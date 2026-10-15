@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.QueryVendorsDto = exports.CreateVendorProfileDto = exports.CreateVendorDto = void 0;
+exports.QueryVendorsDto = exports.CreateVendorProfileDto = exports.UpdateVendorDto = exports.CreateVendorDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class CreateVendorDto {
@@ -44,6 +44,42 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateVendorDto.prototype, "bio", void 0);
+class UpdateVendorDto {
+}
+exports.UpdateVendorDto = UpdateVendorDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "businessName", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "category", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "city", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "state", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "country", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "phone", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "vendorId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateVendorDto.prototype, "bio", void 0);
 class CreateVendorProfileDto {
 }
 exports.CreateVendorProfileDto = CreateVendorProfileDto;
