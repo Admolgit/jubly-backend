@@ -243,13 +243,22 @@ export class PaystackController {
 
       await this.bookingFinance.recordVerifiedCharge(event.data.reference);
 
-      if (transactionExists.bookingId) {
+      if (
+        transactionExists.bookingId &&
+        event.data.metadata?.type !== 'JUBLY_BOOKING_OUTSTANDING_PAYMENT'
+      ) {
         return { status: true };
       }
 
       if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
-        const { bookingId, percentageFee, clientName, clientEmail, title } =
-          event.data.metadata;
+        const {
+          bookingId,
+          percentageFee,
+          clientName,
+          clientEmail,
+          title,
+          amountPaid,
+        } = event.data.metadata;
 
         if (!bookingId) {
           throw new BadRequestException('Incomplete booking metadata for link');
@@ -270,6 +279,7 @@ export class PaystackController {
           await this.bookingService.confirmVendorBookingPayment(
             bookingId,
             event.data.reference,
+            amountPaid,
           );
 
         const senderDetails = await this.prisma.senderDetails.create({
@@ -292,6 +302,7 @@ export class PaystackController {
             percentageFee: transactionExists.percentageFee ?? percentageFee,
             paymentMethod: paymentChannel,
             senderDetailsId: senderDetails.id,
+            paymentStatus: true,
           },
         });
 
@@ -399,6 +410,140 @@ export class PaystackController {
         return { status: true };
       }
 
+      if (event.data.metadata?.type === 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
+        console.log(
+          'Processing outstanding payment webhook:',
+          event.data.metadata,
+        );
+        const {
+          bookingId,
+          vendorId,
+          clientName,
+          clientEmail,
+          amountPaid,
+          outstandingBalance,
+          percentageFee,
+        } = event.data.metadata;
+
+        if (!bookingId) {
+          throw new BadRequestException('Incomplete booking metadata for link');
+        }
+
+        console.log('GET PAST BOOKINGID CHECK');
+
+        const booking = await this.prisma.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            services: true,
+            vendor: true,
+          },
+        });
+
+        if (!booking) {
+          throw new BadRequestException('Vendor-created booking was not found');
+        }
+
+        console.log('GET PAST BOOKING CHECK - FOUND');
+
+        const vendorUser = await this.prisma.vendor.findUnique({
+          where: { id: vendorId },
+          include: { user: true },
+        });
+
+        console.log('GET PAST VENDOR CHECK - FOUND', vendorUser);
+
+        const updatedBooking = await this.prisma.booking.update({
+          where: { id: bookingId },
+          data: { amount: booking?.amount + amountPaid },
+        });
+
+        console.log('GET PAST BOOKING CHECK - UPDATED', updatedBooking);
+
+        const senderDetails = await this.prisma.senderDetails.create({
+          data: {
+            vendorId: booking.vendorId,
+            email: clientEmail,
+            senderName: accountName ?? clientName,
+            senderAccountNumber: accountNumber,
+            senderBankName: bank,
+            senderDescription: 'Payment via Paystack (outstanding payment)',
+          },
+        });
+
+        console.log('GET PAST SENDER DETAILS - CREATED', senderDetails);
+
+        await this.prisma.transaction.update({
+          where: { providerRef: event.data.reference },
+          data: {
+            bookingId: updatedBooking.id,
+            status: transactionExists.checkoutSnapshot ? undefined : 'PENDING',
+            paidAt: new Date(),
+            percentageFee: transactionExists.percentageFee ?? percentageFee,
+            paymentMethod: paymentChannel,
+            senderDetailsId: senderDetails.id,
+            paymentStatus: true,
+          },
+        });
+
+        console.log('GET PAST TRANSACTION CHECK - UPDATED');
+
+        await this.activityService.createLog({
+          vendorId: booking.vendorId,
+          action: 'PAYMENT_RECEIVED',
+          description: `Outstanding payment of ₦${amountPaid.toLocaleString()} received for booking #${booking.id}.`,
+          actor: 'System',
+          actorType: 'SYSTEM',
+          color: 'yellow',
+        });
+
+        console.log('GET PAST ACTIVITY LOG - CREATED');
+
+        setImmediate(() => {
+          void (async () => {
+            try {
+              await this.mailService.outstandingPaymentMail({
+                recipientEmail: clientEmail,
+                recipientName: clientName,
+                serviceName: booking.services.name,
+                vendorName: booking.vendor.businessName,
+                amountDue: Number(outstandingBalance),
+                amountPaid: Number(amountPaid),
+                remainingBalance:
+                  Number(outstandingBalance) - Number(amountPaid),
+                installmentAmount: Number(amountPaid),
+                dueDate: updatedBooking.startTime,
+                nextRepaymentDate: updatedBooking.startTime,
+                bookingId: booking.id,
+              });
+            } catch (err) {
+              console.error('sendClientReceiptMail failed:', err);
+            }
+            if (vendorUser?.user?.email) {
+              try {
+                await this.mailService.vendorOutstandingPaymentMail({
+                  recipientEmail: vendorUser.user.email,
+                  recipientName: vendorUser.businessName,
+                  clientName: clientName,
+                  serviceName: booking.services.name,
+                  amountDue: Number(outstandingBalance),
+                  amountPaid: Number(amountPaid),
+                  remainingBalance:
+                    Number(outstandingBalance) - Number(amountPaid),
+                  installmentAmount: Number(amountPaid),
+                  dueDate: updatedBooking.startTime,
+                  nextRepaymentDate: updatedBooking.startTime,
+                  bookingId: booking.id,
+                });
+              } catch (err) {
+                console.error('sendVendorReceiptMail failed:', err);
+              }
+            }
+          })();
+        });
+
+        return { status: true };
+      }
+
       {
         const {
           slug,
@@ -418,6 +563,7 @@ export class PaystackController {
           vendorEmail,
           city,
           state,
+          amountPaid,
           country,
           vendorUserId,
           phone,
@@ -429,6 +575,7 @@ export class PaystackController {
           !serviceId ||
           !clientId ||
           !email ||
+          !amountPaid ||
           dayOfWeek == null ||
           !startTime ||
           !endTime
@@ -452,12 +599,15 @@ export class PaystackController {
             endTime: new Date(endTime),
             status: 'CONFIRMED',
             phone: phone || '',
+            amount: amountPaid,
           },
           {
             reference: event.data.reference,
             slotLockId: event.data.metadata.slotLockId,
           },
         );
+
+        console.log('Book', { book });
 
         await this.prisma.transaction.update({
           where: { providerRef: event.data.reference },

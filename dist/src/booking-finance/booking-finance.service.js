@@ -35,16 +35,22 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
     get dispatchEnabled() {
         return process.env.JUBLY_FINANCIAL_DISPATCH_ENABLED === 'true';
     }
-    checkoutSnapshot(principal, gross, rate, identity) {
-        const principalKobo = (0, financial_allocation_1.kobo)(principal);
+    checkoutSnapshot(servicePrincipal, paymentPrincipal, gross, rate, identity) {
+        const servicePrincipalKobo = (0, financial_allocation_1.kobo)(servicePrincipal);
+        const paymentPrincipalKobo = (0, financial_allocation_1.kobo)(paymentPrincipal);
         const grossKobo = (0, financial_allocation_1.kobo)(gross);
-        (0, financial_allocation_1.vendorAllocation)(principalKobo, rate);
-        if (grossKobo < principalKobo)
+        (0, financial_allocation_1.vendorAllocation)(paymentPrincipalKobo, rate);
+        if (paymentPrincipalKobo > servicePrincipalKobo) {
+            throw new common_1.ConflictException('Payment exceeds service balance');
+        }
+        if (grossKobo < paymentPrincipalKobo) {
             throw new common_1.ConflictException('Invalid checkout amount');
+        }
         return {
-            servicePrincipalKobo: BigInt(principalKobo),
+            servicePrincipalKobo: BigInt(servicePrincipalKobo),
+            paymentPrincipalKobo: BigInt(paymentPrincipalKobo),
             expectedGrossChargeKobo: BigInt(grossKobo),
-            processingMarkupKobo: BigInt(grossKobo - principalKobo),
+            processingMarkupKobo: BigInt(grossKobo - paymentPrincipalKobo),
             percentageFee: rate,
             paymentEvidenceState: 'AWAITING_VERIFICATION',
             checkoutSnapshot: json({
@@ -67,10 +73,16 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             throw new Error('Payment has no trustworthy checkout snapshot');
         }
         const principal = (0, financial_allocation_1.exactKobo)(payment.servicePrincipalKobo);
+        console.log('principal OK:', principal);
+        const paymentPrincipal = (0, financial_allocation_1.kobo)(payment.amount);
+        console.log('paymentPrincipal OK:', paymentPrincipal);
         const gross = (0, financial_allocation_1.exactKobo)(payment.expectedGrossChargeKobo);
+        console.log('gross OK:', gross);
+        const processingMarkup = (0, financial_allocation_1.exactKobo)(payment.processingMarkupKobo);
+        console.log('processingMarkup OK:', processingMarkup);
         if (!principal ||
-            (0, financial_allocation_1.kobo)(payment.amount) !== principal ||
-            gross - principal !== (0, financial_allocation_1.exactKobo)(payment.processingMarkupKobo) ||
+            !paymentPrincipal ||
+            gross - paymentPrincipal !== processingMarkup ||
             snapshot.vendorId !== payment.vendorId ||
             snapshot.currency !== 'NGN' ||
             payment.currency !== 'NGN' ||
@@ -105,6 +117,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             this.validateCharge(payment, verified);
         }
         catch (error) {
+            console.log(error);
             await this.prisma.transaction.update({
                 where: { id: payment.id },
                 data: { paymentEvidenceState: 'REQUIRES_REVIEW' },
@@ -293,7 +306,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 cancelledByRole: role,
                 tiers: policy.tiers,
                 noShowPolicy: policy.noShowPolicy,
-            }, evidence.percentageFee);
+            }, evidence.initialPayment.payment.percentageFee);
             if (allocation.refund + allocation.gross > evidence.principal) {
                 throw new Error('Service-price cancellation allocation exceeds the verified payment budget');
             }
@@ -676,6 +689,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             await this.applyRefundOutcome(payment, claimed.id, response);
         }
         catch (_error) {
+            console.log(_error);
             await this.markRefundUnknown(payment.id, claimed.id);
         }
     }
@@ -686,6 +700,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 this.validateCharge(payment, charge);
             }
             catch (_error) {
+                console.log(_error);
                 await this.review(plan.bookingId, 'Payment evidence changed after financial allocation');
                 return false;
             }
@@ -706,6 +721,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             return true;
         }
         catch (_error) {
+            console.log(_error);
             return false;
         }
     }
@@ -850,6 +866,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             await this.review(payment.bookingId, 'Refund submission outcome is unproven; do not submit another refund');
         }
         catch (_error) {
+            console.log(_error);
             await this.markRefundUnknown(payment.id, op.id);
         }
     }
@@ -973,6 +990,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             await this.applyTransferOutcome(claimed, transfer);
         }
         catch (_error) {
+            console.log(_error);
             await this.prisma.settlement.updateMany({
                 where: {
                     id: claimed.id,
@@ -1138,6 +1156,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             });
         }
         catch (_error) {
+            console.log(_error);
             await this.prisma.settlement.updateMany({
                 where: {
                     id: settlement.id,

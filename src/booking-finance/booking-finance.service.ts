@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import {
   Booking,
@@ -59,14 +63,13 @@ export class BookingFinanceService {
     private readonly policies: CancellationPolicyService,
   ) {}
 
-  // Explicit rollout gate: enable only after ALL old payout/refund processes
-  // have been replaced. A database claim cannot fence an old binary.
   private get dispatchEnabled() {
     return process.env.JUBLY_FINANCIAL_DISPATCH_ENABLED === 'true';
   }
 
   checkoutSnapshot(
-    principal: number,
+    servicePrincipal: number,
+    paymentPrincipal: number,
     gross: number,
     rate: number,
     identity: {
@@ -75,15 +78,25 @@ export class BookingFinanceService {
       bookingId?: string;
     },
   ) {
-    const principalKobo = kobo(principal);
+    const servicePrincipalKobo = kobo(servicePrincipal);
+    const paymentPrincipalKobo = kobo(paymentPrincipal);
     const grossKobo = kobo(gross);
-    vendorAllocation(principalKobo, rate);
-    if (grossKobo < principalKobo)
+
+    vendorAllocation(paymentPrincipalKobo, rate);
+
+    if (paymentPrincipalKobo > servicePrincipalKobo) {
+      throw new ConflictException('Payment exceeds service balance');
+    }
+
+    if (grossKobo < paymentPrincipalKobo) {
       throw new ConflictException('Invalid checkout amount');
+    }
+
     return {
-      servicePrincipalKobo: BigInt(principalKobo),
+      servicePrincipalKobo: BigInt(servicePrincipalKobo),
+      paymentPrincipalKobo: BigInt(paymentPrincipalKobo),
       expectedGrossChargeKobo: BigInt(grossKobo),
-      processingMarkupKobo: BigInt(grossKobo - principalKobo),
+      processingMarkupKobo: BigInt(grossKobo - paymentPrincipalKobo),
       percentageFee: rate,
       paymentEvidenceState: 'AWAITING_VERIFICATION',
       checkoutSnapshot: json({
@@ -96,7 +109,14 @@ export class BookingFinanceService {
   }
 
   private validateCharge(payment: Transaction, charge: any) {
-    const snapshot = payment.checkoutSnapshot as any;
+    const snapshot = payment.checkoutSnapshot as {
+      vendorId: string;
+      serviceId: string;
+      bookingId?: string;
+      currency: string;
+      commissionRate: number;
+      capturedAt: string;
+    } | null;
     if (
       !snapshot ||
       payment.servicePrincipalKobo == null ||
@@ -108,12 +128,31 @@ export class BookingFinanceService {
     ) {
       throw new Error('Payment has no trustworthy checkout snapshot');
     }
+    // const principal = exactKobo(payment.servicePrincipalKobo);
+    // const paymentPrincipal = kobo(payment.amount);
+    // const gross = exactKobo(payment.expectedGrossChargeKobo);
+    // const processingMarkup = exactKobo(payment.processingMarkupKobo);
+
     const principal = exactKobo(payment.servicePrincipalKobo);
+
+    console.log('principal OK:', principal);
+
+    const paymentPrincipal = kobo(payment.amount);
+
+    console.log('paymentPrincipal OK:', paymentPrincipal);
+
     const gross = exactKobo(payment.expectedGrossChargeKobo);
+
+    console.log('gross OK:', gross);
+
+    const processingMarkup = exactKobo(payment.processingMarkupKobo);
+
+    console.log('processingMarkup OK:', processingMarkup);
+
     if (
       !principal ||
-      kobo(payment.amount) !== principal ||
-      gross - principal !== exactKobo(payment.processingMarkupKobo) ||
+      !paymentPrincipal ||
+      gross - paymentPrincipal !== processingMarkup ||
       snapshot.vendorId !== payment.vendorId ||
       snapshot.currency !== 'NGN' ||
       payment.currency !== 'NGN' ||
@@ -134,12 +173,10 @@ export class BookingFinanceService {
     ) {
       throw new Error('Payment evidence does not match the original checkout');
     }
+
     return principal;
   }
 
-  // Called for verified charge events/reconciliation BEFORE booking fulfillment.
-  // Legacy checkouts can still fulfill existing booking behavior, but never gain
-  // invented financial evidence or permission to move money automatically.
   async recordVerifiedCharge(reference: string, charge?: any) {
     const payment = await this.prisma.transaction.findUnique({
       where: { providerRef: reference },
@@ -151,7 +188,8 @@ export class BookingFinanceService {
       charge ?? (await this.paystack.verifyTransaction(reference)).data;
     try {
       this.validateCharge(payment, verified);
-    } catch (error) {
+    } catch (error: any) {
+      console.log(error);
       await this.prisma.transaction.update({
         where: { id: payment.id },
         data: { paymentEvidenceState: 'REQUIRES_REVIEW' },
@@ -379,7 +417,6 @@ export class BookingFinanceService {
       const booking = await tx.booking.findUniqueOrThrow({
         where: { id: bookingId },
       });
-
       await this.touch(tx, booking, {
         financialMode: 'REVIEW',
         financialReviewReason: reason,
@@ -440,7 +477,7 @@ export class BookingFinanceService {
           tiers: policy.tiers,
           noShowPolicy: policy.noShowPolicy,
         },
-        evidence.percentageFee!,
+        evidence.initialPayment.payment.percentageFee!,
       );
       if (allocation.refund + allocation.gross > evidence.principal) {
         throw new Error(
@@ -636,7 +673,6 @@ export class BookingFinanceService {
         bookingId,
         'Cash payment; no Jubly-held funds to settle',
       );
-
       return {
         transaction: await this.prisma.transaction.findFirst({
           where: { bookingId },
@@ -684,7 +720,6 @@ export class BookingFinanceService {
             'Completion request changed while verifying payment',
           );
         }
-
         if (
           !active.includes(current.status) ||
           (current.financialMode && current.financialMode !== 'UNDECIDED')
@@ -762,12 +797,10 @@ export class BookingFinanceService {
         bookingId,
         'Historical or conflicting vendor settlement requires review',
       );
-
       throw new ConflictException('Settlement requires financial review');
     }
 
     await this.processBooking(bookingId);
-
     settlement = await this.prisma.settlement.findUniqueOrThrow({
       where: { bookingId },
     });
@@ -917,6 +950,7 @@ export class BookingFinanceService {
       });
       await this.applyRefundOutcome(payment, claimed.id, response);
     } catch (_error) {
+      console.log(_error);
       await this.markRefundUnknown(payment.id, claimed.id);
     }
   }
@@ -929,6 +963,7 @@ export class BookingFinanceService {
       try {
         this.validateCharge(payment, charge);
       } catch (_error) {
+        console.log(_error);
         await this.review(
           plan.bookingId,
           'Payment evidence changed after financial allocation',
@@ -959,6 +994,7 @@ export class BookingFinanceService {
       }
       return true;
     } catch (_error) {
+      console.log(_error);
       // Provider availability failures can be retried before dispatch safely.
       return false;
     }
@@ -1141,6 +1177,7 @@ export class BookingFinanceService {
         'Refund submission outcome is unproven; do not submit another refund',
       );
     } catch (_error) {
+      console.log(_error);
       await this.markRefundUnknown(payment.id, op.id);
     }
   }
@@ -1292,6 +1329,7 @@ export class BookingFinanceService {
       });
       await this.applyTransferOutcome(claimed, transfer);
     } catch (_error) {
+      console.log(_error);
       await this.prisma.settlement.updateMany({
         where: {
           id: claimed.id,
@@ -1492,7 +1530,8 @@ export class BookingFinanceService {
           },
         });
       });
-    } catch (_error) {
+    } catch (_error: any) {
+      console.log(_error);
       await this.prisma.settlement.updateMany({
         where: {
           id: settlement.id,

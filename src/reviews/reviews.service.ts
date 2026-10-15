@@ -41,18 +41,7 @@ export class ReviewsService {
     }
   }
 
-  private async eligibleBooking(customerId: string, bookingId: string) {
-    if (!isMongoId(customerId)) throw new UnauthorizedException();
-
-    const customer = await this.prisma.user.findUnique({
-      where: { id: customerId },
-      select: { id: true, role: true },
-    });
-    
-    if (!customer) throw new UnauthorizedException();
-    if (customer.role !== UserRole.CLIENT) {
-      throw new ForbiddenException('Only clients can access booking reviews');
-    }
+  private async eligibleBooking(bookingId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       select: {
@@ -65,11 +54,22 @@ export class ReviewsService {
     });
     if (!booking) throw new NotFoundException('Booking not found');
 
+    const customer = await this.prisma.user.findUnique({
+      where: { id: booking.clientId as string },
+      select: { id: true, role: true },
+    });
+
+    if (!customer) throw new UnauthorizedException();
+    if (customer.role !== UserRole.CLIENT) {
+      throw new ForbiddenException('Only clients can access booking reviews');
+    }
+
     // Both legacy owner fields must agree when present. Never fall back to email.
     const owners = [booking.clientId, booking.userId].filter(
       (id): id is string => id !== null && id !== undefined,
     );
-    if (!owners.length || owners.some((id) => id !== customer.id)) {
+
+    if (!owners.length || owners.every((id) => id !== customer.id)) {
       throw new NotFoundException('Booking not found');
     }
 
@@ -80,24 +80,26 @@ export class ReviewsService {
       where: { id: booking.vendorId },
       select: { id: true, userId: true },
     });
+
     if (!vendor) throw new NotFoundException('Vendor not found');
+
     if (vendor.userId === customer.id)
       throw new ForbiddenException('Self-reviews are not allowed');
+
     if (booking.status !== BookingStatus.COMPLETED) {
       throw new BadRequestException('Only completed bookings can be reviewed');
     }
+
     return booking;
   }
 
-  create(customerId: string, dto: CreateReviewDto) {
+  create(dto: CreateReviewDto) {
     return this.execute(async () => {
-
       if (!Number.isInteger(dto.rating) || dto.rating < 1 || dto.rating > 5) {
         throw new BadRequestException(
           'Rating must be an integer between 1 and 5',
         );
       }
-
       if (
         dto.comment != null &&
         (typeof dto.comment !== 'string' || dto.comment.trim().length > 2000)
@@ -106,9 +108,7 @@ export class ReviewsService {
           'Comment must be a string of at most 2000 characters',
         );
       }
-
-      const booking = await this.eligibleBooking(customerId, dto.bookingId);
-
+      const booking = await this.eligibleBooking(dto.bookingId);
       const existing = await this.prisma.review.findUnique({
         where: { bookingId: booking.id },
         select: { id: true },
@@ -116,12 +116,12 @@ export class ReviewsService {
 
       if (existing)
         throw new ConflictException('This booking has already been reviewed');
-      
+
       const review = await this.prisma.review.create({
         data: {
           bookingId: booking.id,
           vendorId: booking.vendorId,
-          customerId,
+          customerId: booking.clientId as string,
           rating: dto.rating,
           comment: dto.comment?.trim() || null,
         },
@@ -132,7 +132,7 @@ export class ReviewsService {
 
   getBookingReview(customerId: string, bookingId: string) {
     return this.execute(async () => {
-      const booking = await this.eligibleBooking(customerId, bookingId);
+      const booking = await this.eligibleBooking(bookingId);
       const review = await this.prisma.review.findUnique({
         where: { bookingId: booking.id },
       });
@@ -151,13 +151,11 @@ export class ReviewsService {
       });
 
       if (!vendor) throw new NotFoundException('Vendor profile not found');
-      
       const { page, limit } = query;
       const skip = (page - 1) * limit;
 
       if (!Number.isSafeInteger(skip))
         throw new BadRequestException('Page is too large');
-      
       const [rows, aggregate] = await this.prisma.$transaction([
         this.prisma.review.findMany({
           where: { vendorId },

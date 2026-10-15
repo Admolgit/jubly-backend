@@ -23,6 +23,7 @@ export interface IBooking {
   date: string;
   status: string;
   phone: string;
+  amount?: number;
 }
 
 export enum BookingFilter {

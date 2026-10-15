@@ -101,6 +101,12 @@ let BookingController = class BookingController {
     getClientBookingStats(clientEmail, vendorId) {
         return this.bookingService.getClientBookingStats(clientEmail, vendorId);
     }
+    getClientBookingHistory(clientEmail, vendorId, page = '1', limit = '10') {
+        return this.bookingService.getClientBookingHistory(clientEmail, vendorId, page, limit);
+    }
+    payOutstanding(bookingId, clientId, vendorId, dto) {
+        return this.bookingService.payOutstanding(bookingId, clientId, vendorId, dto);
+    }
     getBusinessCategories() {
         return this.bookingService.getBusinessCategories();
     }
@@ -314,6 +320,30 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], BookingController.prototype, "getClientBookingStats", null);
+__decorate([
+    (0, common_1.Get)('client/:vendorId/:clientEmail/booking-history'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Param)('clientEmail')),
+    __param(1, (0, common_1.Param)('vendorId')),
+    __param(2, (0, common_1.Query)('page')),
+    __param(3, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object, Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "getClientBookingHistory", null);
+__decorate([
+    (0, common_1.Post)(':bookingId/pay-outstanding/:clientId/:vendorId'),
+    (0, common_1.UseGuards)(jwt_authGuard_1.JwtAuthGuard, role_guard_1.RolesGuard),
+    (0, role_guard_1.Roles)('VENDOR', 'CLIENT'),
+    __param(0, (0, common_1.Param)('bookingId')),
+    __param(1, (0, common_1.Param)('clientId')),
+    __param(2, (0, common_1.Param)('vendorId')),
+    __param(3, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, Object]),
+    __metadata("design:returntype", void 0)
+], BookingController.prototype, "payOutstanding", null);
 __decorate([
     (0, common_1.Get)('business-categories'),
     (0, public_decorator_1.Public)(),

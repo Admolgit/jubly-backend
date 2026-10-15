@@ -37,10 +37,14 @@ export class BookingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   createVendorBooking(
-    @Req() req: { user: { id: string, email: string } },
+    @Req() req: { user: { id: string; email: string } },
     @Body() dto: CreateVendorBookingDto,
   ) {
-    return this.bookingService.createVendorBooking(req.user.id, req.user.email, dto);
+    return this.bookingService.createVendorBooking(
+      req.user.id,
+      req.user.email,
+      dto,
+    );
   }
 
   @Post('initialize-payment')
@@ -237,6 +241,40 @@ export class BookingController {
     @Param('vendorId') vendorId: string,
   ) {
     return this.bookingService.getClientBookingStats(clientEmail, vendorId);
+  }
+
+  @Get('client/:vendorId/:clientEmail/booking-history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  getClientBookingHistory(
+    @Param('clientEmail') clientEmail: string,
+    @Param('vendorId') vendorId: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    return this.bookingService.getClientBookingHistory(
+      clientEmail,
+      vendorId,
+      page,
+      limit,
+    );
+  }
+
+  @Post(':bookingId/pay-outstanding/:clientId/:vendorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('VENDOR', 'CLIENT')
+  payOutstanding(
+    @Param('bookingId') bookingId: string,
+    @Param('clientId') clientId: string,
+    @Param('vendorId') vendorId: string,
+    @Body() dto: { amount: number },
+  ) {
+    return this.bookingService.payOutstanding(
+      bookingId,
+      clientId,
+      vendorId,
+      dto,
+    );
   }
 
   @Get('business-categories')
