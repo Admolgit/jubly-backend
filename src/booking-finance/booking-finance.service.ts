@@ -1393,6 +1393,21 @@ export class BookingFinanceService {
         // attempt. Its delayed failed/pending result cannot change the new one.
         return;
       }
+
+      this.logger.warn(
+        `[TRANSFER_RECIPIENT_DEBUG] ${JSON.stringify({
+          settlementId: current.id,
+          expectedRecipientCode: expected.recipientCode,
+          currentRecipientCode: current.recipientCode,
+          receivedRecipient:
+            typeof transfer.recipient === 'object'
+              ? transfer.recipient?.recipient_code
+              : transfer.recipient,
+          receivedRecipientType: typeof transfer.recipient,
+          transferReference: transfer.reference,
+        })}`,
+      );
+
       if (
         transfer.reference !== expected.reference ||
         transfer.currency !== expected.currency ||
