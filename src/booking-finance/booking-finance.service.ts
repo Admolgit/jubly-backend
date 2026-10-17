@@ -803,6 +803,20 @@ export class BookingFinanceService {
     });
 
     if (booking.financialMode !== 'COMPLETION') {
+      this.logger.error(
+        `Completion financial state changed: ${JSON.stringify({
+          bookingId,
+          bookingStatus: booking.status,
+          financialMode: booking.financialMode,
+          financialVersion: booking.financialVersion,
+          financialReviewReason: booking.financialReviewReason,
+          settlementId: settlement.id,
+          settlementReference: settlement.reference,
+          settlementState: settlement.operationState,
+          settlementVersion: settlement.financialVersion,
+          settlementTransferCode: settlement.transferCode,
+        })}`,
+      );
       throw new ConflictException('Financial decision changed');
     }
 
@@ -1378,20 +1392,6 @@ export class BookingFinanceService {
         // attempt. Its delayed failed/pending result cannot change the new one.
         return;
       }
-      this.logger.warn(
-        `Transfer validation checks: ${JSON.stringify({
-          referenceMismatch: transfer.reference !== expected.reference,
-          currencyMismatch: transfer.currency !== expected.currency,
-          amountInvalid: !Number.isSafeInteger(transfer.amount),
-          amountMismatch:
-            transfer.amount !== exactKobo(expected.netTransferKobo!),
-          recipientMismatch: recipient !== expected.recipientCode,
-          transferCodeMissing: !transfer.transfer_code,
-          transferCodeMismatch:
-            current.transferCode != null &&
-            transfer.transfer_code !== current.transferCode,
-        })}`,
-      );
       if (
         transfer.reference !== expected.reference ||
         transfer.currency !== expected.currency ||
