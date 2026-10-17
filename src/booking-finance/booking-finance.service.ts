@@ -1489,15 +1489,6 @@ export class BookingFinanceService {
           : {},
       );
 
-      this.logger.warn(
-        `[TRANSFER_STATE_UPDATE] ${JSON.stringify({
-          settlementId: current.id,
-          nextState: state,
-          providerState,
-          transferCode: transfer.transfer_code,
-        })}`,
-      );
-
       await tx.settlement.update({
         where: { id: current.id },
         data: {
@@ -1520,6 +1511,15 @@ export class BookingFinanceService {
           ),
         },
       });
+
+      this.logger.warn(
+        `[TRANSFER_STATE_UPDATE_DONE] ${JSON.stringify({
+          settlementId: current.id,
+          bookingId: booking.id,
+          nextState: state,
+        })}`,
+      );
+
       if (state === 'SUCCESS' && current.purpose === 'NORMAL_COMPLETION') {
         const paymentIds = current.paymentTransactionIds?.length
           ? current.paymentTransactionIds
@@ -1546,6 +1546,13 @@ export class BookingFinanceService {
         });
       }
     });
+
+    this.logger.warn(
+      `[TRANSFER_OUTCOME_TRANSACTION_DONE] ${JSON.stringify({
+        settlementId: expected.id,
+        bookingId: expected.bookingId,
+      })}`,
+    );
   }
 
   private async reconcileTransfer(settlement: Settlement) {
