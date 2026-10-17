@@ -1373,10 +1373,23 @@ export class BookingFinanceService {
       const booking = await tx.booking.findUniqueOrThrow({
         where: { id: current.bookingId },
       });
+
       const recipient =
         typeof transfer.recipient === 'object'
           ? transfer.recipient?.recipient_code
           : transfer.recipient;
+
+      const recipientMismatch = recipient !== expected.recipientCode;
+      const referenceMismatch = transfer.reference !== expected.reference;
+      const currencyMismatch = transfer.currency !== expected.currency;
+      const amountInvalid = !Number.isSafeInteger(transfer.amount);
+      const amountMismatch =
+        transfer.amount !== exactKobo(expected.netTransferKobo!);
+      const transferCodeMissing = !transfer.transfer_code;
+      const transferCodeMismatch = Boolean(
+        current.transferCode && transfer.transfer_code !== current.transferCode,
+      );
+
       if (current.reference !== expected.reference) {
         if (
           ['success', 'reversed'].includes(
@@ -1395,43 +1408,30 @@ export class BookingFinanceService {
       }
 
       this.logger.warn(
-        `[TRANSFER_RECIPIENT_DEBUG] ${JSON.stringify({
-          settlementId: current.id,
+        `[TRANSFER_VALIDATION] ${JSON.stringify({
+          recipient,
           expectedRecipientCode: expected.recipientCode,
-          currentRecipientCode: current.recipientCode,
-          receivedRecipient:
-            typeof transfer.recipient === 'object'
-              ? transfer.recipient?.recipient_code
-              : transfer.recipient,
-          receivedRecipientType: typeof transfer.recipient,
-          transferReference: transfer.reference,
+          recipientType: typeof recipient,
+          expectedRecipientType: typeof expected.recipientCode,
+          recipientMismatch,
+          referenceMismatch,
+          currencyMismatch,
+          amountInvalid,
+          amountMismatch,
+          transferCodeMissing,
+          transferCodeMismatch,
         })}`,
       );
 
       if (
-        transfer.reference !== expected.reference ||
-        transfer.currency !== expected.currency ||
-        !Number.isSafeInteger(transfer.amount) ||
-        transfer.amount !== exactKobo(expected.netTransferKobo!) ||
-        recipient !== expected.recipientCode ||
-        !transfer.transfer_code ||
-        (current.transferCode &&
-          transfer.transfer_code !== current.transferCode)
+        referenceMismatch ||
+        currencyMismatch ||
+        amountInvalid ||
+        amountMismatch ||
+        recipientMismatch ||
+        transferCodeMissing ||
+        transferCodeMismatch
       ) {
-        this.logger.warn(
-          `Transfer validation checks: ${JSON.stringify({
-            referenceMismatch: transfer.reference !== expected.reference,
-            currencyMismatch: transfer.currency !== expected.currency,
-            amountInvalid: !Number.isSafeInteger(transfer.amount),
-            amountMismatch:
-              transfer.amount !== exactKobo(expected.netTransferKobo!),
-            recipientMismatch: recipient !== expected.recipientCode,
-            transferCodeMissing: !transfer.transfer_code,
-            transferCodeMismatch:
-              current.transferCode != null &&
-              transfer.transfer_code !== current.transferCode,
-          })}`,
-        );
         await this.touch(tx, booking, {
           financialMode: 'REVIEW',
           financialReviewReason:
@@ -1439,6 +1439,7 @@ export class BookingFinanceService {
         });
         return;
       }
+
       const providerState = String(transfer.status).toLowerCase();
       const state =
         providerState === 'success'
