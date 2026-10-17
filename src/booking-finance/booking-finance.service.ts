@@ -1351,6 +1351,24 @@ export class BookingFinanceService {
   }
 
   private async applyTransferOutcome(expected: Settlement, transfer: any) {
+    this.logger.warn(
+      `Transfer verification mismatch: ${JSON.stringify({
+        expectedReference: expected.reference,
+        receivedReference: transfer.reference,
+        expectedCurrency: expected.currency,
+        receivedCurrency: transfer.currency,
+        expectedAmountKobo: exactKobo(expected.netTransferKobo!),
+        receivedAmount: transfer.amount,
+        expectedRecipient: expected.recipientCode,
+        receivedRecipient:
+          typeof transfer.recipient === 'object'
+            ? transfer.recipient?.recipient_code
+            : transfer.recipient,
+        // expectedTransferCode: current.transferCode,
+        receivedTransferCode: transfer.transfer_code,
+        receivedStatus: transfer.status,
+      })}`,
+    );
     await this.atomic(async (tx) => {
       const current = await tx.settlement.findUniqueOrThrow({
         where: { id: expected.id },
