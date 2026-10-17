@@ -431,7 +431,6 @@ let VendorService = class VendorService {
                     return false;
                 return true;
             }));
-            console.log({ data });
             const vendor = await this.prisma.vendor.update({
                 where: { userId },
                 data,

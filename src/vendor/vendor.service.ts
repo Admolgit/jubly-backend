@@ -619,8 +619,6 @@ export class VendorService {
         }),
       );
 
-      console.log({ data });
-
       const vendor = await this.prisma.vendor.update({
         where: { userId },
         data,

@@ -49,8 +49,9 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
         });
         if (!booking)
             throw new common_1.NotFoundException('Booking not found');
+        const usedId = booking.clientId ?? booking.userId;
         const customer = await this.prisma.user.findUnique({
-            where: { id: booking.clientId },
+            where: { id: usedId },
             select: { id: true, role: true },
         });
         if (!customer)
@@ -81,6 +82,9 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
         return this.execute(async () => {
             if (!Number.isInteger(dto.rating) || dto.rating < 1 || dto.rating > 5) {
                 throw new common_1.BadRequestException('Rating must be an integer between 1 and 5');
+            }
+            if (!dto.bookingId) {
+                throw new common_1.BadRequestException('This booking has no linked customer account and cannot be reviewed.');
             }
             if (dto.comment != null &&
                 (typeof dto.comment !== 'string' || dto.comment.trim().length > 2000)) {

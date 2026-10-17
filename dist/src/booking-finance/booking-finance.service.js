@@ -17,6 +17,8 @@ const prisma_service_1 = require("../../prisma/prisma.service");
 const cancellation_policy_service_1 = require("../cancellation-policy/cancellation-policy.service");
 const paystack_service_1 = require("../paystack/paystack.service");
 const financial_allocation_1 = require("./financial-allocation");
+const paystackCalculation_1 = require("../utils/paystackCalculation");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const cancelled = [
     'CANCELLED',
     'CANCELLED_BY_CLIENT',
@@ -26,10 +28,11 @@ const active = ['CONFIRMED', 'COMPLETION_PENDING_APPROVAL'];
 const json = (value) => JSON.parse(JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item));
 const nextCheck = () => new Date(Date.now() + 60_000);
 let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceService {
-    constructor(prisma, paystack, policies) {
+    constructor(prisma, paystack, policies, platformSettings) {
         this.prisma = prisma;
         this.paystack = paystack;
         this.policies = policies;
+        this.platformSettings = platformSettings;
         this.logger = new common_1.Logger(BookingFinanceService_1.name);
     }
     get dispatchEnabled() {
@@ -73,13 +76,9 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             throw new Error('Payment has no trustworthy checkout snapshot');
         }
         const principal = (0, financial_allocation_1.exactKobo)(payment.servicePrincipalKobo);
-        console.log('principal OK:', principal);
         const paymentPrincipal = (0, financial_allocation_1.kobo)(payment.amount);
-        console.log('paymentPrincipal OK:', paymentPrincipal);
         const gross = (0, financial_allocation_1.exactKobo)(payment.expectedGrossChargeKobo);
-        console.log('gross OK:', gross);
         const processingMarkup = (0, financial_allocation_1.exactKobo)(payment.processingMarkupKobo);
-        console.log('processingMarkup OK:', processingMarkup);
         if (!principal ||
             !paymentPrincipal ||
             gross - paymentPrincipal !== processingMarkup ||
@@ -883,7 +882,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             return;
         const booking = await this.prisma.booking.findUniqueOrThrow({
             where: { id: bookingId },
-            include: { vendor: true },
+            include: { vendor: true, services: true },
         });
         if (!this.matchesPlan(booking, settlement))
             return;
@@ -981,8 +980,13 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         if (!claimed)
             return;
         try {
+            const paidAmount = booking?.amount;
+            const mainAmount = booking?.services?.price;
+            const vendorRate = await this.platformSettings.resolvePlatformPercentage(booking.vendorId);
+            const platformFee = (0, paystackCalculation_1.calculateJublyCommission)(mainAmount, vendorRate);
+            const vendorAmount = paidAmount - platformFee;
             const transfer = await this.paystack.initiateTransfer({
-                amount: (0, financial_allocation_1.exactKobo)(claimed.netTransferKobo) / 100,
+                amount: (0, financial_allocation_1.exactKobo)(vendorAmount) / 100,
                 recipientCode: claimed.recipientCode,
                 reference: claimed.reference,
                 reason: `Settlement for booking ${bookingId}`,
@@ -1290,5 +1294,6 @@ exports.BookingFinanceService = BookingFinanceService = BookingFinanceService_1 
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         paystack_service_1.PaystackService,
-        cancellation_policy_service_1.CancellationPolicyService])
+        cancellation_policy_service_1.CancellationPolicyService,
+        platform_settings_service_1.PlatformSettingsService])
 ], BookingFinanceService);

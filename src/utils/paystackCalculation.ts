@@ -15,7 +15,7 @@ export function addPaystackFee(amount: number): {
   } else {
     totalAmount = (amount + flatFee) / (1 - percentage);
   }
-  
+
   totalAmount = Math.ceil(totalAmount * 100) / 100;
 
   return {

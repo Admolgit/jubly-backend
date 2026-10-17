@@ -54,8 +54,10 @@ export class ReviewsService {
     });
     if (!booking) throw new NotFoundException('Booking not found');
 
+    const usedId = booking.clientId ?? booking.userId;
+
     const customer = await this.prisma.user.findUnique({
-      where: { id: booking.clientId as string },
+      where: { id: usedId as string },
       select: { id: true, role: true },
     });
 
@@ -73,7 +75,6 @@ export class ReviewsService {
       throw new NotFoundException('Booking not found');
     }
 
-    // Query by ID directly: existing Booking.vendorId has no ObjectId annotation.
     if (!isMongoId(booking.vendorId))
       throw new NotFoundException('Vendor not found');
     const vendor = await this.prisma.vendor.findUnique({
@@ -98,6 +99,11 @@ export class ReviewsService {
       if (!Number.isInteger(dto.rating) || dto.rating < 1 || dto.rating > 5) {
         throw new BadRequestException(
           'Rating must be an integer between 1 and 5',
+        );
+      }
+      if (!dto.bookingId) {
+        throw new BadRequestException(
+          'This booking has no linked customer account and cannot be reviewed.',
         );
       }
       if (

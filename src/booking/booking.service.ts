@@ -624,6 +624,7 @@ export class BookingService {
   ) {
     try {
       const isExistingBooking = Boolean(dto.bookingId);
+
       const vendor = await this.prisma.vendor.findFirst({
         where: { userId },
       });
@@ -719,7 +720,6 @@ export class BookingService {
 
       let amount = Number(dto.amount);
       const mainAmount = service.price;
-
       if (dto.paymentOption === 'PAID_BY_HAND') {
         const canUsePaidByHand =
           await this.platformSettingsService.canUsePaidByHand(vendor.id);
@@ -739,7 +739,8 @@ export class BookingService {
               start: startTime,
               end: endTime,
             });
-            return tx.booking.create({
+
+            const createdBooking = await tx.booking.create({
               data: {
                 vendorId: vendor.id,
                 serviceId: dto.serviceId,
@@ -759,69 +760,29 @@ export class BookingService {
                 paymentVerification: 'VENDOR_REPORTED',
               },
             });
-          },
-        );
 
-        await this.prisma.transaction.create({
-          data: {
-            vendorId: vendor.id,
-            bookingId: booking.id,
-            amount,
-            currency: 'NGN',
-            providerRef: `MANUAL-${booking.id}`,
-            paymentMethod: 'PAID_BY_HAND',
-            status: 'COMPLETED',
-            percentageFee: 0,
-            title: service.name,
-            category: 'VENDOR_REPORTED',
-            paidAt: new Date(),
-          },
-        });
-
-        if (calendarIntegration) {
-          try {
-            await this.googleCalendarService.verifyBooking({
-              calendar: calendarIntegration,
-              startTime,
-              endTime,
+            await tx.transaction.create({
+              data: {
+                vendor: {
+                  connect: { id: vendor.id },
+                },
+                booking: {
+                  connect: { id: createdBooking.id },
+                },
+                amount,
+                currency: 'NGN',
+                providerRef: `MANUAL-${createdBooking.id}`,
+                paymentMethod: 'PAID_BY_HAND',
+                status: 'COMPLETED',
+                percentageFee: 0,
+                title: service.name,
+                category: 'VENDOR_REPORTED',
+                paidAt: new Date(),
+              },
             });
 
-            await this.googleCalendarService.createCalendarEvent(
-              calendarIntegration,
-              {
-                title: service.name,
-                description: service.description ?? 'No description',
-                startTime,
-                endTime,
-                attendeeEmail: dto.clientEmail,
-                attendeeName: dto.clientName,
-                vendorEmail: existingClient?.email,
-                bookingId: booking.id,
-              },
-            );
-          } catch (err: any) {
-            console.error('Google Calendar failed:', err.message);
-          }
-        }
-
-        await this.activityService.createLog({
-          vendorId: vendor.id,
-          userId,
-          action: 'MANUAL_PAYMENT_RECORDED',
-          description: `Booking #${booking.id} was recorded as paid by hand.`,
-          actor: dto.clientName,
-          actorType: 'VENDOR',
-          color: 'green',
-        });
-
-        this.sendVendorCreatedBookingEmails(
-          userId,
-          vendor,
-          service,
-          booking,
-          dto,
-        ).catch((err: any) =>
-          console.error('Vendor-created booking email failed:', err?.message),
+            return createdBooking;
+          },
         );
 
         if (calendarIntegration) {
@@ -846,9 +807,42 @@ export class BookingService {
               },
             );
           } catch (err: any) {
-            console.error('Google Calendar failed:', err.message);
+            console.error(
+              'Google Calendar failed:',
+              err instanceof Error ? err.message : String(err),
+            );
           }
         }
+
+        try {
+          await this.activityService.createLog({
+            vendorId: vendor.id,
+            userId,
+            action: 'MANUAL_PAYMENT_RECORDED',
+            description: `Booking #${booking.id} was recorded as paid by hand.`,
+            actor: dto.clientName,
+            actorType: 'VENDOR',
+            color: 'green',
+          });
+        } catch (err: any) {
+          console.error(
+            'Activity log creation failed:',
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+
+        this.sendVendorCreatedBookingEmails(
+          userId,
+          vendor,
+          service,
+          booking,
+          dto,
+        ).catch((err: any) =>
+          console.error(
+            'Vendor-created booking email failed:',
+            err instanceof Error ? err.message : String(err),
+          ),
+        );
 
         return { booking };
       }
@@ -2271,8 +2265,6 @@ export class BookingService {
         throw new BadRequestException('This approval link is invalid.');
       }
 
-      console.log('VERIFY ID', { payload });
-
       return { bookingId: payload.bookingId };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
@@ -2468,8 +2460,6 @@ export class BookingService {
         );
       }
 
-      console.log('APPROVE', { booking });
-
       const { transaction, settlement } =
         await this.settleBookingPayment(booking);
       const payoutAmount = settlement?.amount ?? transaction?.amount;
@@ -2619,8 +2609,6 @@ export class BookingService {
     try {
       const { bookingId } = this.verifyCompletionToken(token);
       const booking = await this.loadBookingForCompletion(bookingId);
-
-      console.log({ booking });
 
       return successResponse(
         {
@@ -3015,18 +3003,12 @@ export class BookingService {
         },
       });
 
-      console.log({ verifiedPayments });
-
       const totalPaid = verifiedPayments.reduce(
         (sum, payment) => sum + Number(payment.amount ?? 0),
         0,
       );
 
-      console.log({ totalPaid });
-
       const outstandingBalance = Math.max(0, mainAmount - totalPaid);
-
-      console.log({ outstandingBalance, mainAmount });
 
       if (outstandingBalance <= 0) {
         throw new BadRequestException('Booking is already fully paid.');
@@ -3067,14 +3049,6 @@ export class BookingService {
         outstandingBalance,
         percentageFee,
       };
-
-      console.log('Outstanding payment checkout:', {
-        bookingId: booking.id,
-        requestedAmount,
-        outstandingBalance,
-        calculatedAmount,
-        amountType: typeof calculatedAmount,
-      });
 
       const paystackResponse = await this.paystackService.initializeTransaction(
         client.email,

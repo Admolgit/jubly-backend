@@ -20,6 +20,8 @@ import {
   kobo,
   vendorAllocation,
 } from './financial-allocation';
+import { calculateJublyCommission } from 'src/utils/paystackCalculation';
+import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 
 type RefundInstruction = {
   id: string;
@@ -61,6 +63,7 @@ export class BookingFinanceService {
     private readonly prisma: PrismaService,
     private readonly paystack: PaystackService,
     private readonly policies: CancellationPolicyService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   private get dispatchEnabled() {
@@ -135,19 +138,11 @@ export class BookingFinanceService {
 
     const principal = exactKobo(payment.servicePrincipalKobo);
 
-    console.log('principal OK:', principal);
-
     const paymentPrincipal = kobo(payment.amount);
-
-    console.log('paymentPrincipal OK:', paymentPrincipal);
 
     const gross = exactKobo(payment.expectedGrossChargeKobo);
 
-    console.log('gross OK:', gross);
-
     const processingMarkup = exactKobo(payment.processingMarkupKobo);
-
-    console.log('processingMarkup OK:', processingMarkup);
 
     if (
       !principal ||
@@ -646,8 +641,6 @@ export class BookingFinanceService {
       where: { id: bookingId },
     });
 
-    // Compare the actual completion request, not updatedAt.
-    // Unrelated booking updates should not invalidate an unchanged request.
     if (
       expected &&
       (booking.status !== expected.status ||
@@ -1198,7 +1191,7 @@ export class BookingFinanceService {
       return;
     const booking = await this.prisma.booking.findUniqueOrThrow({
       where: { id: bookingId },
-      include: { vendor: true },
+      include: { vendor: true, services: true },
     });
     if (!this.matchesPlan(booking, settlement)) return;
     const payment = await this.prisma.transaction.findUniqueOrThrow({
@@ -1321,8 +1314,17 @@ export class BookingFinanceService {
     });
     if (!claimed) return;
     try {
+      const paidAmount = booking?.amount as number;
+      const mainAmount = booking?.services?.price;
+
+      const vendorRate = await this.platformSettings.resolvePlatformPercentage(
+        booking.vendorId,
+      );
+
+      const platformFee = calculateJublyCommission(mainAmount, vendorRate);
+      const vendorAmount = paidAmount - platformFee;
       const transfer = await this.paystack.initiateTransfer({
-        amount: exactKobo(claimed.netTransferKobo!) / 100,
+        amount: exactKobo(vendorAmount) / 100,
         recipientCode: claimed.recipientCode!,
         reference: claimed.reference!,
         reason: `Settlement for booking ${bookingId}`,
@@ -1484,8 +1486,6 @@ export class BookingFinanceService {
     try {
       const transfer = await this.paystack.verifyTransfer(settlement.reference);
       if (!transfer) {
-        // A stale worker may still dispatch after losing its lease. Never reclaim
-        // its instruction or release its budget based on a temporary not-found.
         await this.prisma.settlement.updateMany({
           where: {
             id: settlement.id,
