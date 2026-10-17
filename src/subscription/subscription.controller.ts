@@ -50,10 +50,13 @@ export class SubscriptionController {
     const { priceNaira, durationDays } =
       await this.platformSettingsService.getSubscriptionPricing(vendor.id);
 
-    return successResponse({
-      priceNaira,
-      durationDays,
-    }, 'Subscription fee retrieved successfully');
+    return successResponse(
+      {
+        priceNaira,
+        durationDays,
+      },
+      'Subscription fee retrieved successfully',
+    );
   }
 
   @Post('upgrade')
@@ -80,7 +83,7 @@ export class SubscriptionController {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.id },
     });
-    
+
     const { priceNaira, durationDays } =
       await this.platformSettingsService.getSubscriptionPricing(vendor.id);
 

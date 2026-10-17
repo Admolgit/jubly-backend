@@ -14,6 +14,8 @@ const cancellation_policy_module_1 = require("../cancellation-policy/cancellatio
 const paystack_service_1 = require("../paystack/paystack.service");
 const booking_finance_service_1 = require("./booking-finance.service");
 const financial_response_interceptor_1 = require("./financial-response.interceptor");
+const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
+const subscription_service_1 = require("../subscription/subscription.service");
 let BookingFinanceModule = class BookingFinanceModule {
 };
 exports.BookingFinanceModule = BookingFinanceModule;
@@ -24,6 +26,8 @@ exports.BookingFinanceModule = BookingFinanceModule = __decorate([
             prisma_service_1.PrismaService,
             paystack_service_1.PaystackService,
             booking_finance_service_1.BookingFinanceService,
+            subscription_service_1.SubscriptionService,
+            platform_settings_service_1.PlatformSettingsService,
             { provide: core_1.APP_INTERCEPTOR, useClass: financial_response_interceptor_1.FinancialResponseInterceptor },
         ],
         exports: [booking_finance_service_1.BookingFinanceService],

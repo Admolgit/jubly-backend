@@ -63,7 +63,7 @@ export class SubscriptionService {
       existing.expiresAt &&
       existing.expiresAt > now;
 
-    const startPoint = stillActive ? existing!.expiresAt! : now;
+    const startPoint = stillActive ? existing.expiresAt! : now;
     const expiresAt = new Date(
       startPoint.getTime() + durationDays * 24 * 60 * 60 * 1000,
     );
