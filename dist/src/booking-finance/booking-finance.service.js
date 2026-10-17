@@ -1038,6 +1038,16 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 }
                 return;
             }
+            this.logger.warn(`[TRANSFER_RECIPIENT_DEBUG] ${JSON.stringify({
+                settlementId: current.id,
+                expectedRecipientCode: expected.recipientCode,
+                currentRecipientCode: current.recipientCode,
+                receivedRecipient: typeof transfer.recipient === 'object'
+                    ? transfer.recipient?.recipient_code
+                    : transfer.recipient,
+                receivedRecipientType: typeof transfer.recipient,
+                transferReference: transfer.reference,
+            })}`);
             if (transfer.reference !== expected.reference ||
                 transfer.currency !== expected.currency ||
                 !Number.isSafeInteger(transfer.amount) ||
