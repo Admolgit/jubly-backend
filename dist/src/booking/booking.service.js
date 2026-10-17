@@ -1695,6 +1695,7 @@ let BookingService = class BookingService {
     async completeBookingNow(booking, user) {
         const { transaction, settlement } = await this.settleBookingPayment(booking);
         const payoutAmount = settlement?.amount ?? transaction?.amount;
+        console.log({ settlement, transaction });
         const updatedBooking = await this.prisma.booking.update({
             where: {
                 id: booking.id,
