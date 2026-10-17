@@ -17,8 +17,6 @@ const prisma_service_1 = require("../../prisma/prisma.service");
 const cancellation_policy_service_1 = require("../cancellation-policy/cancellation-policy.service");
 const paystack_service_1 = require("../paystack/paystack.service");
 const financial_allocation_1 = require("./financial-allocation");
-const paystackCalculation_1 = require("../utils/paystackCalculation");
-const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const cancelled = [
     'CANCELLED',
     'CANCELLED_BY_CLIENT',
@@ -28,11 +26,10 @@ const active = ['CONFIRMED', 'COMPLETION_PENDING_APPROVAL'];
 const json = (value) => JSON.parse(JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item));
 const nextCheck = () => new Date(Date.now() + 60_000);
 let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceService {
-    constructor(prisma, paystack, policies, platformSettings) {
+    constructor(prisma, paystack, policies) {
         this.prisma = prisma;
         this.paystack = paystack;
         this.policies = policies;
-        this.platformSettings = platformSettings;
         this.logger = new common_1.Logger(BookingFinanceService_1.name);
     }
     get dispatchEnabled() {
@@ -101,7 +98,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 String(charge.id) !== payment.providerTransactionId)) {
             throw new Error('Payment evidence does not match the original checkout');
         }
-        return principal;
+        return paymentPrincipal;
     }
     async recordVerifiedCharge(reference, charge) {
         const payment = await this.prisma.transaction.findUnique({
@@ -886,9 +883,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         });
         if (!this.matchesPlan(booking, settlement))
             return;
-        const payment = await this.prisma.transaction.findUniqueOrThrow({
-            where: { id: settlement.transactionId },
-        });
         const paymentIds = settlement.paymentTransactionIds?.length
             ? settlement.paymentTransactionIds
             : settlement.transactionId
@@ -923,8 +917,11 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 return;
             }
         }
-        if (!(await this.checkExternalConflicts(settlement, payment)))
+        if (settlement.netTransferKobo == null ||
+            settlement.netTransferKobo <= BigInt(0)) {
+            await this.review(bookingId, 'Settlement has no valid vendor transfer amount');
             return;
+        }
         if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
             await this.review(bookingId, 'Vendor settlement account is missing');
             return;
@@ -980,13 +977,8 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         if (!claimed)
             return;
         try {
-            const paidAmount = booking?.amount;
-            const mainAmount = booking?.services?.price;
-            const vendorRate = await this.platformSettings.resolvePlatformPercentage(booking.vendorId);
-            const platformFee = (0, paystackCalculation_1.calculateJublyCommission)(mainAmount, vendorRate);
-            const vendorAmount = paidAmount - platformFee;
             const transfer = await this.paystack.initiateTransfer({
-                amount: (0, financial_allocation_1.exactKobo)(vendorAmount) / 100,
+                amount: (0, financial_allocation_1.exactKobo)(claimed?.netTransferKobo) / 100,
                 recipientCode: claimed.recipientCode,
                 reference: claimed.reference,
                 reason: `Settlement for booking ${bookingId}`,
@@ -1294,6 +1286,5 @@ exports.BookingFinanceService = BookingFinanceService = BookingFinanceService_1 
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         paystack_service_1.PaystackService,
-        cancellation_policy_service_1.CancellationPolicyService,
-        platform_settings_service_1.PlatformSettingsService])
+        cancellation_policy_service_1.CancellationPolicyService])
 ], BookingFinanceService);

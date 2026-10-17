@@ -20,8 +20,6 @@ import {
   kobo,
   vendorAllocation,
 } from './financial-allocation';
-import { calculateJublyCommission } from 'src/utils/paystackCalculation';
-import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 
 type RefundInstruction = {
   id: string;
@@ -63,7 +61,6 @@ export class BookingFinanceService {
     private readonly prisma: PrismaService,
     private readonly paystack: PaystackService,
     private readonly policies: CancellationPolicyService,
-    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   private get dispatchEnabled() {
@@ -169,7 +166,10 @@ export class BookingFinanceService {
       throw new Error('Payment evidence does not match the original checkout');
     }
 
-    return principal;
+    // Each transaction represents only the amount paid in that instalment.
+    // servicePrincipalKobo is the full service price and must not be counted
+    // again for every outstanding payment.
+    return paymentPrincipal;
   }
 
   async recordVerifiedCharge(reference: string, charge?: any) {
@@ -1194,9 +1194,9 @@ export class BookingFinanceService {
       include: { vendor: true, services: true },
     });
     if (!this.matchesPlan(booking, settlement)) return;
-    const payment = await this.prisma.transaction.findUniqueOrThrow({
-      where: { id: settlement.transactionId },
-    });
+    // const payment = await this.prisma.transaction.findUniqueOrThrow({
+    //   where: { id: settlement.transactionId },
+    // });
     // if (
     //   settlement.purpose === 'CANCELLATION_COMPENSATION' &&
     //   !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
@@ -1255,7 +1255,16 @@ export class BookingFinanceService {
         return;
       }
     }
-    if (!(await this.checkExternalConflicts(settlement, payment))) return;
+    if (
+      settlement.netTransferKobo == null ||
+      settlement.netTransferKobo <= BigInt(0)
+    ) {
+      await this.review(
+        bookingId,
+        'Settlement has no valid vendor transfer amount',
+      );
+      return;
+    }
     if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
       await this.review(bookingId, 'Vendor settlement account is missing');
       return;
@@ -1314,17 +1323,12 @@ export class BookingFinanceService {
     });
     if (!claimed) return;
     try {
-      const paidAmount = booking?.amount as number;
-      const mainAmount = booking?.services?.price;
-
-      const vendorRate = await this.platformSettings.resolvePlatformPercentage(
-        booking.vendorId,
-      );
-
-      const platformFee = calculateJublyCommission(mainAmount, vendorRate);
-      const vendorAmount = paidAmount - platformFee;
+      // The settlement is the authoritative, immutable payout plan. It already
+      // combines all verified initial/outstanding payments and the commission.
+      // Never recalculate from booking.amount or service.price here: those values
+      // do not represent the verified sum of instalments and can over/underpay.
       const transfer = await this.paystack.initiateTransfer({
-        amount: exactKobo(vendorAmount) / 100,
+        amount: exactKobo(claimed?.netTransferKobo as any) / 100,
         recipientCode: claimed.recipientCode!,
         reference: claimed.reference!,
         reason: `Settlement for booking ${bookingId}`,
