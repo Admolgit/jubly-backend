@@ -1194,14 +1194,14 @@ export class BookingFinanceService {
       include: { vendor: true, services: true },
     });
     if (!this.matchesPlan(booking, settlement)) return;
-    // const payment = await this.prisma.transaction.findUniqueOrThrow({
-    //   where: { id: settlement.transactionId },
-    // });
-    // if (
-    //   settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-    //   !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
-    // )
-    //   return;
+    const payment = await this.prisma.transaction.findUniqueOrThrow({
+      where: { id: settlement.transactionId },
+    });
+    if (
+      settlement.purpose === 'CANCELLATION_COMPENSATION' &&
+      !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
+    )
+      return;
     const paymentIds = settlement.paymentTransactionIds?.length
       ? settlement.paymentTransactionIds
       : settlement.transactionId
@@ -1355,24 +1355,6 @@ export class BookingFinanceService {
       const current = await tx.settlement.findUniqueOrThrow({
         where: { id: expected.id },
       });
-      this.logger.warn(
-        `Transfer verification mismatch: ${JSON.stringify({
-          expectedReference: expected.reference,
-          receivedReference: transfer.reference,
-          expectedCurrency: expected.currency,
-          receivedCurrency: transfer.currency,
-          expectedAmountKobo: exactKobo(expected.netTransferKobo!),
-          receivedAmount: transfer.amount,
-          expectedRecipient: expected.recipientCode,
-          receivedRecipient:
-            typeof transfer.recipient === 'object'
-              ? transfer.recipient?.recipient_code
-              : transfer.recipient,
-          expectedTransferCode: current.transferCode,
-          receivedTransferCode: transfer.transfer_code,
-          receivedStatus: transfer.status,
-        })}`,
-      );
       const booking = await tx.booking.findUniqueOrThrow({
         where: { id: current.bookingId },
       });
@@ -1397,12 +1379,17 @@ export class BookingFinanceService {
         return;
       }
       this.logger.warn(
-        `Transfer code comparison: ${JSON.stringify({
-          expectedTransferCode: current.transferCode,
-          receivedTransferCode: transfer.transfer_code,
-          operationState: current.operationState,
-          expectedReference: expected.reference,
-          currentReference: current.reference,
+        `Transfer validation checks: ${JSON.stringify({
+          referenceMismatch: transfer.reference !== expected.reference,
+          currencyMismatch: transfer.currency !== expected.currency,
+          amountInvalid: !Number.isSafeInteger(transfer.amount),
+          amountMismatch:
+            transfer.amount !== exactKobo(expected.netTransferKobo!),
+          recipientMismatch: recipient !== expected.recipientCode,
+          transferCodeMissing: !transfer.transfer_code,
+          transferCodeMismatch:
+            current.transferCode != null &&
+            transfer.transfer_code !== current.transferCode,
         })}`,
       );
       if (
