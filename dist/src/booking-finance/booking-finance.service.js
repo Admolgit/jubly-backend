@@ -563,19 +563,19 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         booking = await this.prisma.booking.findUniqueOrThrow({
             where: { id: bookingId },
         });
+        this.logger.error(`Completion financial state changed: ${JSON.stringify({
+            bookingId,
+            bookingStatus: booking.status,
+            financialMode: booking.financialMode,
+            financialVersion: booking.financialVersion,
+            financialReviewReason: booking.financialReviewReason,
+            settlementId: settlement.id,
+            settlementReference: settlement.reference,
+            settlementState: settlement.operationState,
+            settlementVersion: settlement.financialVersion,
+            settlementTransferCode: settlement.transferCode,
+        })}`);
         if (booking.financialMode !== 'COMPLETION') {
-            this.logger.error(`Completion financial state changed: ${JSON.stringify({
-                bookingId,
-                bookingStatus: booking.status,
-                financialMode: booking.financialMode,
-                financialVersion: booking.financialVersion,
-                financialReviewReason: booking.financialReviewReason,
-                settlementId: settlement.id,
-                settlementReference: settlement.reference,
-                settlementState: settlement.operationState,
-                settlementVersion: settlement.financialVersion,
-                settlementTransferCode: settlement.transferCode,
-            })}`);
             throw new common_1.ConflictException('Financial decision changed');
         }
         return {
