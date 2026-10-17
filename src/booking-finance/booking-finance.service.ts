@@ -1440,6 +1440,18 @@ export class BookingFinanceService {
         return;
       }
 
+      this.logger.warn(
+        `[TRANSFER_VALIDATION_PASSED] ${JSON.stringify({
+          settlementId: current.id,
+          bookingId: booking.id,
+          operationState: current.operationState,
+          providerStatus: transfer.status,
+          transferCode: transfer.transfer_code,
+          financialMode: booking.financialMode,
+          financialVersion: booking.financialVersion,
+        })}`,
+      );
+
       const providerState = String(transfer.status).toLowerCase();
       const state =
         providerState === 'success'
@@ -1476,6 +1488,16 @@ export class BookingFinanceService {
             }
           : {},
       );
+
+      this.logger.warn(
+        `[TRANSFER_STATE_UPDATE] ${JSON.stringify({
+          settlementId: current.id,
+          nextState: state,
+          providerState,
+          transferCode: transfer.transfer_code,
+        })}`,
+      );
+
       await tx.settlement.update({
         where: { id: current.id },
         data: {
