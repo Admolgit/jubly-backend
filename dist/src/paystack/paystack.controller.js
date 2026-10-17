@@ -151,7 +151,8 @@ let PaystackController = class PaystackController {
             if (event.event.startsWith('transfer.') ||
                 event.event.startsWith('refund.') ||
                 event.event.startsWith('charge.dispute.')) {
-                await this.bookingFinance.handleWebhook(event.event, event.data);
+                const res = await this.bookingFinance.handleWebhook(event.event, event.data);
+                console.log({ res });
                 return { status: true };
             }
             if (event.event !== 'charge.success')
@@ -194,11 +195,12 @@ let PaystackController = class PaystackController {
                 throw new common_1.BadRequestException('Transaction was not initialized');
             }
             await this.bookingFinance.recordVerifiedCharge(event.data.reference);
-            if (transactionExists.bookingId) {
+            if (transactionExists.bookingId &&
+                event.data.metadata?.type !== 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
                 return { status: true };
             }
             if (event.data.metadata?.type === 'VENDOR_CREATED_BOOKING_LINK') {
-                const { bookingId, percentageFee, clientName, clientEmail, title } = event.data.metadata;
+                const { bookingId, percentageFee, clientName, clientEmail, title, amountPaid, } = event.data.metadata;
                 if (!bookingId) {
                     throw new common_1.BadRequestException('Incomplete booking metadata for link');
                 }
@@ -211,7 +213,7 @@ let PaystackController = class PaystackController {
                 if (!booking) {
                     throw new common_1.BadRequestException('Vendor-created booking was not found');
                 }
-                const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, event.data.reference);
+                const updatedBooking = await this.bookingService.confirmVendorBookingPayment(bookingId, event.data.reference, amountPaid);
                 const senderDetails = await this.prisma.senderDetails.create({
                     data: {
                         vendorId: booking.vendorId,
@@ -231,6 +233,7 @@ let PaystackController = class PaystackController {
                         percentageFee: transactionExists.percentageFee ?? percentageFee,
                         paymentMethod: paymentChannel,
                         senderDetailsId: senderDetails.id,
+                        paymentStatus: true,
                     },
                 });
                 await this.activityService.createLog({
@@ -299,13 +302,111 @@ let PaystackController = class PaystackController {
                 });
                 return { status: true };
             }
+            if (event.data.metadata?.type === 'JUBLY_BOOKING_OUTSTANDING_PAYMENT') {
+                const { bookingId, vendorId, clientName, clientEmail, amountPaid, outstandingBalance, percentageFee, } = event.data.metadata;
+                if (!bookingId) {
+                    throw new common_1.BadRequestException('Incomplete booking metadata for link');
+                }
+                const booking = await this.prisma.booking.findUnique({
+                    where: { id: bookingId },
+                    include: {
+                        services: true,
+                        vendor: true,
+                    },
+                });
+                if (!booking) {
+                    throw new common_1.BadRequestException('Vendor-created booking was not found');
+                }
+                const vendorUser = await this.prisma.vendor.findUnique({
+                    where: { id: vendorId },
+                    include: { user: true },
+                });
+                const updatedBooking = await this.prisma.booking.update({
+                    where: { id: bookingId },
+                    data: { amount: booking?.amount + amountPaid },
+                });
+                const senderDetails = await this.prisma.senderDetails.create({
+                    data: {
+                        vendorId: booking.vendorId,
+                        email: clientEmail,
+                        senderName: accountName ?? clientName,
+                        senderAccountNumber: accountNumber,
+                        senderBankName: bank,
+                        senderDescription: 'Payment via Paystack (outstanding payment)',
+                    },
+                });
+                await this.prisma.transaction.update({
+                    where: { providerRef: event.data.reference },
+                    data: {
+                        bookingId: updatedBooking.id,
+                        status: transactionExists.checkoutSnapshot ? undefined : 'PENDING',
+                        paidAt: new Date(),
+                        percentageFee: transactionExists.percentageFee ?? percentageFee,
+                        paymentMethod: paymentChannel,
+                        senderDetailsId: senderDetails.id,
+                        paymentStatus: true,
+                    },
+                });
+                await this.activityService.createLog({
+                    vendorId: booking.vendorId,
+                    action: 'PAYMENT_RECEIVED',
+                    description: `Outstanding payment of ₦${amountPaid.toLocaleString()} received for booking #${booking.id}.`,
+                    actor: 'System',
+                    actorType: 'SYSTEM',
+                    color: 'yellow',
+                });
+                setImmediate(() => {
+                    void (async () => {
+                        try {
+                            await this.mailService.outstandingPaymentMail({
+                                recipientEmail: clientEmail,
+                                recipientName: clientName,
+                                serviceName: booking.services.name,
+                                vendorName: booking.vendor.businessName,
+                                amountDue: Number(outstandingBalance),
+                                amountPaid: Number(amountPaid),
+                                remainingBalance: Number(outstandingBalance) - Number(amountPaid),
+                                installmentAmount: Number(amountPaid),
+                                dueDate: updatedBooking.startTime,
+                                nextRepaymentDate: updatedBooking.startTime,
+                                bookingId: booking.id,
+                            });
+                        }
+                        catch (err) {
+                            console.error('sendClientReceiptMail failed:', err);
+                        }
+                        if (vendorUser?.user?.email) {
+                            try {
+                                await this.mailService.vendorOutstandingPaymentMail({
+                                    recipientEmail: vendorUser.user.email,
+                                    recipientName: vendorUser.businessName,
+                                    clientName: clientName,
+                                    serviceName: booking.services.name,
+                                    amountDue: Number(outstandingBalance),
+                                    amountPaid: Number(amountPaid),
+                                    remainingBalance: Number(outstandingBalance) - Number(amountPaid),
+                                    installmentAmount: Number(amountPaid),
+                                    dueDate: updatedBooking.startTime,
+                                    nextRepaymentDate: updatedBooking.startTime,
+                                    bookingId: booking.id,
+                                });
+                            }
+                            catch (err) {
+                                console.error('sendVendorReceiptMail failed:', err);
+                            }
+                        }
+                    })();
+                });
+                return { status: true };
+            }
             {
-                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, country, vendorUserId, phone, } = event.data.metadata;
+                const { slug, vendorId, clientId, serviceId, title, email, userId, dayOfWeek, startTime, endTime, clientName, clientAddress, durationMins, businessName, vendorEmail, city, state, amountPaid, country, vendorUserId, phone, } = event.data.metadata;
                 if (!vendorId ||
                     !vendorUserId ||
                     !serviceId ||
                     !clientId ||
                     !email ||
+                    !amountPaid ||
                     dayOfWeek == null ||
                     !startTime ||
                     !endTime) {
@@ -323,6 +424,7 @@ let PaystackController = class PaystackController {
                     endTime: new Date(endTime),
                     status: 'CONFIRMED',
                     phone: phone || '',
+                    amount: amountPaid,
                 }, {
                     reference: event.data.reference,
                     slotLockId: event.data.metadata.slotLockId,

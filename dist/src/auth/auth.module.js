@@ -10,6 +10,7 @@ exports.AuthModule = void 0;
 const common_1 = require("@nestjs/common");
 const auth_controller_1 = require("./auth.controller");
 const auth_service_1 = require("./auth.service");
+const google_app_auth_1 = require("./google-app-auth");
 const passport_1 = require("@nestjs/passport");
 const jwt_1 = require("@nestjs/jwt");
 const prisma_service_1 = require("../../prisma/prisma.service");
@@ -42,6 +43,8 @@ exports.AuthModule = AuthModule = __decorate([
             cloudinary_service_1.CloudinaryService,
             paystack_service_1.PaystackService,
             google_login_strategy_middleware_1.GoogleLoginStrategy,
+            google_app_auth_1.GoogleAppAuthGuard,
+            google_app_auth_1.GoogleAppAuthService,
             activityLog_service_1.ActivityService,
             jwt_strategy_1.JwtStrategy,
         ],

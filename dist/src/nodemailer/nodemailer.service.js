@@ -15,6 +15,7 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
         this.logger = new common_1.Logger(NodemailerService_1.name);
         this.resend = new resend_1.Resend(process.env.RESEND_API_KEY);
         this.fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+        this.loginUrl = process.env.FRONTEND_BASE_URL + '/login';
     }
     async sendMail(params) {
         if (!params.to) {
@@ -87,7 +88,6 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
         });
     }
     async sendTempPassword(email, password) {
-        const loginUrl = process.env.FRONTEND_BASE_URL + '/login';
         await this.sendMail({
             to: email,
             subject: 'Your Jubly Temporary Password',
@@ -112,7 +112,7 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
             </p>
 
             <div style="text-align: center; margin: 28px 0;">
-                <a href="${loginUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                <a href="${this.loginUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
                     Log in to Jubly
                 </a>
             </div>
@@ -128,7 +128,45 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
              </p>
         </div>
         `,
-            text: `Your Jubly temporary password is: ${password}\n\nLog in here: ${loginUrl}\n\nPlease change your password after logging in.`,
+            text: `Your Jubly temporary password is: ${password}\n\nLog in here: ${this.loginUrl}\n\nPlease change your password after logging in.`,
+        });
+    }
+    async vendorApprovalMail(email) {
+        await this.sendMail({
+            to: email,
+            subject: 'Your Jubly vendor account has been approved',
+            html: `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff;">
+            <h1 style="font-size: 20px; color: #111827; margin-bottom: 4px;">Welcome to Jubly 👋</h1>
+            <p style="font-size: 14px; color: #4b5563; margin-top: 0;">
+                Thanks for going through the onboarding process.
+            </p>
+
+            <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                Please proceed to the login page using the button link below. to login to your account using your email and password.
+            </p>
+            <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                To login, use the email and password used when creating account.
+            </p>
+
+            <div style="text-align: center; margin: 28px 0;">
+                <a href="${this.loginUrl}" style="display: inline-block; background-color: #111827; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                    Log in to Jubly
+                </a>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 16px 0;" />
+
+            <p style="font-size: 12px; color: #9ca3af; margin: 0;">
+                Sent by Jubly. Please do not reply to this email.
+            </p>
+
+            <p style="font-size:12px;color:#888">
+              Powered by Jubly
+             </p>
+        </div>
+        `,
+            text: `Log in here: ${this.loginUrl}.`,
         });
     }
     async sendClientBookingMail(data) {
@@ -268,6 +306,108 @@ let NodemailerService = NodemailerService_1 = class NodemailerService {
           Powered by Jubly
         </p>
 
+      </div>
+    `,
+        });
+    }
+    async outstandingPaymentMail(data) {
+        const formatAmount = (amount) => `₦${amount.toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        })}`;
+        const formatDate = (date) => date
+            ? new Date(date).toLocaleDateString('en-NG', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+            })
+            : 'Not scheduled';
+        await this.sendMail({
+            to: data.recipientEmail,
+            subject: `Repayment Outstanding: ${data.serviceName} booking`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; color:#333; line-height:1.6">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+
+        <p>
+          Your outstanding payment has been processed. Below is the current repayment summary for your records.
+        </p>
+
+        <div style="background:#f5f5f5;padding:20px;border-radius:8px;margin:20px 0">
+          <h3 style="margin-top:0;color:#111;">Booking Details</h3>
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Vendor:</strong> ${data.vendorName}</p>
+          <p><strong>Booking ID:</strong> ${data.bookingId}</p>
+          <p><strong>Due Date:</strong> ${formatDate(data.dueDate)}</p>
+
+          <hr style="border:0;border-top:1px solid #ddd;margin:16px 0"/>
+
+          <h3 style="color:#111;">Repayment Summary</h3>
+          <p><strong>Amount Paid:</strong> ${formatAmount(data.amountPaid)}</p>
+          <p><strong>Installment Amount:</strong> ${formatAmount(data.installmentAmount)}</p>
+          <p><strong>Outstanding Amount Due:</strong> ${formatAmount(data.amountDue) || '₦0.00'}</p>
+          <p><strong>Remaining Balance:</strong> ${formatAmount(data.remainingBalance) || '₦0.00'}</p>
+          <p><strong>Next Repayment Date:</strong> ${formatDate(data.nextRepaymentDate)}</p>
+        </div>
+
+        <p>Please log in to your Jubly dashboard to review your booking and complete your outstanding payment.</p>
+
+        <p>If you have already made this payment, please disregard this reminder.</p>
+
+        <hr style="border:0;border-top:1px solid #eee;margin:24px 0"/>
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
+      </div>
+    `,
+        });
+    }
+    async vendorOutstandingPaymentMail(data) {
+        const formatAmount = (amount) => `₦${amount.toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        })}`;
+        const formatDate = (date) => date
+            ? new Date(date).toLocaleDateString('en-NG', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+            })
+            : 'Not scheduled';
+        await this.sendMail({
+            to: data.recipientEmail,
+            subject: `Outstanding Client Payment: ${data.serviceName} booking`,
+            html: `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; color:#333; line-height:1.6">
+        <h2 style="color:#111;">Hi ${data.recipientName},</h2>
+
+        <p>
+          This is an update on a booking with an outstanding client payment.
+          Below is the current repayment summary for your records.
+        </p>
+
+        <div style="background:#f5f5f5;padding:20px;border-radius:8px;margin:20px 0">
+          <h3 style="margin-top:0;color:#111;">Booking Details</h3>
+          <p><strong>Client:</strong> ${data.clientName}</p>
+          <p><strong>Service:</strong> ${data.serviceName}</p>
+          <p><strong>Booking ID:</strong> ${data.bookingId}</p>
+          <p><strong>Payment Due Date:</strong> ${formatDate(data.dueDate)}</p>
+
+          <hr style="border:0;border-top:1px solid #ddd;margin:16px 0"/>
+
+          <h3 style="color:#111;">Repayment Summary</h3>
+          <p><strong>Amount Paid by Client:</strong> ${formatAmount(data.amountPaid)}</p>
+          <p><strong>Scheduled Installment:</strong> ${formatAmount(data.installmentAmount)}</p>
+          <p><strong>Current Amount Due:</strong> ${formatAmount(data.amountDue)}</p>
+          <p><strong>Total Outstanding Balance:</strong> ${formatAmount(data.remainingBalance)}</p>
+          <p><strong>Next Repayment Date:</strong> ${formatDate(data.nextRepaymentDate)}</p>
+        </div>
+
+        <p>
+          You can log in to your Jubly dashboard to review the booking
+          and monitor its payment status.
+        </p>
+
+        <hr style="border:0;border-top:1px solid #eee;margin:24px 0"/>
+        <p style="font-size:12px;color:#888">Powered by Jubly</p>
       </div>
     `,
         });

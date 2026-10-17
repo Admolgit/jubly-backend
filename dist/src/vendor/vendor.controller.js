@@ -71,7 +71,6 @@ let VendorController = class VendorController {
         return this.vendorService.updateProfile(userId, dto);
     }
     updateVendorProfile(req, dto) {
-        console.log({ dto });
         const userId = req.user.id;
         return this.vendorService.updateVendorProfile(userId, dto);
     }

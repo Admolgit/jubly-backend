@@ -50,10 +50,13 @@ export class SubscriptionController {
     const { priceNaira, durationDays } =
       await this.platformSettingsService.getSubscriptionPricing(vendor.id);
 
-    return successResponse({
-      priceNaira,
-      durationDays,
-    }, 'Subscription fee retrieved successfully');
+    return successResponse(
+      {
+        priceNaira,
+        durationDays,
+      },
+      'Subscription fee retrieved successfully',
+    );
   }
 
   @Post('upgrade')
@@ -81,9 +84,6 @@ export class SubscriptionController {
       where: { id: req.user.id },
     });
 
-    // Price and duration always come from admin-managed platform settings
-    // (global, or this vendor's override if one exists) — never from the
-    // frontend.
     const { priceNaira, durationDays } =
       await this.platformSettingsService.getSubscriptionPricing(vendor.id);
 
