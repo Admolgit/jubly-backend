@@ -2478,6 +2478,8 @@ export class BookingService {
         },
       });
 
+      console.log({ updatedBooking });
+
       await this.activityService.createLog({
         vendorId: booking.vendorId,
         userId: booking.clientId ?? undefined,

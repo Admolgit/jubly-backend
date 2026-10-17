@@ -1403,6 +1403,20 @@ export class BookingFinanceService {
         (current.transferCode &&
           transfer.transfer_code !== current.transferCode)
       ) {
+        this.logger.warn(
+          `Transfer validation checks: ${JSON.stringify({
+            referenceMismatch: transfer.reference !== expected.reference,
+            currencyMismatch: transfer.currency !== expected.currency,
+            amountInvalid: !Number.isSafeInteger(transfer.amount),
+            amountMismatch:
+              transfer.amount !== exactKobo(expected.netTransferKobo!),
+            recipientMismatch: recipient !== expected.recipientCode,
+            transferCodeMissing: !transfer.transfer_code,
+            transferCodeMismatch:
+              current.transferCode != null &&
+              transfer.transfer_code !== current.transferCode,
+          })}`,
+        );
         await this.touch(tx, booking, {
           financialMode: 'REVIEW',
           financialReviewReason:
