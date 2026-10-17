@@ -564,6 +564,18 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             where: { id: bookingId },
         });
         if (booking.financialMode !== 'COMPLETION') {
+            this.logger.error(`Completion financial state changed: ${JSON.stringify({
+                bookingId,
+                bookingStatus: booking.status,
+                financialMode: booking.financialMode,
+                financialVersion: booking.financialVersion,
+                financialReviewReason: booking.financialReviewReason,
+                settlementId: settlement.id,
+                settlementReference: settlement.reference,
+                settlementState: settlement.operationState,
+                settlementVersion: settlement.financialVersion,
+                settlementTransferCode: settlement.transferCode,
+            })}`);
             throw new common_1.ConflictException('Financial decision changed');
         }
         return {
@@ -1026,16 +1038,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 }
                 return;
             }
-            this.logger.warn(`Transfer validation checks: ${JSON.stringify({
-                referenceMismatch: transfer.reference !== expected.reference,
-                currencyMismatch: transfer.currency !== expected.currency,
-                amountInvalid: !Number.isSafeInteger(transfer.amount),
-                amountMismatch: transfer.amount !== (0, financial_allocation_1.exactKobo)(expected.netTransferKobo),
-                recipientMismatch: recipient !== expected.recipientCode,
-                transferCodeMissing: !transfer.transfer_code,
-                transferCodeMismatch: current.transferCode != null &&
-                    transfer.transfer_code !== current.transferCode,
-            })}`);
             if (transfer.reference !== expected.reference ||
                 transfer.currency !== expected.currency ||
                 !Number.isSafeInteger(transfer.amount) ||
