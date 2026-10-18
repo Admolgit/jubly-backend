@@ -802,21 +802,6 @@ export class BookingFinanceService {
       where: { id: bookingId },
     });
 
-    this.logger.error(
-      `Completion financial state changed: ${JSON.stringify({
-        bookingId,
-        bookingStatus: booking.status,
-        financialMode: booking.financialMode,
-        financialVersion: booking.financialVersion,
-        financialReviewReason: booking.financialReviewReason,
-        settlementId: settlement.id,
-        settlementReference: settlement.reference,
-        settlementState: settlement.operationState,
-        settlementVersion: settlement.financialVersion,
-        settlementTransferCode: settlement.transferCode,
-      })}`,
-    );
-
     if (booking.financialMode !== 'COMPLETION') {
       throw new ConflictException('Financial decision changed');
     }
@@ -1390,6 +1375,16 @@ export class BookingFinanceService {
         current.transferCode && transfer.transfer_code !== current.transferCode,
       );
 
+      console.log('[TRANSFER_REFERENCE_CHECK]', {
+        bookingId: booking.id,
+        settlementId: current.id,
+        expectedReference: expected.reference,
+        currentReference: current.reference,
+        transferReference: transfer.reference,
+        transferStatus: transfer.status,
+        referenceChanged: current.reference !== expected.reference,
+      });
+
       if (current.reference !== expected.reference) {
         if (
           ['success', 'reversed'].includes(
@@ -1407,21 +1402,25 @@ export class BookingFinanceService {
         return;
       }
 
-      this.logger.warn(
-        `[TRANSFER_VALIDATION] ${JSON.stringify({
-          recipient,
-          expectedRecipientCode: expected.recipientCode,
-          recipientType: typeof recipient,
-          expectedRecipientType: typeof expected.recipientCode,
-          recipientMismatch,
-          referenceMismatch,
-          currencyMismatch,
-          amountInvalid,
-          amountMismatch,
-          transferCodeMissing,
+      console.log('[TRANSFER_VALIDATION_DECISION]', {
+        bookingId: booking.id,
+        financialMode: booking.financialMode,
+        referenceMismatch,
+        currencyMismatch,
+        amountInvalid,
+        amountMismatch,
+        recipientMismatch,
+        transferCodeMissing,
+        transferCodeMismatch,
+        shouldReview:
+          referenceMismatch ||
+          currencyMismatch ||
+          amountInvalid ||
+          amountMismatch ||
+          recipientMismatch ||
+          transferCodeMissing ||
           transferCodeMismatch,
-        })}`,
-      );
+      });
 
       if (
         referenceMismatch ||
@@ -1439,18 +1438,6 @@ export class BookingFinanceService {
         });
         return;
       }
-
-      this.logger.warn(
-        `[TRANSFER_VALIDATION_PASSED] ${JSON.stringify({
-          settlementId: current.id,
-          bookingId: booking.id,
-          operationState: current.operationState,
-          providerStatus: transfer.status,
-          transferCode: transfer.transfer_code,
-          financialMode: booking.financialMode,
-          financialVersion: booking.financialVersion,
-        })}`,
-      );
 
       const providerState = String(transfer.status).toLowerCase();
       const state =
@@ -1512,14 +1499,6 @@ export class BookingFinanceService {
         },
       });
 
-      this.logger.warn(
-        `[TRANSFER_STATE_UPDATE_DONE] ${JSON.stringify({
-          settlementId: current.id,
-          bookingId: booking.id,
-          nextState: state,
-        })}`,
-      );
-
       if (state === 'SUCCESS' && current.purpose === 'NORMAL_COMPLETION') {
         const paymentIds = current.paymentTransactionIds?.length
           ? current.paymentTransactionIds
@@ -1546,13 +1525,6 @@ export class BookingFinanceService {
         });
       }
     });
-
-    this.logger.warn(
-      `[TRANSFER_OUTCOME_TRANSACTION_DONE] ${JSON.stringify({
-        settlementId: expected.id,
-        bookingId: expected.bookingId,
-      })}`,
-    );
   }
 
   private async reconcileTransfer(settlement: Settlement) {

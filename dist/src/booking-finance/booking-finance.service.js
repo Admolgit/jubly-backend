@@ -563,18 +563,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         booking = await this.prisma.booking.findUniqueOrThrow({
             where: { id: bookingId },
         });
-        this.logger.error(`Completion financial state changed: ${JSON.stringify({
-            bookingId,
-            bookingStatus: booking.status,
-            financialMode: booking.financialMode,
-            financialVersion: booking.financialVersion,
-            financialReviewReason: booking.financialReviewReason,
-            settlementId: settlement.id,
-            settlementReference: settlement.reference,
-            settlementState: settlement.operationState,
-            settlementVersion: settlement.financialVersion,
-            settlementTransferCode: settlement.transferCode,
-        })}`);
         if (booking.financialMode !== 'COMPLETION') {
             throw new common_1.ConflictException('Financial decision changed');
         }
@@ -1036,6 +1024,15 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             const amountMismatch = transfer.amount !== (0, financial_allocation_1.exactKobo)(expected.netTransferKobo);
             const transferCodeMissing = !transfer.transfer_code;
             const transferCodeMismatch = Boolean(current.transferCode && transfer.transfer_code !== current.transferCode);
+            console.log('[TRANSFER_REFERENCE_CHECK]', {
+                bookingId: booking.id,
+                settlementId: current.id,
+                expectedReference: expected.reference,
+                currentReference: current.reference,
+                transferReference: transfer.reference,
+                transferStatus: transfer.status,
+                referenceChanged: current.reference !== expected.reference,
+            });
             if (current.reference !== expected.reference) {
                 if (['success', 'reversed'].includes(String(transfer.status).toLowerCase())) {
                     await this.touch(tx, booking, {
@@ -1045,19 +1042,24 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 }
                 return;
             }
-            this.logger.warn(`[TRANSFER_VALIDATION] ${JSON.stringify({
-                recipient,
-                expectedRecipientCode: expected.recipientCode,
-                recipientType: typeof recipient,
-                expectedRecipientType: typeof expected.recipientCode,
-                recipientMismatch,
+            console.log('[TRANSFER_VALIDATION_DECISION]', {
+                bookingId: booking.id,
+                financialMode: booking.financialMode,
                 referenceMismatch,
                 currencyMismatch,
                 amountInvalid,
                 amountMismatch,
+                recipientMismatch,
                 transferCodeMissing,
                 transferCodeMismatch,
-            })}`);
+                shouldReview: referenceMismatch ||
+                    currencyMismatch ||
+                    amountInvalid ||
+                    amountMismatch ||
+                    recipientMismatch ||
+                    transferCodeMissing ||
+                    transferCodeMismatch,
+            });
             if (referenceMismatch ||
                 currencyMismatch ||
                 amountInvalid ||
@@ -1071,15 +1073,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 });
                 return;
             }
-            this.logger.warn(`[TRANSFER_VALIDATION_PASSED] ${JSON.stringify({
-                settlementId: current.id,
-                bookingId: booking.id,
-                operationState: current.operationState,
-                providerStatus: transfer.status,
-                transferCode: transfer.transfer_code,
-                financialMode: booking.financialMode,
-                financialVersion: booking.financialVersion,
-            })}`);
             const providerState = String(transfer.status).toLowerCase();
             const state = providerState === 'success'
                 ? 'SUCCESS'
@@ -1125,11 +1118,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                         : attempt)),
                 },
             });
-            this.logger.warn(`[TRANSFER_STATE_UPDATE_DONE] ${JSON.stringify({
-                settlementId: current.id,
-                bookingId: booking.id,
-                nextState: state,
-            })}`);
             if (state === 'SUCCESS' && current.purpose === 'NORMAL_COMPLETION') {
                 const paymentIds = current.paymentTransactionIds?.length
                     ? current.paymentTransactionIds
@@ -1153,10 +1141,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 });
             }
         });
-        this.logger.warn(`[TRANSFER_OUTCOME_TRANSACTION_DONE] ${JSON.stringify({
-            settlementId: expected.id,
-            bookingId: expected.bookingId,
-        })}`);
     }
     async reconcileTransfer(settlement) {
         if (!settlement.reference)
