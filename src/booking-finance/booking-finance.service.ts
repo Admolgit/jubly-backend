@@ -373,7 +373,10 @@ export class BookingFinanceService {
   ): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.prisma.$transaction(work);
+        return await this.prisma.$transaction(work, {
+          maxWait: 5000,
+          timeout: 15000,
+        });
       } catch (error: any) {
         if (error.code === 'P2034' && attempt < 3) continue;
         if (error.code === 'P2034' || error.code === 'P2002')
