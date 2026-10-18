@@ -1395,43 +1395,6 @@ export class BookingFinanceService {
         return;
       }
 
-      console.log('[applyTransferOutcome] Current financial state:', {
-        bookingId: booking.id,
-        financialMode: booking.financialMode,
-        financialReviewReason: booking.financialReviewReason,
-        settlementId: current.id,
-        reference: current.reference,
-      });
-
-      const validationFailed =
-        referenceMismatch ||
-        currencyMismatch ||
-        amountInvalid ||
-        amountMismatch ||
-        recipientMismatch ||
-        transferCodeMissing ||
-        transferCodeMismatch;
-
-      console.log('[applyTransferOutcome] Validation result:', {
-        settlementId: current.id,
-        validationFailed,
-      });
-
-      if (validationFailed) {
-        console.error(
-          '[applyTransferOutcome] Setting REVIEW: transfer instruction conflict',
-          { settlementId: current.id },
-        );
-
-        await this.touch(tx, booking, {
-          financialMode: 'REVIEW',
-          financialReviewReason:
-            'Transfer outcome conflicts with financial instruction',
-        });
-
-        return;
-      }
-
       if (
         referenceMismatch ||
         currencyMismatch ||
@@ -1465,6 +1428,7 @@ export class BookingFinanceService {
         (current.operationState === 'SUCCESS' && state !== 'REVERSED')
       )
         return;
+
       if (
         current.operationState === 'FAILED' &&
         !['FAILED', 'REVERSED'].includes(state)
@@ -1475,6 +1439,7 @@ export class BookingFinanceService {
         });
         return;
       }
+
       await this.touch(
         tx,
         booking,
@@ -1525,13 +1490,29 @@ export class BookingFinanceService {
           return;
         }
 
-        await this.prisma.booking.update({
+        // Do not silently override an existing financial review.
+        if (booking.financialMode === 'REVIEW') {
+          console.warn(
+            '[applyTransferOutcome] Successful transfer; booking requires review',
+            {
+              bookingId: booking.id,
+              settlementId: current.id,
+              financialReviewReason: booking.financialReviewReason,
+            },
+          );
+          return;
+        }
+
+        // Use the transaction client for atomicity.
+        await tx.booking.update({
           where: {
             id: booking.id,
-            status: 'CONFIRMED',
-            // ...(current ? { financialMode: 'COMPLETION' as const } : {}),
+            status: booking.status,
+            financialMode: 'COMPLETION',
           },
-          data: { status: 'COMPLETED', financialMode: 'COMPLETION' },
+          data: {
+            status: 'COMPLETED',
+          },
         });
 
         await tx.transaction.updateMany({
@@ -1540,7 +1521,9 @@ export class BookingFinanceService {
             bookingId: current.bookingId,
             status: { in: ['PENDING', 'SUCCESS', 'success'] },
           },
-          data: { status: 'COMPLETED' },
+          data: {
+            status: 'COMPLETED',
+          },
         });
       }
     });
