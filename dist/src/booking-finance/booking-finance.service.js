@@ -1035,6 +1035,32 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 }
                 return;
             }
+            console.log('[applyTransferOutcome] Current financial state:', {
+                bookingId: booking.id,
+                financialMode: booking.financialMode,
+                financialReviewReason: booking.financialReviewReason,
+                settlementId: current.id,
+                reference: current.reference,
+            });
+            const validationFailed = referenceMismatch ||
+                currencyMismatch ||
+                amountInvalid ||
+                amountMismatch ||
+                recipientMismatch ||
+                transferCodeMissing ||
+                transferCodeMismatch;
+            console.log('[applyTransferOutcome] Validation result:', {
+                settlementId: current.id,
+                validationFailed,
+            });
+            if (validationFailed) {
+                console.error('[applyTransferOutcome] Setting REVIEW: transfer instruction conflict', { settlementId: current.id });
+                await this.touch(tx, booking, {
+                    financialMode: 'REVIEW',
+                    financialReviewReason: 'Transfer outcome conflicts with financial instruction',
+                });
+                return;
+            }
             if (referenceMismatch ||
                 currencyMismatch ||
                 amountInvalid ||
@@ -1106,26 +1132,17 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                     });
                     return;
                 }
-                if (booking.financialMode === 'REVIEW') {
-                    console.warn('[applyTransferOutcome] Successful transfer; booking requires review', {
-                        bookingId: booking.id,
-                        settlementId: current.id,
-                        financialReviewReason: booking.financialReviewReason,
-                    });
-                    return;
-                }
-                const version = (booking.financialVersion ?? 0) + 1;
-                await tx.booking.update({
+                await this.prisma.booking.update({
                     where: {
                         id: booking.id,
-                        status: booking.status,
-                        financialMode: 'REVIEW',
+                        status: 'CONFIRMED',
+                        ...(current ? { financialMode: 'REVIEW' } : {}),
                     },
                     data: {
                         status: 'COMPLETED',
                         financialMode: 'COMPLETION',
                         financialReviewReason: null,
-                        financialVersion: version,
+                        financialVersion: { increment: 1 },
                     },
                 });
                 await tx.transaction.updateMany({
@@ -1134,9 +1151,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                         bookingId: current.bookingId,
                         status: { in: ['PENDING', 'SUCCESS', 'success'] },
                     },
-                    data: {
-                        status: 'COMPLETED',
-                    },
+                    data: { status: 'COMPLETED' },
                 });
             }
         });
