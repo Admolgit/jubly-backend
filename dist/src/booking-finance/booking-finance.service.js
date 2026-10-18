@@ -226,7 +226,10 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
     async atomic(work) {
         for (let attempt = 0;; attempt++) {
             try {
-                return await this.prisma.$transaction(work);
+                return await this.prisma.$transaction(work, {
+                    maxWait: 5000,
+                    timeout: 15000,
+                });
             }
             catch (error) {
                 if (error.code === 'P2034' && attempt < 3)
