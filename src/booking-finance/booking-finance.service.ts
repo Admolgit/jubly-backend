@@ -1525,6 +1525,8 @@ export class BookingFinanceService {
           return;
         }
 
+        console.log({ booking });
+
         await this.prisma.booking.update({
           where: {
             id: booking.id,
