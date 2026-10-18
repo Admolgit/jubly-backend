@@ -475,6 +475,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         let settlement = await this.prisma.settlement.findUnique({
             where: { bookingId },
         });
+        console.log({ settlement });
         if (!settlement) {
             let verified;
             try {
@@ -1024,15 +1025,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             const amountMismatch = transfer.amount !== (0, financial_allocation_1.exactKobo)(expected.netTransferKobo);
             const transferCodeMissing = !transfer.transfer_code;
             const transferCodeMismatch = Boolean(current.transferCode && transfer.transfer_code !== current.transferCode);
-            console.log('[TRANSFER_REFERENCE_CHECK]', {
-                bookingId: booking.id,
-                settlementId: current.id,
-                expectedReference: expected.reference,
-                currentReference: current.reference,
-                transferReference: transfer.reference,
-                transferStatus: transfer.status,
-                referenceChanged: current.reference !== expected.reference,
-            });
             if (current.reference !== expected.reference) {
                 if (['success', 'reversed'].includes(String(transfer.status).toLowerCase())) {
                     await this.touch(tx, booking, {
@@ -1042,23 +1034,38 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 }
                 return;
             }
-            console.log('[TRANSFER_VALIDATION_DECISION]', {
-                bookingId: booking.id,
-                financialMode: booking.financialMode,
-                referenceMismatch,
-                currencyMismatch,
-                amountInvalid,
-                amountMismatch,
-                recipientMismatch,
-                transferCodeMissing,
-                transferCodeMismatch,
-                shouldReview: referenceMismatch ||
-                    currencyMismatch ||
-                    amountInvalid ||
-                    amountMismatch ||
-                    recipientMismatch ||
-                    transferCodeMissing ||
-                    transferCodeMismatch,
+            const expectedAmount = (0, financial_allocation_1.exactKobo)(expected.netTransferKobo);
+            console.log('[applyTransferOutcome] Validation diagnostics:', {
+                settlementId: current.id,
+                reference: {
+                    expected: expected.reference,
+                    actual: transfer.reference,
+                    mismatch: referenceMismatch,
+                },
+                currency: {
+                    expected: expected.currency,
+                    actual: transfer.currency,
+                    mismatch: currencyMismatch,
+                },
+                amount: {
+                    expected: expectedAmount,
+                    actual: transfer.amount,
+                    actualType: typeof transfer.amount,
+                    isSafeInteger: Number.isSafeInteger(transfer.amount),
+                    invalid: amountInvalid,
+                    mismatch: amountMismatch,
+                },
+                recipient: {
+                    expected: expected.recipientCode,
+                    actual: recipient,
+                    mismatch: recipientMismatch,
+                },
+                transferCode: {
+                    expected: current.transferCode,
+                    actual: transfer.transfer_code,
+                    missing: transferCodeMissing,
+                    mismatch: transferCodeMismatch,
+                },
             });
             if (referenceMismatch ||
                 currencyMismatch ||
