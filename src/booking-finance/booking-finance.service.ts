@@ -1530,7 +1530,7 @@ export class BookingFinanceService {
         await this.prisma.booking.update({
           where: {
             id: booking.id,
-            status: 'CONFIRMED',
+            status: 'COMPLETION_PENDING_APPROVAL',
             ...(current ? { financialMode: 'REVIEW' as const } : {}),
           },
           data: {
