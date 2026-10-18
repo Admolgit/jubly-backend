@@ -1394,40 +1394,42 @@ export class BookingFinanceService {
         return;
       }
 
-      const expectedAmount = exactKobo(expected.netTransferKobo!);
-
-      console.log('[applyTransferOutcome] Validation diagnostics:', {
+      console.log('[applyTransferOutcome] Current financial state:', {
+        bookingId: booking.id,
+        financialMode: booking.financialMode,
+        financialReviewReason: booking.financialReviewReason,
         settlementId: current.id,
-        reference: {
-          expected: expected.reference,
-          actual: transfer.reference,
-          mismatch: referenceMismatch,
-        },
-        currency: {
-          expected: expected.currency,
-          actual: transfer.currency,
-          mismatch: currencyMismatch,
-        },
-        amount: {
-          expected: expectedAmount,
-          actual: transfer.amount,
-          actualType: typeof transfer.amount,
-          isSafeInteger: Number.isSafeInteger(transfer.amount),
-          invalid: amountInvalid,
-          mismatch: amountMismatch,
-        },
-        recipient: {
-          expected: expected.recipientCode,
-          actual: recipient,
-          mismatch: recipientMismatch,
-        },
-        transferCode: {
-          expected: current.transferCode,
-          actual: transfer.transfer_code,
-          missing: transferCodeMissing,
-          mismatch: transferCodeMismatch,
-        },
+        reference: current.reference,
       });
+
+      const validationFailed =
+        referenceMismatch ||
+        currencyMismatch ||
+        amountInvalid ||
+        amountMismatch ||
+        recipientMismatch ||
+        transferCodeMissing ||
+        transferCodeMismatch;
+
+      console.log('[applyTransferOutcome] Validation result:', {
+        settlementId: current.id,
+        validationFailed,
+      });
+
+      if (validationFailed) {
+        console.error(
+          '[applyTransferOutcome] Setting REVIEW: transfer instruction conflict',
+          { settlementId: current.id },
+        );
+
+        await this.touch(tx, booking, {
+          financialMode: 'REVIEW',
+          financialReviewReason:
+            'Transfer outcome conflicts with financial instruction',
+        });
+
+        return;
+      }
 
       if (
         referenceMismatch ||
