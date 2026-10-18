@@ -256,7 +256,6 @@ model Booking {
   refundAmount                 Float?
   vendorCompensationAmount     Float?
 
-  // Vendor-initiated completion approval audit
   completionRequestedBy     String? // userId of the vendor who requested completion
   completionRequestedAt     DateTime?
   completionApprovedAt      DateTime?
