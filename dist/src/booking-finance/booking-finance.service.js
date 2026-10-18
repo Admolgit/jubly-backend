@@ -1114,14 +1114,18 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                     });
                     return;
                 }
+                const version = (booking.financialVersion ?? 0) + 1;
                 await tx.booking.update({
                     where: {
                         id: booking.id,
                         status: booking.status,
-                        financialMode: 'COMPLETION',
+                        financialMode: 'REVIEW',
                     },
                     data: {
                         status: 'COMPLETED',
+                        financialMode: 'COMPLETION',
+                        financialReviewReason: null,
+                        financialVersion: version,
                     },
                 });
                 await tx.transaction.updateMany({
