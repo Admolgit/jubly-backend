@@ -1132,6 +1132,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                     });
                     return;
                 }
+                console.log({ booking });
                 await this.prisma.booking.update({
                     where: {
                         id: booking.id,
