@@ -1135,9 +1135,9 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 await this.prisma.booking.update({
                     where: {
                         id: booking.id,
-                        status: booking.status,
+                        status: 'CONFIRMED',
                     },
-                    data: { status: 'COMPLETED' },
+                    data: { status: 'COMPLETED', financialMode: 'COMPLETION' },
                 });
                 await tx.transaction.updateMany({
                     where: {

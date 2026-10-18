@@ -1528,10 +1528,10 @@ export class BookingFinanceService {
         await this.prisma.booking.update({
           where: {
             id: booking.id,
-            status: booking.status,
+            status: 'CONFIRMED',
             // ...(current ? { financialMode: 'COMPLETION' as const } : {}),
           },
-          data: { status: 'COMPLETED' },
+          data: { status: 'COMPLETED', financialMode: 'COMPLETION' },
         });
 
         await tx.transaction.updateMany({
