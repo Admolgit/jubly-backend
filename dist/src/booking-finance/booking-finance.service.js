@@ -1136,7 +1136,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                     where: {
                         id: booking.id,
                         status: booking.status,
-                        ...(current ? { financialMode: 'COMPLETION' } : {}),
                     },
                     data: { status: 'COMPLETED' },
                 });

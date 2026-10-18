@@ -1529,7 +1529,7 @@ export class BookingFinanceService {
           where: {
             id: booking.id,
             status: booking.status,
-            ...(current ? { financialMode: 'COMPLETION' as const } : {}),
+            // ...(current ? { financialMode: 'COMPLETION' as const } : {}),
           },
           data: { status: 'COMPLETED' },
         });
