@@ -815,6 +815,7 @@ export class BookingFinanceService {
           })
         : null,
       settlement,
+      updatedBooking: booking,
     };
   }
 
@@ -1523,6 +1524,15 @@ export class BookingFinanceService {
           });
           return;
         }
+
+        await this.prisma.booking.update({
+          where: {
+            id: booking.id,
+            status: booking.status,
+            ...(current ? { financialMode: 'COMPLETION' as const } : {}),
+          },
+          data: { status: 'COMPLETED' },
+        });
 
         await tx.transaction.updateMany({
           where: {

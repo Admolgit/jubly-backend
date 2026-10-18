@@ -574,6 +574,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 })
                 : null,
             settlement,
+            updatedBooking: booking,
         };
     }
     matchesPlan(booking, settlement) {
@@ -1131,6 +1132,14 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                     });
                     return;
                 }
+                await this.prisma.booking.update({
+                    where: {
+                        id: booking.id,
+                        status: booking.status,
+                        ...(current ? { financialMode: 'COMPLETION' } : {}),
+                    },
+                    data: { status: 'COMPLETED' },
+                });
                 await tx.transaction.updateMany({
                     where: {
                         id: { in: paymentIds },
