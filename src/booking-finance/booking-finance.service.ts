@@ -678,6 +678,8 @@ export class BookingFinanceService {
       where: { bookingId },
     });
 
+    console.log({ settlement });
+
     if (!settlement) {
       let verified: Awaited<ReturnType<BookingFinanceService['evidence']>>;
 
@@ -1375,16 +1377,6 @@ export class BookingFinanceService {
         current.transferCode && transfer.transfer_code !== current.transferCode,
       );
 
-      console.log('[TRANSFER_REFERENCE_CHECK]', {
-        bookingId: booking.id,
-        settlementId: current.id,
-        expectedReference: expected.reference,
-        currentReference: current.reference,
-        transferReference: transfer.reference,
-        transferStatus: transfer.status,
-        referenceChanged: current.reference !== expected.reference,
-      });
-
       if (current.reference !== expected.reference) {
         if (
           ['success', 'reversed'].includes(
@@ -1402,24 +1394,39 @@ export class BookingFinanceService {
         return;
       }
 
-      console.log('[TRANSFER_VALIDATION_DECISION]', {
-        bookingId: booking.id,
-        financialMode: booking.financialMode,
-        referenceMismatch,
-        currencyMismatch,
-        amountInvalid,
-        amountMismatch,
-        recipientMismatch,
-        transferCodeMissing,
-        transferCodeMismatch,
-        shouldReview:
-          referenceMismatch ||
-          currencyMismatch ||
-          amountInvalid ||
-          amountMismatch ||
-          recipientMismatch ||
-          transferCodeMissing ||
-          transferCodeMismatch,
+      const expectedAmount = exactKobo(expected.netTransferKobo!);
+
+      console.log('[applyTransferOutcome] Validation diagnostics:', {
+        settlementId: current.id,
+        reference: {
+          expected: expected.reference,
+          actual: transfer.reference,
+          mismatch: referenceMismatch,
+        },
+        currency: {
+          expected: expected.currency,
+          actual: transfer.currency,
+          mismatch: currencyMismatch,
+        },
+        amount: {
+          expected: expectedAmount,
+          actual: transfer.amount,
+          actualType: typeof transfer.amount,
+          isSafeInteger: Number.isSafeInteger(transfer.amount),
+          invalid: amountInvalid,
+          mismatch: amountMismatch,
+        },
+        recipient: {
+          expected: expected.recipientCode,
+          actual: recipient,
+          mismatch: recipientMismatch,
+        },
+        transferCode: {
+          expected: current.transferCode,
+          actual: transfer.transfer_code,
+          missing: transferCodeMissing,
+          mismatch: transferCodeMismatch,
+        },
       });
 
       if (
