@@ -20,8 +20,6 @@ import {
   kobo,
   vendorAllocation,
 } from './financial-allocation';
-import { calculateJublyCommission } from 'src/utils/paystackCalculation';
-import { PlatformSettingsService } from 'src/platform-settings/platform-settings.service';
 
 type RefundInstruction = {
   id: string;
@@ -63,7 +61,6 @@ export class BookingFinanceService {
     private readonly prisma: PrismaService,
     private readonly paystack: PaystackService,
     private readonly policies: CancellationPolicyService,
-    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   private get dispatchEnabled() {
@@ -169,7 +166,10 @@ export class BookingFinanceService {
       throw new Error('Payment evidence does not match the original checkout');
     }
 
-    return principal;
+    // Each transaction represents only the amount paid in that instalment.
+    // servicePrincipalKobo is the full service price and must not be counted
+    // again for every outstanding payment.
+    return paymentPrincipal;
   }
 
   async recordVerifiedCharge(reference: string, charge?: any) {
@@ -373,7 +373,10 @@ export class BookingFinanceService {
   ): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.prisma.$transaction(work);
+        return await this.prisma.$transaction(work, {
+          maxWait: 5000,
+          timeout: 15000,
+        });
       } catch (error: any) {
         if (error.code === 'P2034' && attempt < 3) continue;
         if (error.code === 'P2034' || error.code === 'P2002')
@@ -1180,6 +1183,28 @@ export class BookingFinanceService {
       where: { bookingId },
     });
     if (!settlement?.purpose || !settlement.transactionId) return;
+
+    // A payout can already be SUCCESS while the booking update was skipped by
+    // an older code path or interrupted before it ran. Re-verify the provider
+    // outcome and retry the idempotent booking completion update in that case.
+    if (
+      settlement.operationState === 'SUCCESS' &&
+      settlement.purpose === 'NORMAL_COMPLETION'
+    ) {
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { status: true, financialMode: true },
+      });
+      if (
+        booking &&
+        (booking.status !== 'COMPLETED' ||
+          booking.financialMode !== 'COMPLETION')
+      ) {
+        return this.reconcileTransfer(settlement);
+      }
+      return;
+    }
+
     if (
       ['PROCESSING', 'REQUIRES_VERIFICATION', 'FAILED'].includes(
         settlement.operationState ?? '',
@@ -1255,7 +1280,16 @@ export class BookingFinanceService {
         return;
       }
     }
-    if (!(await this.checkExternalConflicts(settlement, payment))) return;
+    if (
+      settlement.netTransferKobo == null ||
+      settlement.netTransferKobo <= BigInt(0)
+    ) {
+      await this.review(
+        bookingId,
+        'Settlement has no valid vendor transfer amount',
+      );
+      return;
+    }
     if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
       await this.review(bookingId, 'Vendor settlement account is missing');
       return;
@@ -1314,17 +1348,12 @@ export class BookingFinanceService {
     });
     if (!claimed) return;
     try {
-      const paidAmount = booking?.amount as number;
-      const mainAmount = booking?.services?.price;
-
-      const vendorRate = await this.platformSettings.resolvePlatformPercentage(
-        booking.vendorId,
-      );
-
-      const platformFee = calculateJublyCommission(mainAmount, vendorRate);
-      const vendorAmount = paidAmount - platformFee;
+      // The settlement is the authoritative, immutable payout plan. It already
+      // combines all verified initial/outstanding payments and the commission.
+      // Never recalculate from booking.amount or service.price here: those values
+      // do not represent the verified sum of instalments and can over/underpay.
       const transfer = await this.paystack.initiateTransfer({
-        amount: exactKobo(vendorAmount) / 100,
+        amount: exactKobo(claimed.netTransferKobo) / 100,
         recipientCode: claimed.recipientCode!,
         reference: claimed.reference!,
         reason: `Settlement for booking ${bookingId}`,
@@ -1404,7 +1433,9 @@ export class BookingFinanceService {
                 : 'REQUIRES_VERIFICATION';
       if (
         current.operationState === 'REVERSED' ||
-        (current.operationState === 'SUCCESS' && state !== 'REVERSED')
+        (current.operationState === 'SUCCESS' &&
+          state !== 'REVERSED' &&
+          state !== 'SUCCESS')
       )
         return;
       if (
@@ -1417,16 +1448,20 @@ export class BookingFinanceService {
         });
         return;
       }
-      await this.touch(
-        tx,
-        booking,
-        state === 'REVERSED'
-          ? {
-              financialMode: 'REVIEW',
-              financialReviewReason: 'Vendor transfer reversed',
-            }
-          : {},
-      );
+      // For a successful normal-completion transfer, defer touching the booking
+      // until payment links have been checked. The final touch below must use the
+      // original booking.updatedAt so its optimistic-concurrency guard can pass.
+      if (state === 'REVERSED') {
+        await this.touch(tx, booking, {
+          financialMode: 'REVIEW',
+          financialReviewReason: 'Vendor transfer reversed',
+        });
+      } else if (
+        state !== 'SUCCESS' ||
+        current.purpose !== 'NORMAL_COMPLETION'
+      ) {
+        await this.touch(tx, booking);
+      }
       await tx.settlement.update({
         where: { id: current.id },
         data: {
@@ -1465,6 +1500,28 @@ export class BookingFinanceService {
           return;
         }
 
+        // Do not complete a cancelled booking or silently clear an unrelated
+        // financial review. A review raised by an earlier validation conflict
+        // for this same transfer can be resolved now that this outcome passed
+        // all instruction checks above.
+        const canCompleteBooking =
+          active.includes(booking.status) || booking.status === 'COMPLETED';
+        const canResolveReview =
+          booking.financialMode !== 'REVIEW' ||
+          booking.financialReviewReason ===
+            'Transfer outcome conflicts with financial instruction';
+
+        if (!canCompleteBooking || !canResolveReview) {
+          if (booking.financialMode !== 'REVIEW') {
+            await this.touch(tx, booking, {
+              financialMode: 'REVIEW',
+              financialReviewReason:
+                'Successful transfer requires booking-state review',
+            });
+          }
+          return;
+        }
+
         await tx.transaction.updateMany({
           where: {
             id: { in: paymentIds },
@@ -1472,6 +1529,15 @@ export class BookingFinanceService {
             status: { in: ['PENDING', 'SUCCESS', 'success'] },
           },
           data: { status: 'COMPLETED' },
+        });
+
+        // The transfer is validated and disbursed. Update the booking in this
+        // same transaction so a webhook/reconciliation retry cannot leave the
+        // settlement successful while the booking remains unfinished.
+        await this.touch(tx, booking, {
+          status: 'COMPLETED',
+          financialMode: 'COMPLETION',
+          financialReviewReason: null,
         });
       }
     });
@@ -1557,6 +1623,7 @@ export class BookingFinanceService {
             'REQUIRES_VERIFICATION',
             'FAILED',
             'NOT_REQUIRED',
+            'SUCCESS',
           ],
         },
         OR: [
@@ -1570,9 +1637,24 @@ export class BookingFinanceService {
     });
     for (const plan of plans) {
       await this.processBooking(plan.bookingId);
+      const booking =
+        plan.operationState === 'SUCCESS'
+          ? await this.prisma.booking.findUnique({
+              where: { id: plan.bookingId },
+              select: { status: true, financialMode: true },
+            })
+          : null;
       await this.prisma.settlement.updateMany({
         where: { id: plan.id },
-        data: { reconcileAfter: nextCheck() },
+        data: {
+          // Stop repeatedly polling a payout once its booking is fully settled.
+          // If it is still incomplete, processTransfer will retry after nextCheck.
+          reconcileAfter:
+            booking?.status === 'COMPLETED' &&
+            booking.financialMode === 'COMPLETION'
+              ? new Date('2099-12-31T00:00:00.000Z')
+              : nextCheck(),
+        },
       });
     }
   }

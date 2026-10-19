@@ -17,8 +17,6 @@ const prisma_service_1 = require("../../prisma/prisma.service");
 const cancellation_policy_service_1 = require("../cancellation-policy/cancellation-policy.service");
 const paystack_service_1 = require("../paystack/paystack.service");
 const financial_allocation_1 = require("./financial-allocation");
-const paystackCalculation_1 = require("../utils/paystackCalculation");
-const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const cancelled = [
     'CANCELLED',
     'CANCELLED_BY_CLIENT',
@@ -28,11 +26,10 @@ const active = ['CONFIRMED', 'COMPLETION_PENDING_APPROVAL'];
 const json = (value) => JSON.parse(JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item));
 const nextCheck = () => new Date(Date.now() + 60_000);
 let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceService {
-    constructor(prisma, paystack, policies, platformSettings) {
+    constructor(prisma, paystack, policies) {
         this.prisma = prisma;
         this.paystack = paystack;
         this.policies = policies;
-        this.platformSettings = platformSettings;
         this.logger = new common_1.Logger(BookingFinanceService_1.name);
     }
     get dispatchEnabled() {
@@ -101,7 +98,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 String(charge.id) !== payment.providerTransactionId)) {
             throw new Error('Payment evidence does not match the original checkout');
         }
-        return principal;
+        return paymentPrincipal;
     }
     async recordVerifiedCharge(reference, charge) {
         const payment = await this.prisma.transaction.findUnique({
@@ -229,7 +226,10 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
     async atomic(work) {
         for (let attempt = 0;; attempt++) {
             try {
-                return await this.prisma.$transaction(work);
+                return await this.prisma.$transaction(work, {
+                    maxWait: 5000,
+                    timeout: 15000,
+                });
             }
             catch (error) {
                 if (error.code === 'P2034' && attempt < 3)
@@ -875,6 +875,19 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         });
         if (!settlement?.purpose || !settlement.transactionId)
             return;
+        if (settlement.operationState === 'SUCCESS' &&
+            settlement.purpose === 'NORMAL_COMPLETION') {
+            const booking = await this.prisma.booking.findUnique({
+                where: { id: bookingId },
+                select: { status: true, financialMode: true },
+            });
+            if (booking &&
+                (booking.status !== 'COMPLETED' ||
+                    booking.financialMode !== 'COMPLETION')) {
+                return this.reconcileTransfer(settlement);
+            }
+            return;
+        }
         if (['PROCESSING', 'REQUIRES_VERIFICATION', 'FAILED'].includes(settlement.operationState ?? '')) {
             return this.reconcileTransfer(settlement);
         }
@@ -923,8 +936,11 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 return;
             }
         }
-        if (!(await this.checkExternalConflicts(settlement, payment)))
+        if (settlement.netTransferKobo == null ||
+            settlement.netTransferKobo <= BigInt(0)) {
+            await this.review(bookingId, 'Settlement has no valid vendor transfer amount');
             return;
+        }
         if (!booking.vendor.bankAccountNumber || !booking.vendor.bankCode) {
             await this.review(bookingId, 'Vendor settlement account is missing');
             return;
@@ -980,13 +996,8 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         if (!claimed)
             return;
         try {
-            const paidAmount = booking?.amount;
-            const mainAmount = booking?.services?.price;
-            const vendorRate = await this.platformSettings.resolvePlatformPercentage(booking.vendorId);
-            const platformFee = (0, paystackCalculation_1.calculateJublyCommission)(mainAmount, vendorRate);
-            const vendorAmount = paidAmount - platformFee;
             const transfer = await this.paystack.initiateTransfer({
-                amount: (0, financial_allocation_1.exactKobo)(vendorAmount) / 100,
+                amount: (0, financial_allocation_1.exactKobo)(claimed.netTransferKobo) / 100,
                 recipientCode: claimed.recipientCode,
                 reference: claimed.reference,
                 reason: `Settlement for booking ${bookingId}`,
@@ -1053,7 +1064,9 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                             ? 'PROCESSING'
                             : 'REQUIRES_VERIFICATION';
             if (current.operationState === 'REVERSED' ||
-                (current.operationState === 'SUCCESS' && state !== 'REVERSED'))
+                (current.operationState === 'SUCCESS' &&
+                    state !== 'REVERSED' &&
+                    state !== 'SUCCESS'))
                 return;
             if (current.operationState === 'FAILED' &&
                 !['FAILED', 'REVERSED'].includes(state)) {
@@ -1063,12 +1076,16 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 });
                 return;
             }
-            await this.touch(tx, booking, state === 'REVERSED'
-                ? {
+            if (state === 'REVERSED') {
+                await this.touch(tx, booking, {
                     financialMode: 'REVIEW',
                     financialReviewReason: 'Vendor transfer reversed',
-                }
-                : {});
+                });
+            }
+            else if (state !== 'SUCCESS' ||
+                current.purpose !== 'NORMAL_COMPLETION') {
+                await this.touch(tx, booking);
+            }
             await tx.settlement.update({
                 where: { id: current.id },
                 data: {
@@ -1100,6 +1117,19 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                     });
                     return;
                 }
+                const canCompleteBooking = active.includes(booking.status) || booking.status === 'COMPLETED';
+                const canResolveReview = booking.financialMode !== 'REVIEW' ||
+                    booking.financialReviewReason ===
+                        'Transfer outcome conflicts with financial instruction';
+                if (!canCompleteBooking || !canResolveReview) {
+                    if (booking.financialMode !== 'REVIEW') {
+                        await this.touch(tx, booking, {
+                            financialMode: 'REVIEW',
+                            financialReviewReason: 'Successful transfer requires booking-state review',
+                        });
+                    }
+                    return;
+                }
                 await tx.transaction.updateMany({
                     where: {
                         id: { in: paymentIds },
@@ -1107,6 +1137,11 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                         status: { in: ['PENDING', 'SUCCESS', 'success'] },
                     },
                     data: { status: 'COMPLETED' },
+                });
+                await this.touch(tx, booking, {
+                    status: 'COMPLETED',
+                    financialMode: 'COMPLETION',
+                    financialReviewReason: null,
                 });
             }
         });
@@ -1185,6 +1220,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                         'REQUIRES_VERIFICATION',
                         'FAILED',
                         'NOT_REQUIRED',
+                        'SUCCESS',
                     ],
                 },
                 OR: [
@@ -1198,9 +1234,20 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         });
         for (const plan of plans) {
             await this.processBooking(plan.bookingId);
+            const booking = plan.operationState === 'SUCCESS'
+                ? await this.prisma.booking.findUnique({
+                    where: { id: plan.bookingId },
+                    select: { status: true, financialMode: true },
+                })
+                : null;
             await this.prisma.settlement.updateMany({
                 where: { id: plan.id },
-                data: { reconcileAfter: nextCheck() },
+                data: {
+                    reconcileAfter: booking?.status === 'COMPLETED' &&
+                        booking.financialMode === 'COMPLETION'
+                        ? new Date('2099-12-31T00:00:00.000Z')
+                        : nextCheck(),
+                },
             });
         }
     }
@@ -1294,6 +1341,5 @@ exports.BookingFinanceService = BookingFinanceService = BookingFinanceService_1 
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         paystack_service_1.PaystackService,
-        cancellation_policy_service_1.CancellationPolicyService,
-        platform_settings_service_1.PlatformSettingsService])
+        cancellation_policy_service_1.CancellationPolicyService])
 ], BookingFinanceService);
