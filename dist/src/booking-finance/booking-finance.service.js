@@ -875,6 +875,19 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         });
         if (!settlement?.purpose || !settlement.transactionId)
             return;
+        if (settlement.operationState === 'SUCCESS' &&
+            settlement.purpose === 'NORMAL_COMPLETION') {
+            const booking = await this.prisma.booking.findUnique({
+                where: { id: bookingId },
+                select: { status: true, financialMode: true },
+            });
+            if (booking &&
+                (booking.status !== 'COMPLETED' ||
+                    booking.financialMode !== 'COMPLETION')) {
+                return this.reconcileTransfer(settlement);
+            }
+            return;
+        }
         if (['PROCESSING', 'REQUIRES_VERIFICATION', 'FAILED'].includes(settlement.operationState ?? '')) {
             return this.reconcileTransfer(settlement);
         }
@@ -889,9 +902,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         const payment = await this.prisma.transaction.findUniqueOrThrow({
             where: { id: settlement.transactionId },
         });
-        if (settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-            !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? ''))
-            return;
         const paymentIds = settlement.paymentTransactionIds?.length
             ? settlement.paymentTransactionIds
             : settlement.transactionId
@@ -1223,23 +1233,21 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             take: 25,
         });
         for (const plan of plans) {
-            if (plan.operationState === 'SUCCESS') {
-                const booking = await this.prisma.booking.findUnique({
+            await this.processBooking(plan.bookingId);
+            const booking = plan.operationState === 'SUCCESS'
+                ? await this.prisma.booking.findUnique({
                     where: { id: plan.bookingId },
-                    select: { status: true },
-                });
-                if (booking &&
-                    booking.status !== 'COMPLETED' &&
-                    plan.purpose === 'NORMAL_COMPLETION') {
-                    await this.reconcileTransfer(plan);
-                }
-            }
-            else {
-                await this.processBooking(plan.bookingId);
-            }
+                    select: { status: true, financialMode: true },
+                })
+                : null;
             await this.prisma.settlement.updateMany({
                 where: { id: plan.id },
-                data: { reconcileAfter: nextCheck() },
+                data: {
+                    reconcileAfter: booking?.status === 'COMPLETED' &&
+                        booking.financialMode === 'COMPLETION'
+                        ? new Date('2099-12-31T00:00:00.000Z')
+                        : nextCheck(),
+                },
             });
         }
     }
@@ -1309,7 +1317,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 await this.review(bookingId, 'Late outcome from an older transfer attempt');
             }
         }
-        return data;
     }
     async refundResponse(bookingId) {
         await this.processBooking(bookingId);
