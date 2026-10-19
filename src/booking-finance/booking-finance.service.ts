@@ -1222,11 +1222,11 @@ export class BookingFinanceService {
     const payment = await this.prisma.transaction.findUniqueOrThrow({
       where: { id: settlement.transactionId },
     });
-    // if (
-    //   settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-    //   !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
-    // )
-    //   return;
+    if (
+      settlement.purpose === 'CANCELLATION_COMPENSATION' &&
+      !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
+    )
+      return;
     const paymentIds = settlement.paymentTransactionIds?.length
       ? settlement.paymentTransactionIds
       : settlement.transactionId
@@ -1353,7 +1353,7 @@ export class BookingFinanceService {
       // Never recalculate from booking.amount or service.price here: those values
       // do not represent the verified sum of instalments and can over/underpay.
       const transfer = await this.paystack.initiateTransfer({
-        amount: exactKobo(claimed.netTransferKobo) / 100,
+        amount: exactKobo(claimed.netTransferKobo!) / 100,
         recipientCode: claimed.recipientCode!,
         reference: claimed.reference!,
         reason: `Settlement for booking ${bookingId}`,

@@ -902,6 +902,9 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         const payment = await this.prisma.transaction.findUniqueOrThrow({
             where: { id: settlement.transactionId },
         });
+        if (settlement.purpose === 'CANCELLATION_COMPENSATION' &&
+            !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? ''))
+            return;
         const paymentIds = settlement.paymentTransactionIds?.length
             ? settlement.paymentTransactionIds
             : settlement.transactionId
