@@ -681,8 +681,6 @@ export class BookingFinanceService {
       where: { bookingId },
     });
 
-    console.log({ settlement });
-
     if (!settlement) {
       let verified: Awaited<ReturnType<BookingFinanceService['evidence']>>;
 
@@ -818,7 +816,6 @@ export class BookingFinanceService {
           })
         : null,
       settlement,
-      updatedBooking: booking,
     };
   }
 
@@ -1334,7 +1331,7 @@ export class BookingFinanceService {
       // Never recalculate from booking.amount or service.price here: those values
       // do not represent the verified sum of instalments and can over/underpay.
       const transfer = await this.paystack.initiateTransfer({
-        amount: exactKobo(claimed?.netTransferKobo as any) / 100,
+        amount: exactKobo(claimed.netTransferKobo as any) / 100,
         recipientCode: claimed.recipientCode!,
         reference: claimed.reference!,
         reason: `Settlement for booking ${bookingId}`,
@@ -1364,23 +1361,10 @@ export class BookingFinanceService {
       const booking = await tx.booking.findUniqueOrThrow({
         where: { id: current.bookingId },
       });
-
       const recipient =
         typeof transfer.recipient === 'object'
           ? transfer.recipient?.recipient_code
           : transfer.recipient;
-
-      const recipientMismatch = recipient !== expected.recipientCode;
-      const referenceMismatch = transfer.reference !== expected.reference;
-      const currencyMismatch = transfer.currency !== expected.currency;
-      const amountInvalid = !Number.isSafeInteger(transfer.amount);
-      const amountMismatch =
-        transfer.amount !== exactKobo(expected.netTransferKobo!);
-      const transferCodeMissing = !transfer.transfer_code;
-      const transferCodeMismatch = Boolean(
-        current.transferCode && transfer.transfer_code !== current.transferCode,
-      );
-
       if (current.reference !== expected.reference) {
         if (
           ['success', 'reversed'].includes(
@@ -1397,52 +1381,15 @@ export class BookingFinanceService {
         // attempt. Its delayed failed/pending result cannot change the new one.
         return;
       }
-
-      console.log('[applyTransferOutcome] Current financial state:', {
-        bookingId: booking.id,
-        financialMode: booking.financialMode,
-        financialReviewReason: booking.financialReviewReason,
-        settlementId: current.id,
-        reference: current.reference,
-      });
-
-      const validationFailed =
-        referenceMismatch ||
-        currencyMismatch ||
-        amountInvalid ||
-        amountMismatch ||
-        recipientMismatch ||
-        transferCodeMissing ||
-        transferCodeMismatch;
-
-      console.log('[applyTransferOutcome] Validation result:', {
-        settlementId: current.id,
-        validationFailed,
-      });
-
-      if (validationFailed) {
-        console.error(
-          '[applyTransferOutcome] Setting REVIEW: transfer instruction conflict',
-          { settlementId: current.id },
-        );
-
-        await this.touch(tx, booking, {
-          financialMode: 'REVIEW',
-          financialReviewReason:
-            'Transfer outcome conflicts with financial instruction',
-        });
-
-        return;
-      }
-
       if (
-        referenceMismatch ||
-        currencyMismatch ||
-        amountInvalid ||
-        amountMismatch ||
-        recipientMismatch ||
-        transferCodeMissing ||
-        transferCodeMismatch
+        transfer.reference !== expected.reference ||
+        transfer.currency !== expected.currency ||
+        !Number.isSafeInteger(transfer.amount) ||
+        transfer.amount !== exactKobo(expected.netTransferKobo!) ||
+        recipient !== expected.recipientCode ||
+        !transfer.transfer_code ||
+        (current.transferCode &&
+          transfer.transfer_code !== current.transferCode)
       ) {
         await this.touch(tx, booking, {
           financialMode: 'REVIEW',
@@ -1451,7 +1398,6 @@ export class BookingFinanceService {
         });
         return;
       }
-
       const providerState = String(transfer.status).toLowerCase();
       const state =
         providerState === 'success'
@@ -1465,7 +1411,9 @@ export class BookingFinanceService {
                 : 'REQUIRES_VERIFICATION';
       if (
         current.operationState === 'REVERSED' ||
-        (current.operationState === 'SUCCESS' && state !== 'REVERSED')
+        (current.operationState === 'SUCCESS' &&
+          state !== 'REVERSED' &&
+          state !== 'SUCCESS')
       )
         return;
       if (
@@ -1478,17 +1426,20 @@ export class BookingFinanceService {
         });
         return;
       }
-      await this.touch(
-        tx,
-        booking,
-        state === 'REVERSED'
-          ? {
-              financialMode: 'REVIEW',
-              financialReviewReason: 'Vendor transfer reversed',
-            }
-          : {},
-      );
-
+      // For a successful normal-completion transfer, defer touching the booking
+      // until payment links have been checked. The final touch below must use the
+      // original booking.updatedAt so its optimistic-concurrency guard can pass.
+      if (state === 'REVERSED') {
+        await this.touch(tx, booking, {
+          financialMode: 'REVIEW',
+          financialReviewReason: 'Vendor transfer reversed',
+        });
+      } else if (
+        state !== 'SUCCESS' ||
+        current.purpose !== 'NORMAL_COMPLETION'
+      ) {
+        await this.touch(tx, booking);
+      }
       await tx.settlement.update({
         where: { id: current.id },
         data: {
@@ -1511,7 +1462,6 @@ export class BookingFinanceService {
           ),
         },
       });
-
       if (state === 'SUCCESS' && current.purpose === 'NORMAL_COMPLETION') {
         const paymentIds = current.paymentTransactionIds?.length
           ? current.paymentTransactionIds
@@ -1528,21 +1478,27 @@ export class BookingFinanceService {
           return;
         }
 
-        console.log({ booking });
+        // Do not complete a cancelled booking or silently clear an unrelated
+        // financial review. A review raised by an earlier validation conflict
+        // for this same transfer can be resolved now that this outcome passed
+        // all instruction checks above.
+        const canCompleteBooking =
+          active.includes(booking.status) || booking.status === 'COMPLETED';
+        const canResolveReview =
+          booking.financialMode !== 'REVIEW' ||
+          booking.financialReviewReason ===
+            'Transfer outcome conflicts with financial instruction';
 
-        await this.prisma.booking.update({
-          where: {
-            id: booking.id,
-            status: 'COMPLETION_PENDING_APPROVAL',
-            ...(current ? { financialMode: 'REVIEW' as const } : {}),
-          },
-          data: {
-            status: 'COMPLETED',
-            financialMode: 'COMPLETION',
-            financialReviewReason: null,
-            financialVersion: { increment: 1 },
-          },
-        });
+        if (!canCompleteBooking || !canResolveReview) {
+          if (booking.financialMode !== 'REVIEW') {
+            await this.touch(tx, booking, {
+              financialMode: 'REVIEW',
+              financialReviewReason:
+                'Successful transfer requires booking-state review',
+            });
+          }
+          return;
+        }
 
         await tx.transaction.updateMany({
           where: {
@@ -1551,6 +1507,15 @@ export class BookingFinanceService {
             status: { in: ['PENDING', 'SUCCESS', 'success'] },
           },
           data: { status: 'COMPLETED' },
+        });
+
+        // The transfer is validated and disbursed. Update the booking in this
+        // same transaction so a webhook/reconciliation retry cannot leave the
+        // settlement successful while the booking remains unfinished.
+        await this.touch(tx, booking, {
+          status: 'COMPLETED',
+          financialMode: 'COMPLETION',
+          financialReviewReason: null,
         });
       }
     });
