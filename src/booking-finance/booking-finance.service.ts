@@ -1331,7 +1331,7 @@ export class BookingFinanceService {
       // Never recalculate from booking.amount or service.price here: those values
       // do not represent the verified sum of instalments and can over/underpay.
       const transfer = await this.paystack.initiateTransfer({
-        amount: exactKobo(claimed.netTransferKobo as any) / 100,
+        amount: exactKobo(claimed.netTransferKobo!) / 100,
         recipientCode: claimed.recipientCode!,
         reference: claimed.reference!,
         reason: `Settlement for booking ${bookingId}`,
@@ -1601,6 +1601,9 @@ export class BookingFinanceService {
             'REQUIRES_VERIFICATION',
             'FAILED',
             'NOT_REQUIRED',
+            // Re-check successful payouts too: the transfer may have succeeded
+            // before a booking-status update failed or the transaction timed out.
+            'SUCCESS',
           ],
         },
         OR: [
@@ -1613,7 +1616,24 @@ export class BookingFinanceService {
       take: 25,
     });
     for (const plan of plans) {
-      await this.processBooking(plan.bookingId);
+      if (plan.operationState === 'SUCCESS') {
+        // Do not keep re-verifying completed bookings. A successful settlement
+        // with an unfinished normal-completion booking must be reconciled so
+        // the booking update can be retried even if the original webhook was lost.
+        const booking = await this.prisma.booking.findUnique({
+          where: { id: plan.bookingId },
+          select: { status: true },
+        });
+        if (
+          booking &&
+          booking.status !== 'COMPLETED' &&
+          plan.purpose === 'NORMAL_COMPLETION'
+        ) {
+          await this.reconcileTransfer(plan);
+        }
+      } else {
+        await this.processBooking(plan.bookingId);
+      }
       await this.prisma.settlement.updateMany({
         where: { id: plan.id },
         data: { reconcileAfter: nextCheck() },
@@ -1683,20 +1703,17 @@ export class BookingFinanceService {
       },
     });
     if (settlement?.purpose) return this.reconcileTransfer(settlement);
+
     if (settlement)
       return this.review(
         settlement.bookingId,
         'Historical transfer event requires reconciliation',
       );
-    // Older attempt references are kept in the embedded history. They cannot
-    // overwrite the current attempt; a contradictory late success needs review.
+
     if (
       data?.reference &&
       ['transfer.success', 'transfer.reversed'].includes(event)
     ) {
-      // Prisma 5's Mongo JSON filter cannot query isSet/nested array paths.
-      // Filter the embedded attempt history in Mongo rather than loading every
-      // settlement or creating another collection just to look up attempts.
       const matches = (await this.prisma.settlement.aggregateRaw({
         pipeline: [
           { $match: { 'attemptHistory.reference': String(data.reference) } },
@@ -1714,6 +1731,8 @@ export class BookingFinanceService {
         );
       }
     }
+
+    return data;
   }
 
   async refundResponse(bookingId: string) {
