@@ -2279,20 +2279,20 @@ export class BookingService {
   }
 
   private async completeBookingNow(booking: any, user: any) {
-    const { transaction, settlement, updatedBooking } =
+    const { transaction, settlement } =
       await this.settleBookingPayment(booking);
     const payoutAmount = settlement?.amount ?? transaction?.amount;
 
     console.log({ settlement, transaction });
 
-    // const updatedBooking = await this.prisma.booking.update({
-    //   where: {
-    //     id: booking.id,
-    //     status: booking.status,
-    //     ...(settlement ? { financialMode: 'COMPLETION' as const } : {}),
-    //   },
-    //   data: { status: 'COMPLETED' },
-    // });
+    const updatedBooking = await this.prisma.booking.update({
+      where: {
+        id: booking.id,
+        status: booking.status,
+        ...(settlement ? { financialMode: 'COMPLETION' as const } : {}),
+      },
+      data: { status: 'COMPLETED' },
+    });
 
     await this.activityService.createLog({
       vendorId: booking.vendorId,
@@ -2477,8 +2477,6 @@ export class BookingService {
           completionApprovedAt: new Date(),
         },
       });
-
-      console.log({ updatedBooking });
 
       await this.activityService.createLog({
         vendorId: booking.vendorId,

@@ -478,7 +478,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         let settlement = await this.prisma.settlement.findUnique({
             where: { bookingId },
         });
-        console.log({ settlement });
         if (!settlement) {
             let verified;
             try {
@@ -577,7 +576,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 })
                 : null,
             settlement,
-            updatedBooking: booking,
         };
     }
     matchesPlan(booking, settlement) {
@@ -989,7 +987,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             return;
         try {
             const transfer = await this.paystack.initiateTransfer({
-                amount: (0, financial_allocation_1.exactKobo)(claimed?.netTransferKobo) / 100,
+                amount: (0, financial_allocation_1.exactKobo)(claimed.netTransferKobo) / 100,
                 recipientCode: claimed.recipientCode,
                 reference: claimed.reference,
                 reason: `Settlement for booking ${bookingId}`,
@@ -1022,13 +1020,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             const recipient = typeof transfer.recipient === 'object'
                 ? transfer.recipient?.recipient_code
                 : transfer.recipient;
-            const recipientMismatch = recipient !== expected.recipientCode;
-            const referenceMismatch = transfer.reference !== expected.reference;
-            const currencyMismatch = transfer.currency !== expected.currency;
-            const amountInvalid = !Number.isSafeInteger(transfer.amount);
-            const amountMismatch = transfer.amount !== (0, financial_allocation_1.exactKobo)(expected.netTransferKobo);
-            const transferCodeMissing = !transfer.transfer_code;
-            const transferCodeMismatch = Boolean(current.transferCode && transfer.transfer_code !== current.transferCode);
             if (current.reference !== expected.reference) {
                 if (['success', 'reversed'].includes(String(transfer.status).toLowerCase())) {
                     await this.touch(tx, booking, {
@@ -1038,39 +1029,14 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 }
                 return;
             }
-            console.log('[applyTransferOutcome] Current financial state:', {
-                bookingId: booking.id,
-                financialMode: booking.financialMode,
-                financialReviewReason: booking.financialReviewReason,
-                settlementId: current.id,
-                reference: current.reference,
-            });
-            const validationFailed = referenceMismatch ||
-                currencyMismatch ||
-                amountInvalid ||
-                amountMismatch ||
-                recipientMismatch ||
-                transferCodeMissing ||
-                transferCodeMismatch;
-            console.log('[applyTransferOutcome] Validation result:', {
-                settlementId: current.id,
-                validationFailed,
-            });
-            if (validationFailed) {
-                console.error('[applyTransferOutcome] Setting REVIEW: transfer instruction conflict', { settlementId: current.id });
-                await this.touch(tx, booking, {
-                    financialMode: 'REVIEW',
-                    financialReviewReason: 'Transfer outcome conflicts with financial instruction',
-                });
-                return;
-            }
-            if (referenceMismatch ||
-                currencyMismatch ||
-                amountInvalid ||
-                amountMismatch ||
-                recipientMismatch ||
-                transferCodeMissing ||
-                transferCodeMismatch) {
+            if (transfer.reference !== expected.reference ||
+                transfer.currency !== expected.currency ||
+                !Number.isSafeInteger(transfer.amount) ||
+                transfer.amount !== (0, financial_allocation_1.exactKobo)(expected.netTransferKobo) ||
+                recipient !== expected.recipientCode ||
+                !transfer.transfer_code ||
+                (current.transferCode &&
+                    transfer.transfer_code !== current.transferCode)) {
                 await this.touch(tx, booking, {
                     financialMode: 'REVIEW',
                     financialReviewReason: 'Transfer outcome conflicts with financial instruction',
@@ -1088,7 +1054,9 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                             ? 'PROCESSING'
                             : 'REQUIRES_VERIFICATION';
             if (current.operationState === 'REVERSED' ||
-                (current.operationState === 'SUCCESS' && state !== 'REVERSED'))
+                (current.operationState === 'SUCCESS' &&
+                    state !== 'REVERSED' &&
+                    state !== 'SUCCESS'))
                 return;
             if (current.operationState === 'FAILED' &&
                 !['FAILED', 'REVERSED'].includes(state)) {
@@ -1098,12 +1066,16 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 });
                 return;
             }
-            await this.touch(tx, booking, state === 'REVERSED'
-                ? {
+            if (state === 'REVERSED') {
+                await this.touch(tx, booking, {
                     financialMode: 'REVIEW',
                     financialReviewReason: 'Vendor transfer reversed',
-                }
-                : {});
+                });
+            }
+            else if (state !== 'SUCCESS' ||
+                current.purpose !== 'NORMAL_COMPLETION') {
+                await this.touch(tx, booking);
+            }
             await tx.settlement.update({
                 where: { id: current.id },
                 data: {
@@ -1135,20 +1107,19 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                     });
                     return;
                 }
-                console.log({ booking });
-                await this.prisma.booking.update({
-                    where: {
-                        id: booking.id,
-                        status: 'COMPLETION_PENDING_APPROVAL',
-                        ...(current ? { financialMode: 'REVIEW' } : {}),
-                    },
-                    data: {
-                        status: 'COMPLETED',
-                        financialMode: 'COMPLETION',
-                        financialReviewReason: null,
-                        financialVersion: { increment: 1 },
-                    },
-                });
+                const canCompleteBooking = active.includes(booking.status) || booking.status === 'COMPLETED';
+                const canResolveReview = booking.financialMode !== 'REVIEW' ||
+                    booking.financialReviewReason ===
+                        'Transfer outcome conflicts with financial instruction';
+                if (!canCompleteBooking || !canResolveReview) {
+                    if (booking.financialMode !== 'REVIEW') {
+                        await this.touch(tx, booking, {
+                            financialMode: 'REVIEW',
+                            financialReviewReason: 'Successful transfer requires booking-state review',
+                        });
+                    }
+                    return;
+                }
                 await tx.transaction.updateMany({
                     where: {
                         id: { in: paymentIds },
@@ -1156,6 +1127,11 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                         status: { in: ['PENDING', 'SUCCESS', 'success'] },
                     },
                     data: { status: 'COMPLETED' },
+                });
+                await this.touch(tx, booking, {
+                    status: 'COMPLETED',
+                    financialMode: 'COMPLETION',
+                    financialReviewReason: null,
                 });
             }
         });
