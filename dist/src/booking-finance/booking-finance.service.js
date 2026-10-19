@@ -1210,6 +1210,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                         'REQUIRES_VERIFICATION',
                         'FAILED',
                         'NOT_REQUIRED',
+                        'SUCCESS',
                     ],
                 },
                 OR: [
@@ -1222,7 +1223,20 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             take: 25,
         });
         for (const plan of plans) {
-            await this.processBooking(plan.bookingId);
+            if (plan.operationState === 'SUCCESS') {
+                const booking = await this.prisma.booking.findUnique({
+                    where: { id: plan.bookingId },
+                    select: { status: true },
+                });
+                if (booking &&
+                    booking.status !== 'COMPLETED' &&
+                    plan.purpose === 'NORMAL_COMPLETION') {
+                    await this.reconcileTransfer(plan);
+                }
+            }
+            else {
+                await this.processBooking(plan.bookingId);
+            }
             await this.prisma.settlement.updateMany({
                 where: { id: plan.id },
                 data: { reconcileAfter: nextCheck() },
@@ -1295,6 +1309,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 await this.review(bookingId, 'Late outcome from an older transfer attempt');
             }
         }
+        return data;
     }
     async refundResponse(bookingId) {
         await this.processBooking(bookingId);
