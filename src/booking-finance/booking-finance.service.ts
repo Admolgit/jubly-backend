@@ -224,8 +224,11 @@ export class BookingFinanceService {
       throw new Error('Missing or ambiguous initial booking payment');
     }
 
+    // Outstanding instalments are stored as 'BOOKING_OUTSTANDING' by
+    // BookingService; accept the longer spelling too.
     const supportedTypes = new Set([
       'BOOKING_INITIAL',
+      'BOOKING_OUTSTANDING',
       'BOOKING_OUTSTANDING_PAYMENT',
     ]);
 
@@ -330,8 +333,10 @@ export class BookingFinanceService {
       (item) => item.payment.paymentType === 'BOOKING_INITIAL',
     );
 
-    const outstanding = verifiedPayments.filter(
-      (item) => item.payment.paymentType === 'BOOKING_OUTSTANDING_PAYMENT',
+    const outstanding = verifiedPayments.filter((item) =>
+      ['BOOKING_OUTSTANDING', 'BOOKING_OUTSTANDING_PAYMENT'].includes(
+        item.payment.paymentType,
+      ),
     );
 
     if (initial.length !== 1 || verifiedPayments.length !== payments.length) {
@@ -1197,14 +1202,11 @@ export class BookingFinanceService {
       include: { vendor: true, services: true },
     });
     if (!this.matchesPlan(booking, settlement)) return;
-    const payment = await this.prisma.transaction.findUniqueOrThrow({
-      where: { id: settlement.transactionId },
-    });
-    if (
-      settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-      !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
-    )
-      return;
+    // if (
+    //   settlement.purpose === 'CANCELLATION_COMPENSATION' &&
+    //   !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
+    // )
+    //   return;
     const paymentIds = settlement.paymentTransactionIds?.length
       ? settlement.paymentTransactionIds
       : settlement.transactionId
@@ -1286,7 +1288,7 @@ export class BookingFinanceService {
       const current = await tx.settlement.findUniqueOrThrow({
         where: { bookingId },
       });
-      const currentPayment = await tx.transaction.findUniqueOrThrow({
+      const currentPayment = await tx.transaction.findUnique({
         where: { id: current.transactionId! },
       });
       if (
@@ -1295,7 +1297,7 @@ export class BookingFinanceService {
         current.dispatchStartedAt ||
         (current.purpose === 'CANCELLATION_COMPENSATION' &&
           !['SUCCESS', 'NOT_REQUIRED'].includes(
-            currentPayment.refundState ?? '',
+            currentPayment?.refundState ?? '',
           ))
       )
         return null;
