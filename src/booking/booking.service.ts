@@ -3079,7 +3079,7 @@ export class BookingService {
           vendorId: booking.vendorId,
           clientId: client.id,
           amount: Number(dto.amount),
-          paymentType: 'BOOKING_OUTSTANDING',
+          paymentType: 'BOOKING_OUTSTANDING_PAYMENT',
           ...this.bookingFinance.checkoutSnapshot(
             Number(mainAmount),
             Number(dto.amount),
