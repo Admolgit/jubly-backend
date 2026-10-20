@@ -147,6 +147,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         }
         const supportedTypes = new Set([
             'BOOKING_INITIAL',
+            'BOOKING_OUTSTANDING',
             'BOOKING_OUTSTANDING_PAYMENT',
         ]);
         if (payments.some((payment) => !supportedTypes.has(payment.paymentType ?? ''))) {
@@ -201,7 +202,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             });
         }
         const initial = verifiedPayments.filter((item) => item.payment.paymentType === 'BOOKING_INITIAL');
-        const outstanding = verifiedPayments.filter((item) => item.payment.paymentType === 'BOOKING_OUTSTANDING_PAYMENT');
+        const outstanding = verifiedPayments.filter((item) => ['BOOKING_OUTSTANDING', 'BOOKING_OUTSTANDING_PAYMENT'].includes(item.payment.paymentType));
         if (initial.length !== 1 || verifiedPayments.length !== payments.length) {
             throw new Error('Booking payment history is incomplete or ambiguous');
         }
@@ -886,12 +887,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         });
         if (!this.matchesPlan(booking, settlement))
             return;
-        const payment = await this.prisma.transaction.findUniqueOrThrow({
-            where: { id: settlement.transactionId },
-        });
-        if (settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-            !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? ''))
-            return;
         const paymentIds = settlement.paymentTransactionIds?.length
             ? settlement.paymentTransactionIds
             : settlement.transactionId
@@ -949,14 +944,14 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             const current = await tx.settlement.findUniqueOrThrow({
                 where: { bookingId },
             });
-            const currentPayment = await tx.transaction.findUniqueOrThrow({
+            const currentPayment = await tx.transaction.findUnique({
                 where: { id: current.transactionId },
             });
             if (!this.matchesPlan(currentBooking, current) ||
                 current.operationState !== 'PENDING' ||
                 current.dispatchStartedAt ||
                 (current.purpose === 'CANCELLATION_COMPENSATION' &&
-                    !['SUCCESS', 'NOT_REQUIRED'].includes(currentPayment.refundState ?? '')))
+                    !['SUCCESS', 'NOT_REQUIRED'].includes(currentPayment?.refundState ?? '')))
                 return null;
             this.budget(current);
             await this.touch(tx, currentBooking);
