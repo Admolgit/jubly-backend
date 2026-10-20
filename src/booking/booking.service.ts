@@ -2283,15 +2283,18 @@ export class BookingService {
       await this.settleBookingPayment(booking);
     const payoutAmount = settlement?.amount ?? transaction?.amount;
 
-    console.log({ settlement, transaction });
-
-    const updatedBooking = await this.prisma.booking.update({
+    // The finance service may already have marked the booking COMPLETED after a
+    // successful transfer, so accept either status.
+    await this.prisma.booking.updateMany({
       where: {
         id: booking.id,
-        status: booking.status,
+        status: { in: [booking.status, 'COMPLETED'] },
         ...(settlement ? { financialMode: 'COMPLETION' as const } : {}),
       },
       data: { status: 'COMPLETED' },
+    });
+    const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+      where: { id: booking.id },
     });
 
     await this.activityService.createLog({
@@ -2466,16 +2469,21 @@ export class BookingService {
         await this.settleBookingPayment(booking);
       const payoutAmount = settlement?.amount ?? transaction?.amount;
 
-      const updatedBooking = await this.prisma.booking.update({
+      // A successful transfer may already have flipped the booking to COMPLETED
+      // inside the finance service, so accept either status here.
+      await this.prisma.booking.updateMany({
         where: {
           id: booking.id,
-          status: 'COMPLETION_PENDING_APPROVAL',
+          status: { in: ['COMPLETION_PENDING_APPROVAL', 'COMPLETED'] },
           ...(settlement ? { financialMode: 'COMPLETION' as const } : {}),
         },
         data: {
           status: 'COMPLETED',
           completionApprovedAt: new Date(),
         },
+      });
+      const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+        where: { id: booking.id },
       });
 
       await this.activityService.createLog({

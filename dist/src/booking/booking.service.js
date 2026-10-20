@@ -1695,14 +1695,16 @@ let BookingService = class BookingService {
     async completeBookingNow(booking, user) {
         const { transaction, settlement } = await this.settleBookingPayment(booking);
         const payoutAmount = settlement?.amount ?? transaction?.amount;
-        console.log({ settlement, transaction });
-        const updatedBooking = await this.prisma.booking.update({
+        await this.prisma.booking.updateMany({
             where: {
                 id: booking.id,
-                status: booking.status,
+                status: { in: [booking.status, 'COMPLETED'] },
                 ...(settlement ? { financialMode: 'COMPLETION' } : {}),
             },
             data: { status: 'COMPLETED' },
+        });
+        const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+            where: { id: booking.id },
         });
         await this.activityService.createLog({
             vendorId: booking.vendorId,
@@ -1824,16 +1826,19 @@ let BookingService = class BookingService {
             }
             const { transaction, settlement } = await this.settleBookingPayment(booking);
             const payoutAmount = settlement?.amount ?? transaction?.amount;
-            const updatedBooking = await this.prisma.booking.update({
+            await this.prisma.booking.updateMany({
                 where: {
                     id: booking.id,
-                    status: 'COMPLETION_PENDING_APPROVAL',
+                    status: { in: ['COMPLETION_PENDING_APPROVAL', 'COMPLETED'] },
                     ...(settlement ? { financialMode: 'COMPLETION' } : {}),
                 },
                 data: {
                     status: 'COMPLETED',
                     completionApprovedAt: new Date(),
                 },
+            });
+            const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+                where: { id: booking.id },
             });
             await this.activityService.createLog({
                 vendorId: booking.vendorId,

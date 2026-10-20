@@ -148,6 +148,10 @@ export class ReviewsService {
 
   getVendorReviews(vendorId: string, query: ReviewQueryDto) {
     return this.execute(async () => {
+      const result = await this.prisma.review.deleteMany({});
+
+      console.log(`Deleted ${result.count} reviews`);
+
       const vendor = await this.prisma.vendor.findUnique({
         where: {
           id: vendorId,

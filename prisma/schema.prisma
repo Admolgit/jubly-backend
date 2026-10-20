@@ -302,21 +302,22 @@ model Review {
 }
 
 model RescheduleRequest {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
-  bookingId String  @db.ObjectId
-  booking   Booking @relation(fields: [bookingId], references: [id])
-  initiatedBy     String   @db.ObjectId
-  initiatedByRole UserRole
-  proposedDate DateTime
-  previousProposedDate DateTime?
-  reason String?
-  status RescheduleStatus @default(PENDING)
+  id                         String           @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId                  String           @db.ObjectId
+  booking                    Booking          @relation(fields: [bookingId], references: [id])
+  initiatedBy                String           @db.ObjectId
+  initiatedByRole            UserRole
+  proposedDate               DateTime
+  previousProposedDate       DateTime?
+  reason                     String?
+  status                     RescheduleStatus @default(PENDING)
   bookingStatusBeforeRequest BookingStatus
-  respondedBy    String?   @db.ObjectId
-  respondedAt    DateTime?
-  responseReason String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  respondedBy                String?          @db.ObjectId
+  respondedAt                DateTime?
+  responseReason             String?
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+
   @@index([bookingId])
   @@index([status])
 }
