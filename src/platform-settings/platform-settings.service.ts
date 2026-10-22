@@ -76,13 +76,6 @@ export class PlatformSettingsService {
     }
   }
 
-  /**
-   * The settings that actually apply to a given vendor: the global
-   * PlatformSettings document, with any non-null field from that vendor's
-   * VendorPlatformSettings override applied on top. A vendor with no
-   * override document (or one with every field left null) is fully governed
-   * by the global settings — nothing changes for them.
-   */
   async getEffectiveSettings(vendorId?: string): Promise<PlatformSettings> {
     const global = await this.getOrCreateSettings();
 

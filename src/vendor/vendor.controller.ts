@@ -164,7 +164,6 @@ export class VendorController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   updateVendorProfile(@Req() req: { user: { id: string } }, @Body() dto: any) {
-    console.log({dto})
     const userId = req.user.id;
     return this.vendorService.updateVendorProfile(userId, dto);
   }

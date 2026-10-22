@@ -214,7 +214,7 @@ let BookingService = class BookingService {
                 if (payment) {
                     await tx.transaction.update({
                         where: { providerRef: payment.reference },
-                        data: { bookingId: booking.id },
+                        data: { bookingId: booking.id, paymentType: 'BOOKING_INITIAL' },
                     });
                     if (payment.slotLockId) {
                         await tx.slotLock.deleteMany({
@@ -458,7 +458,6 @@ let BookingService = class BookingService {
             }, 'Successful', 201);
         }
         catch (error) {
-            console.error('Error initializing payment:', error);
             if (slotLockId) {
                 await this.prisma.slotLock
                     .deleteMany({ where: { id: slotLockId } })
@@ -470,7 +469,7 @@ let BookingService = class BookingService {
             throw new common_1.InternalServerErrorException('Failed to initialize payment', error.message);
         }
     }
-    async createVendorBooking(userId, dto) {
+    async createVendorBooking(userId, email, dto) {
         try {
             const isExistingBooking = Boolean(dto.bookingId);
             const vendor = await this.prisma.vendor.findFirst({
@@ -479,6 +478,7 @@ let BookingService = class BookingService {
             if (!vendor) {
                 throw new common_1.NotFoundException('Vendor not found');
             }
+            const calendarIntegration = await this.getVendorCalendar(userId);
             const isManualBookingEnabled = await this.platformSettingsService.isManualBookingEnabled(vendor.id);
             if (!isManualBookingEnabled) {
                 throw new common_1.ForbiddenException('Vendor-created bookings are currently disabled.');
@@ -534,7 +534,6 @@ let BookingService = class BookingService {
             }
             let amount = Number(dto.amount);
             const mainAmount = service.price;
-            const calendarIntegration = await this.getVendorCalendar(userId);
             if (dto.paymentOption === 'PAID_BY_HAND') {
                 const canUsePaidByHand = await this.platformSettingsService.canUsePaidByHand(vendor.id);
                 if (!canUsePaidByHand) {
@@ -546,7 +545,7 @@ let BookingService = class BookingService {
                         start: startTime,
                         end: endTime,
                     });
-                    return tx.booking.create({
+                    const createdBooking = await tx.booking.create({
                         data: {
                             vendorId: vendor.id,
                             serviceId: dto.serviceId,
@@ -566,21 +565,26 @@ let BookingService = class BookingService {
                             paymentVerification: 'VENDOR_REPORTED',
                         },
                     });
-                });
-                await this.prisma.transaction.create({
-                    data: {
-                        vendorId: vendor.id,
-                        bookingId: booking.id,
-                        amount,
-                        currency: 'NGN',
-                        providerRef: `MANUAL-${booking.id}`,
-                        paymentMethod: 'PAID_BY_HAND',
-                        status: 'COMPLETED',
-                        percentageFee: 0,
-                        title: service.name,
-                        category: 'VENDOR_REPORTED',
-                        paidAt: new Date(),
-                    },
+                    await tx.transaction.create({
+                        data: {
+                            vendor: {
+                                connect: { id: vendor.id },
+                            },
+                            booking: {
+                                connect: { id: createdBooking.id },
+                            },
+                            amount,
+                            currency: 'NGN',
+                            providerRef: `MANUAL-${createdBooking.id}`,
+                            paymentMethod: 'PAID_BY_HAND',
+                            status: 'COMPLETED',
+                            percentageFee: 0,
+                            title: service.name,
+                            category: 'VENDOR_REPORTED',
+                            paidAt: new Date(),
+                        },
+                    });
+                    return createdBooking;
                 });
                 if (calendarIntegration) {
                     try {
@@ -596,24 +600,29 @@ let BookingService = class BookingService {
                             endTime,
                             attendeeEmail: dto.clientEmail,
                             attendeeName: dto.clientName,
-                            vendorEmail: existingClient?.email,
+                            vendorEmail: email,
                             bookingId: booking.id,
                         });
                     }
                     catch (err) {
-                        console.error('Google Calendar failed:', err.message);
+                        console.error('Google Calendar failed:', err instanceof Error ? err.message : String(err));
                     }
                 }
-                await this.activityService.createLog({
-                    vendorId: vendor.id,
-                    userId,
-                    action: 'MANUAL_PAYMENT_RECORDED',
-                    description: `Booking #${booking.id} was recorded as paid by hand.`,
-                    actor: dto.clientName,
-                    actorType: 'VENDOR',
-                    color: 'green',
-                });
-                this.sendVendorCreatedBookingEmails(userId, vendor, service, booking, dto).catch((err) => console.error('Vendor-created booking email failed:', err?.message));
+                try {
+                    await this.activityService.createLog({
+                        vendorId: vendor.id,
+                        userId,
+                        action: 'MANUAL_PAYMENT_RECORDED',
+                        description: `Booking #${booking.id} was recorded as paid by hand.`,
+                        actor: dto.clientName,
+                        actorType: 'VENDOR',
+                        color: 'green',
+                    });
+                }
+                catch (err) {
+                    console.error('Activity log creation failed:', err instanceof Error ? err.message : String(err));
+                }
+                this.sendVendorCreatedBookingEmails(userId, vendor, service, booking, dto).catch((err) => console.error('Vendor-created booking email failed:', err instanceof Error ? err.message : String(err)));
                 return { booking };
             }
             if (!isExistingBooking) {
@@ -722,6 +731,7 @@ let BookingService = class BookingService {
                     ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), Number(amount), calculatedAmount, percentageFee, {
                         vendorId: vendor.id,
                         serviceId: dto.serviceId,
+                        bookingId: booking.id,
                     }),
                     currency: 'NGN',
                     providerRef: reference,
@@ -1680,19 +1690,21 @@ let BookingService = class BookingService {
         }
     }
     async settleBookingPayment(booking) {
-        console.log('SETTLE BOOKING', booking);
         return this.bookingFinance.settleCompletion(booking.id, booking);
     }
     async completeBookingNow(booking, user) {
         const { transaction, settlement } = await this.settleBookingPayment(booking);
         const payoutAmount = settlement?.amount ?? transaction?.amount;
-        const updatedBooking = await this.prisma.booking.update({
+        await this.prisma.booking.updateMany({
             where: {
                 id: booking.id,
-                status: booking.status,
+                status: { in: [booking.status, 'COMPLETED'] },
                 ...(settlement ? { financialMode: 'COMPLETION' } : {}),
             },
             data: { status: 'COMPLETED' },
+        });
+        const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+            where: { id: booking.id },
         });
         await this.activityService.createLog({
             vendorId: booking.vendorId,
@@ -1814,16 +1826,19 @@ let BookingService = class BookingService {
             }
             const { transaction, settlement } = await this.settleBookingPayment(booking);
             const payoutAmount = settlement?.amount ?? transaction?.amount;
-            const updatedBooking = await this.prisma.booking.update({
+            await this.prisma.booking.updateMany({
                 where: {
                     id: booking.id,
-                    status: 'COMPLETION_PENDING_APPROVAL',
+                    status: { in: ['COMPLETION_PENDING_APPROVAL', 'COMPLETED'] },
                     ...(settlement ? { financialMode: 'COMPLETION' } : {}),
                 },
                 data: {
                     status: 'COMPLETED',
                     completionApprovedAt: new Date(),
                 },
+            });
+            const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+                where: { id: booking.id },
             });
             await this.activityService.createLog({
                 vendorId: booking.vendorId,
@@ -2231,11 +2246,8 @@ let BookingService = class BookingService {
                     paymentStatus: true,
                 },
             });
-            console.log({ verifiedPayments });
             const totalPaid = verifiedPayments.reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0);
-            console.log({ totalPaid });
             const outstandingBalance = Math.max(0, mainAmount - totalPaid);
-            console.log({ outstandingBalance, mainAmount });
             if (outstandingBalance <= 0) {
                 throw new common_1.BadRequestException('Booking is already fully paid.');
             }
@@ -2259,13 +2271,6 @@ let BookingService = class BookingService {
                 outstandingBalance,
                 percentageFee,
             };
-            console.log('Outstanding payment checkout:', {
-                bookingId: booking.id,
-                requestedAmount,
-                outstandingBalance,
-                calculatedAmount,
-                amountType: typeof calculatedAmount,
-            });
             const paystackResponse = await this.paystackService.initializeTransaction(client.email, calculatedAmount, metadata);
             if (!paystackResponse) {
                 throw new common_1.InternalServerErrorException('Failed to initialize payment transaction.');
@@ -2276,7 +2281,7 @@ let BookingService = class BookingService {
                     vendorId: booking.vendorId,
                     clientId: client.id,
                     amount: Number(dto.amount),
-                    paymentType: 'BOOKING_OUTSTANDING',
+                    paymentType: 'BOOKING_OUTSTANDING_PAYMENT',
                     ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), Number(dto.amount), calculatedAmount, percentageFee, {
                         vendorId: booking.vendorId,
                         serviceId: booking.services.id,

@@ -10,6 +10,7 @@ import {
 export type VendorBookingPaymentOption = 'PAY_BY_LINK' | 'PAID_BY_HAND';
 
 export class CreateVendorBookingDto {
+  @IsOptional()
   @IsString()
   bookingId?: string;
 

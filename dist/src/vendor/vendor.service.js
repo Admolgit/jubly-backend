@@ -424,13 +424,13 @@ let VendorService = class VendorService {
                 state: dto?.state,
                 country: dto?.country,
             }).filter(([_, value]) => {
+                console.log(_);
                 if (value === undefined || value === null)
                     return false;
                 if (typeof value === 'string' && value.trim() === '')
                     return false;
                 return true;
             }));
-            console.log({ data });
             const vendor = await this.prisma.vendor.update({
                 where: { userId },
                 data,

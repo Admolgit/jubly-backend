@@ -15,6 +15,7 @@ class CreateVendorBookingDto {
 }
 exports.CreateVendorBookingDto = CreateVendorBookingDto;
 __decorate([
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateVendorBookingDto.prototype, "bookingId", void 0);

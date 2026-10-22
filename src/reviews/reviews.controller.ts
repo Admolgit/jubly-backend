@@ -23,10 +23,10 @@ import { ReviewsService } from './reviews.service';
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
-  @Post(':clientId')
+  @Post('')
   @Public()
-  create(@Param('clientId') clientId: string, @Body() dto: CreateReviewDto) {
-    return this.reviewsService.create(clientId, dto);
+  create(@Body() dto: CreateReviewDto) {
+    return this.reviewsService.create(dto);
   }
 
   @Get('vendor/:vendorId')

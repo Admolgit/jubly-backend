@@ -37,10 +37,14 @@ export class BookingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('VENDOR')
   createVendorBooking(
-    @Req() req: { user: { id: string } },
+    @Req() req: { user: { id: string; email: string } },
     @Body() dto: CreateVendorBookingDto,
   ) {
-    return this.bookingService.createVendorBooking(req.user.id, dto);
+    return this.bookingService.createVendorBooking(
+      req.user.id,
+      req.user.email,
+      dto,
+    );
   }
 
   @Post('initialize-payment')

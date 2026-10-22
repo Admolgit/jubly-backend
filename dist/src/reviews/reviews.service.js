@@ -36,18 +36,7 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
             throw new common_1.InternalServerErrorException('Unable to process reviews');
         }
     }
-    async eligibleBooking(customerId, bookingId) {
-        if (!(0, class_validator_1.isMongoId)(customerId))
-            throw new common_1.UnauthorizedException();
-        const customer = await this.prisma.user.findUnique({
-            where: { id: customerId },
-            select: { id: true, role: true },
-        });
-        if (!customer)
-            throw new common_1.UnauthorizedException();
-        if (customer.role !== client_1.UserRole.CLIENT) {
-            throw new common_1.ForbiddenException('Only clients can access booking reviews');
-        }
+    async eligibleBooking(bookingId) {
         const booking = await this.prisma.booking.findUnique({
             where: { id: bookingId },
             select: {
@@ -60,8 +49,18 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
         });
         if (!booking)
             throw new common_1.NotFoundException('Booking not found');
+        const usedId = booking.clientId ?? booking.userId;
+        const customer = await this.prisma.user.findUnique({
+            where: { id: usedId },
+            select: { id: true, role: true },
+        });
+        if (!customer)
+            throw new common_1.UnauthorizedException();
+        if (customer.role !== client_1.UserRole.CLIENT) {
+            throw new common_1.ForbiddenException('Only clients can access booking reviews');
+        }
         const owners = [booking.clientId, booking.userId].filter((id) => id !== null && id !== undefined);
-        if (!owners.length || owners.some((id) => id !== customer.id)) {
+        if (!owners.length || owners.every((id) => id !== customer.id)) {
             throw new common_1.NotFoundException('Booking not found');
         }
         if (!(0, class_validator_1.isMongoId)(booking.vendorId))
@@ -79,16 +78,19 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
         }
         return booking;
     }
-    create(customerId, dto) {
+    create(dto) {
         return this.execute(async () => {
             if (!Number.isInteger(dto.rating) || dto.rating < 1 || dto.rating > 5) {
                 throw new common_1.BadRequestException('Rating must be an integer between 1 and 5');
+            }
+            if (!dto.bookingId) {
+                throw new common_1.BadRequestException('This booking has no linked customer account and cannot be reviewed.');
             }
             if (dto.comment != null &&
                 (typeof dto.comment !== 'string' || dto.comment.trim().length > 2000)) {
                 throw new common_1.BadRequestException('Comment must be a string of at most 2000 characters');
             }
-            const booking = await this.eligibleBooking(customerId, dto.bookingId);
+            const booking = await this.eligibleBooking(dto.bookingId);
             const existing = await this.prisma.review.findUnique({
                 where: { bookingId: booking.id },
                 select: { id: true },
@@ -99,7 +101,7 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
                 data: {
                     bookingId: booking.id,
                     vendorId: booking.vendorId,
-                    customerId,
+                    customerId: booking.clientId,
                     rating: dto.rating,
                     comment: dto.comment?.trim() || null,
                 },
@@ -109,7 +111,7 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
     }
     getBookingReview(customerId, bookingId) {
         return this.execute(async () => {
-            const booking = await this.eligibleBooking(customerId, bookingId);
+            const booking = await this.eligibleBooking(bookingId);
             const review = await this.prisma.review.findUnique({
                 where: { bookingId: booking.id },
             });
