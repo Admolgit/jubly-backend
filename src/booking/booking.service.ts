@@ -3090,6 +3090,7 @@ export class BookingService {
               serviceId: booking.services.id,
             },
           ),
+          currency: 'NGN',
           providerRef: paystackResponse.reference,
           status: 'PENDING',
           paymentStatus: false,

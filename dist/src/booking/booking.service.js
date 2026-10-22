@@ -2286,6 +2286,7 @@ let BookingService = class BookingService {
                         vendorId: booking.vendorId,
                         serviceId: booking.services.id,
                     }),
+                    currency: 'NGN',
                     providerRef: paystackResponse.reference,
                     status: 'PENDING',
                     paymentStatus: false,
