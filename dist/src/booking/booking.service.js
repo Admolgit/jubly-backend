@@ -2227,9 +2227,6 @@ let BookingService = class BookingService {
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
             }
-            if (booking.clientId !== clientId || booking.vendor.id !== vendorId) {
-                throw new common_1.ForbiddenException('You are not the owner of this booking.');
-            }
             const eligibleStatuses = ['CONFIRMED', 'COMPLETED'];
             if (!eligibleStatuses.includes(booking.status)) {
                 throw new common_1.BadRequestException('This booking is not eligible for payment.');

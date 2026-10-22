@@ -96,16 +96,19 @@ export class ReviewsService {
 
   create(dto: CreateReviewDto) {
     return this.execute(async () => {
+      console.log('FIRST');
       if (!Number.isInteger(dto.rating) || dto.rating < 1 || dto.rating > 5) {
         throw new BadRequestException(
           'Rating must be an integer between 1 and 5',
         );
       }
+      console.log('SECOND');
       if (!dto.bookingId) {
         throw new BadRequestException(
           'This booking has no linked customer account and cannot be reviewed.',
         );
       }
+      console.log('THIRD');
       if (
         dto.comment != null &&
         (typeof dto.comment !== 'string' || dto.comment.trim().length > 2000)
@@ -114,24 +117,30 @@ export class ReviewsService {
           'Comment must be a string of at most 2000 characters',
         );
       }
+      console.log('FOURTH');
       const booking = await this.eligibleBooking(dto.bookingId);
+      console.log('FIFTH');
       const existing = await this.prisma.review.findUnique({
         where: { bookingId: booking.id },
         select: { id: true },
       });
 
+      console.log('SIXTH');
+
       if (existing)
         throw new ConflictException('This booking has already been reviewed');
+      console.log('SEVENTH', booking, dto);
 
       const review = await this.prisma.review.create({
         data: {
           bookingId: booking.id,
           vendorId: booking.vendorId,
-          customerId: booking.clientId as string,
+          customerId: (booking.clientId ?? booking.userId) as string,
           rating: dto.rating,
           comment: dto.comment?.trim() || null,
         },
       });
+      console.log('EIGHT');
       return successResponse({ review }, 'Review submitted successfully', 201);
     });
   }
