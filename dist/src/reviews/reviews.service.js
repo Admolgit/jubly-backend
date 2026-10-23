@@ -50,6 +50,8 @@ let ReviewsService = ReviewsService_1 = class ReviewsService {
         if (!booking)
             throw new common_1.NotFoundException('Booking not found');
         const usedId = booking.clientId ?? booking.userId;
+        if (!usedId)
+            throw new common_1.UnauthorizedException();
         const customer = await this.prisma.user.findUnique({
             where: { id: usedId },
             select: { id: true, role: true },
