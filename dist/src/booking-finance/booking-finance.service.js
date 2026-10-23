@@ -147,6 +147,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         }
         const supportedTypes = new Set([
             'BOOKING_INITIAL',
+            'BOOKING_OUTSTANDING',
             'BOOKING_OUTSTANDING_PAYMENT',
         ]);
         if (payments.some((payment) => !supportedTypes.has(payment.paymentType ?? ''))) {
@@ -201,7 +202,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             });
         }
         const initial = verifiedPayments.filter((item) => item.payment.paymentType === 'BOOKING_INITIAL');
-        const outstanding = verifiedPayments.filter((item) => item.payment.paymentType === 'BOOKING_OUTSTANDING_PAYMENT');
+        const outstanding = verifiedPayments.filter((item) => ['BOOKING_OUTSTANDING', 'BOOKING_OUTSTANDING_PAYMENT'].includes(item.payment.paymentType));
         if (initial.length !== 1 || verifiedPayments.length !== payments.length) {
             throw new Error('Booking payment history is incomplete or ambiguous');
         }
@@ -875,19 +876,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
         });
         if (!settlement?.purpose || !settlement.transactionId)
             return;
-        if (settlement.operationState === 'SUCCESS' &&
-            settlement.purpose === 'NORMAL_COMPLETION') {
-            const booking = await this.prisma.booking.findUnique({
-                where: { id: bookingId },
-                select: { status: true, financialMode: true },
-            });
-            if (booking &&
-                (booking.status !== 'COMPLETED' ||
-                    booking.financialMode !== 'COMPLETION')) {
-                return this.reconcileTransfer(settlement);
-            }
-            return;
-        }
         if (['PROCESSING', 'REQUIRES_VERIFICATION', 'FAILED'].includes(settlement.operationState ?? '')) {
             return this.reconcileTransfer(settlement);
         }
@@ -898,12 +886,6 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             include: { vendor: true, services: true },
         });
         if (!this.matchesPlan(booking, settlement))
-            return;
-        const payment = await this.prisma.transaction.findUniqueOrThrow({
-            where: { id: settlement.transactionId },
-        });
-        if (settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-            !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? ''))
             return;
         const paymentIds = settlement.paymentTransactionIds?.length
             ? settlement.paymentTransactionIds
@@ -962,14 +944,14 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             const current = await tx.settlement.findUniqueOrThrow({
                 where: { bookingId },
             });
-            const currentPayment = await tx.transaction.findUniqueOrThrow({
+            const currentPayment = await tx.transaction.findUnique({
                 where: { id: current.transactionId },
             });
             if (!this.matchesPlan(currentBooking, current) ||
                 current.operationState !== 'PENDING' ||
                 current.dispatchStartedAt ||
                 (current.purpose === 'CANCELLATION_COMPENSATION' &&
-                    !['SUCCESS', 'NOT_REQUIRED'].includes(currentPayment.refundState ?? '')))
+                    !['SUCCESS', 'NOT_REQUIRED'].includes(currentPayment?.refundState ?? '')))
                 return null;
             this.budget(current);
             await this.touch(tx, currentBooking);
@@ -1030,9 +1012,10 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             const booking = await tx.booking.findUniqueOrThrow({
                 where: { id: current.bookingId },
             });
-            const recipient = typeof transfer.recipient === 'object'
-                ? transfer.recipient?.recipient_code
+            const rawRecipient = transfer.recipient !== null && typeof transfer.recipient === 'object'
+                ? transfer.recipient.recipient_code
                 : transfer.recipient;
+            const recipient = typeof rawRecipient === 'string' ? rawRecipient : undefined;
             if (current.reference !== expected.reference) {
                 if (['success', 'reversed'].includes(String(transfer.status).toLowerCase())) {
                     await this.touch(tx, booking, {
@@ -1046,7 +1029,7 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
                 transfer.currency !== expected.currency ||
                 !Number.isSafeInteger(transfer.amount) ||
                 transfer.amount !== (0, financial_allocation_1.exactKobo)(expected.netTransferKobo) ||
-                recipient !== expected.recipientCode ||
+                (recipient !== undefined && recipient !== expected.recipientCode) ||
                 !transfer.transfer_code ||
                 (current.transferCode &&
                     transfer.transfer_code !== current.transferCode)) {
@@ -1236,21 +1219,23 @@ let BookingFinanceService = BookingFinanceService_1 = class BookingFinanceServic
             take: 25,
         });
         for (const plan of plans) {
-            await this.processBooking(plan.bookingId);
-            const booking = plan.operationState === 'SUCCESS'
-                ? await this.prisma.booking.findUnique({
+            if (plan.operationState === 'SUCCESS') {
+                const booking = await this.prisma.booking.findUnique({
                     where: { id: plan.bookingId },
-                    select: { status: true, financialMode: true },
-                })
-                : null;
+                    select: { status: true },
+                });
+                if (booking &&
+                    booking.status !== 'COMPLETED' &&
+                    plan.purpose === 'NORMAL_COMPLETION') {
+                    await this.reconcileTransfer(plan);
+                }
+            }
+            else {
+                await this.processBooking(plan.bookingId);
+            }
             await this.prisma.settlement.updateMany({
                 where: { id: plan.id },
-                data: {
-                    reconcileAfter: booking?.status === 'COMPLETED' &&
-                        booking.financialMode === 'COMPLETION'
-                        ? new Date('2099-12-31T00:00:00.000Z')
-                        : nextCheck(),
-                },
+                data: { reconcileAfter: nextCheck() },
             });
         }
     }

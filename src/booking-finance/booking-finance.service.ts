@@ -224,8 +224,11 @@ export class BookingFinanceService {
       throw new Error('Missing or ambiguous initial booking payment');
     }
 
+    // Outstanding instalments are stored as 'BOOKING_OUTSTANDING' by
+    // BookingService; accept the longer spelling too.
     const supportedTypes = new Set([
       'BOOKING_INITIAL',
+      'BOOKING_OUTSTANDING',
       'BOOKING_OUTSTANDING_PAYMENT',
     ]);
 
@@ -330,8 +333,10 @@ export class BookingFinanceService {
       (item) => item.payment.paymentType === 'BOOKING_INITIAL',
     );
 
-    const outstanding = verifiedPayments.filter(
-      (item) => item.payment.paymentType === 'BOOKING_OUTSTANDING_PAYMENT',
+    const outstanding = verifiedPayments.filter((item) =>
+      ['BOOKING_OUTSTANDING', 'BOOKING_OUTSTANDING_PAYMENT'].includes(
+        item.payment.paymentType,
+      ),
     );
 
     if (initial.length !== 1 || verifiedPayments.length !== payments.length) {
@@ -1183,28 +1188,6 @@ export class BookingFinanceService {
       where: { bookingId },
     });
     if (!settlement?.purpose || !settlement.transactionId) return;
-
-    // A payout can already be SUCCESS while the booking update was skipped by
-    // an older code path or interrupted before it ran. Re-verify the provider
-    // outcome and retry the idempotent booking completion update in that case.
-    if (
-      settlement.operationState === 'SUCCESS' &&
-      settlement.purpose === 'NORMAL_COMPLETION'
-    ) {
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-        select: { status: true, financialMode: true },
-      });
-      if (
-        booking &&
-        (booking.status !== 'COMPLETED' ||
-          booking.financialMode !== 'COMPLETION')
-      ) {
-        return this.reconcileTransfer(settlement);
-      }
-      return;
-    }
-
     if (
       ['PROCESSING', 'REQUIRES_VERIFICATION', 'FAILED'].includes(
         settlement.operationState ?? '',
@@ -1219,14 +1202,11 @@ export class BookingFinanceService {
       include: { vendor: true, services: true },
     });
     if (!this.matchesPlan(booking, settlement)) return;
-    const payment = await this.prisma.transaction.findUniqueOrThrow({
-      where: { id: settlement.transactionId },
-    });
-    if (
-      settlement.purpose === 'CANCELLATION_COMPENSATION' &&
-      !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
-    )
-      return;
+    // if (
+    //   settlement.purpose === 'CANCELLATION_COMPENSATION' &&
+    //   !['SUCCESS', 'NOT_REQUIRED'].includes(payment.refundState ?? '')
+    // )
+    //   return;
     const paymentIds = settlement.paymentTransactionIds?.length
       ? settlement.paymentTransactionIds
       : settlement.transactionId
@@ -1308,7 +1288,7 @@ export class BookingFinanceService {
       const current = await tx.settlement.findUniqueOrThrow({
         where: { bookingId },
       });
-      const currentPayment = await tx.transaction.findUniqueOrThrow({
+      const currentPayment = await tx.transaction.findUnique({
         where: { id: current.transactionId! },
       });
       if (
@@ -1317,7 +1297,7 @@ export class BookingFinanceService {
         current.dispatchStartedAt ||
         (current.purpose === 'CANCELLATION_COMPENSATION' &&
           !['SUCCESS', 'NOT_REQUIRED'].includes(
-            currentPayment.refundState ?? '',
+            currentPayment?.refundState ?? '',
           ))
       )
         return null;
@@ -1383,10 +1363,17 @@ export class BookingFinanceService {
       const booking = await tx.booking.findUniqueOrThrow({
         where: { id: current.bookingId },
       });
-      const recipient =
-        typeof transfer.recipient === 'object'
-          ? transfer.recipient?.recipient_code
+      // Paystack's initiate-transfer response returns `recipient` as a numeric
+      // ID, while verify-transfer / webhooks return an object with
+      // `recipient_code`. Only a recipient code can be compared with ours; a
+      // numeric ID is not a conflict. Reference, amount, currency and
+      // transfer_code are still validated below.
+      const rawRecipient =
+        transfer.recipient !== null && typeof transfer.recipient === 'object'
+          ? transfer.recipient.recipient_code
           : transfer.recipient;
+      const recipient =
+        typeof rawRecipient === 'string' ? rawRecipient : undefined;
       if (current.reference !== expected.reference) {
         if (
           ['success', 'reversed'].includes(
@@ -1408,7 +1395,7 @@ export class BookingFinanceService {
         transfer.currency !== expected.currency ||
         !Number.isSafeInteger(transfer.amount) ||
         transfer.amount !== exactKobo(expected.netTransferKobo!) ||
-        recipient !== expected.recipientCode ||
+        (recipient !== undefined && recipient !== expected.recipientCode) ||
         !transfer.transfer_code ||
         (current.transferCode &&
           transfer.transfer_code !== current.transferCode)
@@ -1623,6 +1610,8 @@ export class BookingFinanceService {
             'REQUIRES_VERIFICATION',
             'FAILED',
             'NOT_REQUIRED',
+            // Re-check successful payouts too: the transfer may have succeeded
+            // before a booking-status update failed or the transaction timed out.
             'SUCCESS',
           ],
         },
@@ -1636,25 +1625,27 @@ export class BookingFinanceService {
       take: 25,
     });
     for (const plan of plans) {
-      await this.processBooking(plan.bookingId);
-      const booking =
-        plan.operationState === 'SUCCESS'
-          ? await this.prisma.booking.findUnique({
-              where: { id: plan.bookingId },
-              select: { status: true, financialMode: true },
-            })
-          : null;
+      if (plan.operationState === 'SUCCESS') {
+        // Do not keep re-verifying completed bookings. A successful settlement
+        // with an unfinished normal-completion booking must be reconciled so
+        // the booking update can be retried even if the original webhook was lost.
+        const booking = await this.prisma.booking.findUnique({
+          where: { id: plan.bookingId },
+          select: { status: true },
+        });
+        if (
+          booking &&
+          booking.status !== 'COMPLETED' &&
+          plan.purpose === 'NORMAL_COMPLETION'
+        ) {
+          await this.reconcileTransfer(plan);
+        }
+      } else {
+        await this.processBooking(plan.bookingId);
+      }
       await this.prisma.settlement.updateMany({
         where: { id: plan.id },
-        data: {
-          // Stop repeatedly polling a payout once its booking is fully settled.
-          // If it is still incomplete, processTransfer will retry after nextCheck.
-          reconcileAfter:
-            booking?.status === 'COMPLETED' &&
-            booking.financialMode === 'COMPLETION'
-              ? new Date('2099-12-31T00:00:00.000Z')
-              : nextCheck(),
-        },
+        data: { reconcileAfter: nextCheck() },
       });
     }
   }

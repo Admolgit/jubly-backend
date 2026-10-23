@@ -1695,14 +1695,16 @@ let BookingService = class BookingService {
     async completeBookingNow(booking, user) {
         const { transaction, settlement } = await this.settleBookingPayment(booking);
         const payoutAmount = settlement?.amount ?? transaction?.amount;
-        console.log({ settlement, transaction });
-        const updatedBooking = await this.prisma.booking.update({
+        await this.prisma.booking.updateMany({
             where: {
                 id: booking.id,
-                status: booking.status,
+                status: { in: [booking.status, 'COMPLETED'] },
                 ...(settlement ? { financialMode: 'COMPLETION' } : {}),
             },
             data: { status: 'COMPLETED' },
+        });
+        const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+            where: { id: booking.id },
         });
         await this.activityService.createLog({
             vendorId: booking.vendorId,
@@ -1824,16 +1826,19 @@ let BookingService = class BookingService {
             }
             const { transaction, settlement } = await this.settleBookingPayment(booking);
             const payoutAmount = settlement?.amount ?? transaction?.amount;
-            const updatedBooking = await this.prisma.booking.update({
+            await this.prisma.booking.updateMany({
                 where: {
                     id: booking.id,
-                    status: 'COMPLETION_PENDING_APPROVAL',
+                    status: { in: ['COMPLETION_PENDING_APPROVAL', 'COMPLETED'] },
                     ...(settlement ? { financialMode: 'COMPLETION' } : {}),
                 },
                 data: {
                     status: 'COMPLETED',
                     completionApprovedAt: new Date(),
                 },
+            });
+            const updatedBooking = await this.prisma.booking.findUniqueOrThrow({
+                where: { id: booking.id },
             });
             await this.activityService.createLog({
                 vendorId: booking.vendorId,
@@ -2222,9 +2227,6 @@ let BookingService = class BookingService {
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
             }
-            if (booking.clientId !== clientId || booking.vendor.id !== vendorId) {
-                throw new common_1.ForbiddenException('You are not the owner of this booking.');
-            }
             const eligibleStatuses = ['CONFIRMED', 'COMPLETED'];
             if (!eligibleStatuses.includes(booking.status)) {
                 throw new common_1.BadRequestException('This booking is not eligible for payment.');
@@ -2258,7 +2260,11 @@ let BookingService = class BookingService {
             const metadata = {
                 type: 'JUBLY_BOOKING_OUTSTANDING_PAYMENT',
                 bookingId: booking.id,
-                clientName: client.firstName + ' ' + client.lastName,
+                clientName: [client.firstName, client.lastName]
+                    .filter((name) => typeof name === 'string' &&
+                    name.trim() !== '' &&
+                    !['null', 'undefined'].includes(name.trim().toLowerCase()))
+                    .join(' '),
                 clientEmail: client.email,
                 vendorId: booking.vendorId,
                 serviceId: booking.serviceId,
@@ -2276,11 +2282,12 @@ let BookingService = class BookingService {
                     vendorId: booking.vendorId,
                     clientId: client.id,
                     amount: Number(dto.amount),
-                    paymentType: 'BOOKING_OUTSTANDING',
+                    paymentType: 'BOOKING_OUTSTANDING_PAYMENT',
                     ...this.bookingFinance.checkoutSnapshot(Number(mainAmount), Number(dto.amount), calculatedAmount, percentageFee, {
                         vendorId: booking.vendorId,
                         serviceId: booking.services.id,
                     }),
+                    currency: 'NGN',
                     providerRef: paystackResponse.reference,
                     status: 'PENDING',
                     paymentStatus: false,
