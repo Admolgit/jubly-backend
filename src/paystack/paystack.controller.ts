@@ -37,6 +37,16 @@ import { SubscriptionService } from 'src/subscription/subscription.service';
 import type { User, Vendor } from '@prisma/client';
 import { dateConverter, timeConverter } from 'src/utils/dateAndTimeConverter';
 
+const usableName = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const name = value
+    .trim()
+    .split(/\s+/)
+    .filter((part) => !['null', 'undefined'].includes(part.toLowerCase()))
+    .join(' ');
+  return name || null;
+};
+
 @Controller('paystack')
 export class PaystackController {
   constructor(
@@ -455,7 +465,7 @@ export class PaystackController {
           data: {
             vendorId: booking.vendorId,
             email: clientEmail,
-            senderName: accountName ?? clientName,
+            senderName: usableName(accountName) ?? usableName(clientName),
             senderAccountNumber: accountNumber,
             senderBankName: bank,
             senderDescription: 'Payment via Paystack (outstanding payment)',
