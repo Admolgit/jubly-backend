@@ -2985,19 +2985,13 @@ export class BookingService {
         throw new NotFoundException('Booking not found');
       }
 
-      // 1. Verify that this client owns the booking.
-      if (booking.clientId !== clientId || booking.vendor.id !== vendorId) {
-        throw new ForbiddenException('You are not the owner of this booking.');
-      }
-
-      // 2. Verify that the booking is eligible for payment.
       const eligibleStatuses = ['CONFIRMED', 'COMPLETED'];
       if (!eligibleStatuses.includes(booking.status)) {
         throw new BadRequestException(
           'This booking is not eligible for payment.',
         );
       }
-      // 3. Calculate the outstanding balance from verified payments.
+
       const mainAmount = booking.services.price;
 
       if (!Number.isFinite(mainAmount) || mainAmount <= 0) {
@@ -3026,7 +3020,6 @@ export class BookingService {
 
       const requestedAmount = Number(dto.amount);
 
-      // Permit partial payments, but never more than the balance.
       if (
         !Number.isFinite(requestedAmount) ||
         requestedAmount <= 0 ||
@@ -3036,8 +3029,6 @@ export class BookingService {
           'Payment amount must be greater than zero and no more than the outstanding balance.',
         );
       }
-
-      // 5. Initialize a new Paystack transaction for the balance.
 
       const pastackAmount = addPaystackFee(dto.amount);
 
@@ -3051,7 +3042,14 @@ export class BookingService {
       const metadata = {
         type: 'JUBLY_BOOKING_OUTSTANDING_PAYMENT',
         bookingId: booking.id,
-        clientName: client.firstName + ' ' + client.lastName,
+        clientName: [client.firstName, client.lastName]
+          .filter(
+            (name) =>
+              typeof name === 'string' &&
+              name.trim() !== '' &&
+              !['null', 'undefined'].includes(name.trim().toLowerCase()),
+          )
+          .join(' '),
         clientEmail: client.email,
         vendorId: booking.vendorId,
         serviceId: booking.serviceId,
@@ -3090,6 +3088,7 @@ export class BookingService {
               serviceId: booking.services.id,
             },
           ),
+          currency: 'NGN',
           providerRef: paystackResponse.reference,
           status: 'PENDING',
           paymentStatus: false,

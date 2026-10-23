@@ -2227,9 +2227,6 @@ let BookingService = class BookingService {
             if (!booking) {
                 throw new common_1.NotFoundException('Booking not found');
             }
-            if (booking.clientId !== clientId || booking.vendor.id !== vendorId) {
-                throw new common_1.ForbiddenException('You are not the owner of this booking.');
-            }
             const eligibleStatuses = ['CONFIRMED', 'COMPLETED'];
             if (!eligibleStatuses.includes(booking.status)) {
                 throw new common_1.BadRequestException('This booking is not eligible for payment.');
@@ -2263,7 +2260,11 @@ let BookingService = class BookingService {
             const metadata = {
                 type: 'JUBLY_BOOKING_OUTSTANDING_PAYMENT',
                 bookingId: booking.id,
-                clientName: client.firstName + ' ' + client.lastName,
+                clientName: [client.firstName, client.lastName]
+                    .filter((name) => typeof name === 'string' &&
+                    name.trim() !== '' &&
+                    !['null', 'undefined'].includes(name.trim().toLowerCase()))
+                    .join(' '),
                 clientEmail: client.email,
                 vendorId: booking.vendorId,
                 serviceId: booking.serviceId,
@@ -2286,6 +2287,7 @@ let BookingService = class BookingService {
                         vendorId: booking.vendorId,
                         serviceId: booking.services.id,
                     }),
+                    currency: 'NGN',
                     providerRef: paystackResponse.reference,
                     status: 'PENDING',
                     paymentStatus: false,

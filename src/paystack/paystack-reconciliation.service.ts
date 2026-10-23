@@ -18,6 +18,16 @@ const PENDING_TRANSACTION_STALE_AFTER_MS = 20 * 60 * 1000;
 const PENDING_TRANSACTION_ABANDON_AFTER_MS = 48 * 60 * 60 * 1000;
 const BATCH_SIZE = 25;
 
+const usableName = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const name = value
+    .trim()
+    .split(/\s+/)
+    .filter((part) => !['null', 'undefined'].includes(part.toLowerCase()))
+    .join(' ');
+  return name || null;
+};
+
 @Injectable()
 export class PaystackReconciliationService implements OnModuleInit {
   constructor(
@@ -390,7 +400,7 @@ export class PaystackReconciliationService implements OnModuleInit {
       data: {
         vendorId: booking.vendorId,
         email: clientEmail,
-        senderName: accountName ?? clientName,
+        senderName: usableName(accountName) ?? usableName(clientName),
         senderAccountNumber: accountNumber,
         senderBankName: bank,
         senderDescription:
