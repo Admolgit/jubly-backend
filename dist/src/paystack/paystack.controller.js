@@ -63,6 +63,16 @@ const activityLog_service_1 = require("../activity/activityLog.service");
 const platform_settings_service_1 = require("../platform-settings/platform-settings.service");
 const subscription_service_1 = require("../subscription/subscription.service");
 const dateAndTimeConverter_1 = require("../utils/dateAndTimeConverter");
+const usableName = (value) => {
+    if (typeof value !== 'string')
+        return null;
+    const name = value
+        .trim()
+        .split(/\s+/)
+        .filter((part) => !['null', 'undefined'].includes(part.toLowerCase()))
+        .join(' ');
+    return name || null;
+};
 let PaystackController = class PaystackController {
     constructor(bookingFinance, reschedules, paystackService, prisma, transactionsService, mailService, bookingService, activityService, platformSettingsService, subscriptionService) {
         this.bookingFinance = bookingFinance;
@@ -329,7 +339,7 @@ let PaystackController = class PaystackController {
                     data: {
                         vendorId: booking.vendorId,
                         email: clientEmail,
-                        senderName: accountName ?? clientName,
+                        senderName: usableName(accountName) ?? usableName(clientName),
                         senderAccountNumber: accountNumber,
                         senderBankName: bank,
                         senderDescription: 'Payment via Paystack (outstanding payment)',

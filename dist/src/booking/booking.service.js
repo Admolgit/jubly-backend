@@ -2260,7 +2260,11 @@ let BookingService = class BookingService {
             const metadata = {
                 type: 'JUBLY_BOOKING_OUTSTANDING_PAYMENT',
                 bookingId: booking.id,
-                clientName: client.firstName + ' ' + client.lastName,
+                clientName: [client.firstName, client.lastName]
+                    .filter((name) => typeof name === 'string' &&
+                    name.trim() !== '' &&
+                    !['null', 'undefined'].includes(name.trim().toLowerCase()))
+                    .join(' '),
                 clientEmail: client.email,
                 vendorId: booking.vendorId,
                 serviceId: booking.serviceId,
